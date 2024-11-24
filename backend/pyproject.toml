@@ -1,0 +1,61 @@
+[tool.poetry]
+name = "hackstream-api"
+version = "0.1.0"
+description = ""
+authors = ["Matheus Fillipe <matheusfillipeag@gmail.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.5"
+uvicorn = "^0.32.1"
+python-mpd2 = "^3.1.1"
+redis = "^5.2.0"
+yt-dlp = "^2024.11.18"
+pydantic-settings = "^2.6.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+show_error_codes = true
+no_implicit_optional = true
+warn_return_any = true
+warn_unused_ignores = true
+follow_imports = "silent"
+warn_redundant_casts = true
+disallow_any_generics = false
+check_untyped_defs = true
+
+[tool.ruff]
+line-length = 120
+target-version = 'py310'
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 120
+force_single_line = true
+profile = "black"
+
+[tool.docformatter]
+wrap-summaries = 120
+wrap-descriptions = 120
+in-place = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.codespell]
+skip = 'poetry.lock'

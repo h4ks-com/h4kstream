@@ -1,0 +1,51 @@
+services:
+  main:
+    image: python:3.12-slim
+    container_name: main
+    build:
+      context: ./main
+    volumes:
+      - ./data:/app/data
+    environment:
+      - REDIS_HOST=redis
+      - ICECAST_HOST=icecast
+      - MPD_HOST=localhost
+      - MPD_PORT=6600
+    depends_on:
+      - redis
+      - icecast
+    ports:
+      - "8000:8000"
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  icecast:
+    image: pellaeon/icecast:latest
+    container_name: icecast
+    environment:
+      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD}
+      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD}
+      - ICECAST_PASSWORD=${ICECAST_PASSWORD}
+      - ICECAST_HOSTNAME=localhost
+    ports:
+      - "8005:8000"
+
+  caddy:
+    image: caddy:alpine
+    container_name: caddy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    ports:
+      - "80:80"
+
+volumes:
+  mpd_data:
+    driver: local
+
+networks:
+  default:
+    driver: bridge
