@@ -13,6 +13,10 @@ python-mpd2 = "^3.1.1"
 redis = "^5.2.0"
 yt-dlp = "^2024.11.18"
 pydantic-settings = "^2.6.1"
+pytest-asyncio = "^0.24.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.3"
 
 [build-system]
 requires = ["poetry-core"]

@@ -133,3 +133,5 @@ dmypy.json
 
 # Other
 .DS_Store
+
+./volumes/
