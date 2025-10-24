@@ -3,7 +3,7 @@ services:
     image: python:3.12-slim
     container_name: main
     build:
-      context: ./main
+      context: ./backend
     volumes:
     - ./data:/app/data
     environment:
@@ -35,7 +35,7 @@ services:
     - "8000:8000"
 
   icecast:
-    image: pellaeon/icecast:latest
+    image: infiniteproject/icecast:latest
     container_name: icecast
     environment:
     - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD}
@@ -48,8 +48,8 @@ services:
   caddy:
     image: caddy:alpine
     container_name: caddy
-    volumes:
-    - ./Caddyfile:/etc/caddy/Caddyfile
+    # volumes:
+    # - ./Caddyfile:/etc/caddy/Caddyfile
     ports:
     - "80:80"
 
