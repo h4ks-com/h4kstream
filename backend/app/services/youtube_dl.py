@@ -35,7 +35,7 @@ async def download_song(url: str, mainloop: bool = False) -> YoutubeDownloadResu
         raise YoutubeDownloadException(YoutubeErrorType.INVALID_URL)
 
     target_suffix = MAINLOOP_DIRECTORY if mainloop else USER_DIRECTORY
-    target_dir = settings.VOLUMES_PATH + target_suffix
+    target_dir = settings.VOLUME_PATH + target_suffix
     try:
         with yt_dlp.YoutubeDL(
             {
@@ -65,4 +65,6 @@ async def download_song(url: str, mainloop: bool = False) -> YoutubeDownloadResu
     except yt_dlp.DownloadError:
         raise YoutubeDownloadException(YoutubeErrorType.DOWNLOAD_ERROR)
 
+    # Make chmod 777
+    video_path.chmod(0o777)
     return YoutubeDownloadResult(title=video_title, path=video_path, length=video_length)

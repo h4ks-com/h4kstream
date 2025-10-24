@@ -1,42 +1,39 @@
+import logging
 import os
 
-import mpd
+from mpd.asyncio import MPDClient as OriginalMPDClient
 
 MPD_HOST = os.getenv("MPD_HOST", "localhost")
 MPD_PORT = int(os.getenv("MPD_PORT", "6600"))
+MLD_PATH_PREFIX = "/music"
 
 
-def connect():
-    client = mpd.MPDClient()
-    client.connect(MPD_HOST, MPD_PORT)
-    return client
+class MPDClient:
+    def __init__(self, host: str, port: int):
+        self.host = host
+        self.port = port
+        self.client = OriginalMPDClient()
+        self.disconnect()
 
+    async def connect(self):
+        await self.client.connect(MPD_HOST, MPD_PORT)
 
-def get_queue():
-    client = connect()
-    queue = client.playlistinfo()
-    client.close()
-    return queue
+    def disconnect(self):
+        self.client.disconnect()
 
+    def get_queue(self):
+        queue = self.client.playlistinfo()
+        return queue
 
-def add_local_song(file_path, mainloop=False):
-    client = connect()
-    if mainloop:
-        client.add("mainloop/" + file_path)
-    else:
-        client.add("user/" + file_path)
-    client.close()
-    return file_path
+    async def add_local_song(self, filename: str, mainloop: bool = False):
+        if mainloop:
+            # TODO
+            pass
+        else:
+            logging.debug(f"Adding {filename} to MPD queue.")
+            # await self.client.add(f"file://{MLD_PATH_PREFIX}/{filename}")
+            await self.client.add(f"{filename}")
+        return filename
 
-
-async def download_and_add(url, mainloop=False):
-    from .youtube_dl import download_song
-
-    file_path = await download_song(url, mainloop)
-    return add_local_song(file_path, mainloop)
-
-
-def remove_song(song_id):
-    client = connect()
-    client.deleteid(song_id)
-    client.close()
+    def remove_song(self, song_id: int):
+        self.client.deleteid(song_id)

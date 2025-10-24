@@ -6,7 +6,8 @@ from app.settings import settings
 
 if __name__ == "__main__":
     app_identifier = "app.main:app"
-    logging.getLogger().setLevel(logging.INFO if not settings.DEBUG else logging.DEBUG)
+    loglevel = logging.INFO if not settings.DEBUG else logging.DEBUG
+    logging.getLogger().setLevel(loglevel)
     uvicorn.run(
         app_identifier,
         host=settings.HOST,

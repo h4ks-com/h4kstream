@@ -5,46 +5,53 @@ services:
     build:
       context: ./main
     volumes:
-      - ./data:/app/data
+    - ./data:/app/data
     environment:
-      - REDIS_HOST=redis
-      - ICECAST_HOST=icecast
-      - MPD_HOST=localhost
-      - MPD_PORT=6600
+    - REDIS_HOST=redis
+    - ICECAST_HOST=icecast
+    - MPD_HOST=localhost
+    - MPD_PORT=6600
     depends_on:
-      - redis
-      - icecast
+    - redis
+    - icecast
     ports:
-      - "8000:8000"
+    - "8000:8000"
 
   redis:
     image: redis:alpine
     container_name: redis
     ports:
-      - "6379:6379"
+    - "6379:6379"
+
+  mpd:
+    image: gists/mpd:latest
+    container_name: mpd
+    user: root
+    volumes:
+    - ${VOLUME_PATH}/music:/music
+    - ${VOLUME_PATH}/playlist:/var/lib/mpd/playlists:rw
+    ports:
+    - "6600:6600"
+    - "8000:8000"
 
   icecast:
     image: pellaeon/icecast:latest
     container_name: icecast
     environment:
-      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD}
-      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD}
-      - ICECAST_PASSWORD=${ICECAST_PASSWORD}
-      - ICECAST_HOSTNAME=localhost
+    - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD}
+    - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD}
+    - ICECAST_PASSWORD=${ICECAST_PASSWORD}
+    - ICECAST_HOSTNAME=localhost
     ports:
-      - "8005:8000"
+    - "8005:8000"
 
   caddy:
     image: caddy:alpine
     container_name: caddy
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+    - ./Caddyfile:/etc/caddy/Caddyfile
     ports:
-      - "80:80"
-
-volumes:
-  mpd_data:
-    driver: local
+    - "80:80"
 
 networks:
   default:
