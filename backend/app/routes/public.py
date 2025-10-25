@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 from uuid import uuid4
 
@@ -13,7 +14,7 @@ from app.dependencies import dep_mpd_client
 from app.services.mpd_service import MPDClient
 from app.services.youtube_dl import YoutubeDownloadException
 from app.services.youtube_dl import download_song
-from app.settings import settings
+from app.settings import MUSIC_DIR
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -28,26 +29,33 @@ async def add_song(
     # TODO: Check if user is allowed to add songs
 
     filename = uuid4().hex + ".mp3"
-    music_path = Path(settings.VOLUME_PATH) / Path("music")
+    music_path = Path(MUSIC_DIR)
     target_path = music_path / Path(filename)
     if url and file:
-        raise HTTPException(status_code=400, detail="Cannot provide both URL and file.")
+        raise HTTPException(
+            status_code=400, detail="Cannot provide both URL and file.")
     if url:
         try:
             result = await download_song(url)
         except YoutubeDownloadException as e:
             raise HTTPException(status_code=400, detail=e.error_type.value)
         song_path = result.path
-        song_path = song_path.rename(target_path)
+        shutil.move(str(song_path), str(target_path))
+        song_path = target_path
+        await mpd_client.update_database()
     elif file:
-        song_path = Path(settings.VOLUME_PATH) / Path(
+        from app.settings import SONGS_DIR
+        song_path = Path(SONGS_DIR) / Path(
             sanitize_filename(song_name or file.filename or filename)
         )
         with open(song_path, "wb") as f:
             f.write(await file.read())
-        song_path = song_path.rename(target_path)
+        shutil.move(str(song_path), str(target_path))
+        song_path = target_path
+        await mpd_client.update_database()
     else:
-        raise HTTPException(status_code=400, detail="No valid URL or file provided.")
+        raise HTTPException(
+            status_code=400, detail="No valid URL or file provided.")
 
     await mpd_client.add_local_song(song_path.name)
 
@@ -58,7 +66,9 @@ async def add_song(
 
 @router.get("/list")
 async def list_songs(mpd_client: MPDClient = Depends(dep_mpd_client)):
-    return mpd_client.get_queue()
+    queue = await mpd_client.get_queue()
+    print("Queue:", queue)
+    return queue
 
 
 @router.post("/delete")

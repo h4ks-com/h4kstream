@@ -30,5 +30,7 @@ class Settings(BaseSettings):
 
 settings = Settings()
 TEMPLATES_PATH = "static"
+MUSIC_DIR = "/music"
+SONGS_DIR = "/songs"
 
-__all__ = ["settings"]
+__all__ = ["settings", "MUSIC_DIR", "SONGS_DIR"]

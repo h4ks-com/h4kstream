@@ -25,4 +25,4 @@ async def dep_mpd_client() -> AsyncGenerator[MPDClient, None]:
     client = MPDClient(settings.MPD_HOST, settings.MPD_PORT)
     await client.connect()
     yield client
-    client.disconnect()
+    await client.disconnect()

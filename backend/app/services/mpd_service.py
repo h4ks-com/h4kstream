@@ -1,11 +1,7 @@
+import asyncio
 import logging
-import os
 
-from mpd.asyncio import MPDClient as OriginalMPDClient
-
-MPD_HOST = os.getenv("MPD_HOST", "localhost")
-MPD_PORT = int(os.getenv("MPD_PORT", "6600"))
-MLD_PATH_PREFIX = "/music"
+from mpd import MPDClient as OriginalMPDClient
 
 
 class MPDClient:
@@ -13,17 +9,15 @@ class MPDClient:
         self.host = host
         self.port = port
         self.client = OriginalMPDClient()
-        self.disconnect()
 
     async def connect(self):
-        await self.client.connect(MPD_HOST, MPD_PORT)
+        await asyncio.to_thread(self.client.connect, self.host, self.port)
 
-    def disconnect(self):
-        self.client.disconnect()
+    async def disconnect(self):
+        await asyncio.to_thread(self.client.disconnect)
 
-    def get_queue(self):
-        queue = self.client.playlistinfo()
-        return queue
+    async def get_queue(self):
+        return await asyncio.to_thread(self.client.playlistinfo)
 
     async def add_local_song(self, filename: str, mainloop: bool = False):
         if mainloop:
@@ -31,9 +25,32 @@ class MPDClient:
             pass
         else:
             logging.debug(f"Adding {filename} to MPD queue.")
-            # await self.client.add(f"file://{MLD_PATH_PREFIX}/{filename}")
-            await self.client.add(f"{filename}")
+            print(f"Adding {filename}")
+            try:
+                await asyncio.to_thread(self.client.add, f"{filename}")
+                print(f"Added {filename}")
+            except Exception as e:
+                print(f"Error: {e}, reconnecting")
+                await self.connect()
+                await asyncio.to_thread(self.client.add, f"{filename}")
+                print(f"Added {filename} after reconnect")
         return filename
 
-    def remove_song(self, song_id: int):
-        self.client.deleteid(song_id)
+    async def remove_song(self, song_id: int):
+        await asyncio.to_thread(self.client.deleteid, song_id)
+
+    async def update_database(self, path: str = ""):
+        print(f"Updating database with {path}")
+        try:
+            await asyncio.to_thread(self.client.update, path)
+            await self._wait_for_update()
+            print("Updated database")
+        except Exception as e:
+            print(f"Update failed: {e}")
+
+    async def _wait_for_update(self):
+        while True:
+            status = await asyncio.to_thread(self.client.status)
+            if 'updating_db' not in status:
+                break
+            await asyncio.sleep(0.1)

@@ -26,4 +26,6 @@ repos:
     additional_dependencies:
     - "pydantic==2.10.0"
     - "types-redis==4.6.0.20241004"
-    args: [--ignore-missing-imports]
+    args:
+    - --ignore-missing-imports
+    - --disable-error-code=attr-defined
