@@ -86,3 +86,63 @@ class MPDClient:
     async def clear_queue(self):
         """Clear all songs from the MPD queue."""
         await asyncio.to_thread(self.client.clear)
+
+    async def list_all(self):
+        """List all songs in the MPD database."""
+        return await asyncio.to_thread(self.client.listall)
+
+    async def set_repeat(self, enabled: bool):
+        """Enable or disable repeat mode."""
+        await asyncio.to_thread(self.client.repeat, 1 if enabled else 0)
+
+    async def set_random(self, enabled: bool):
+        """Enable or disable random mode."""
+        await asyncio.to_thread(self.client.random, 1 if enabled else 0)
+
+    async def play(self, position: int | None = None):
+        """Start playback at the given position (or resume if None)."""
+        if position is not None:
+            await asyncio.to_thread(self.client.play, position)
+        else:
+            await asyncio.to_thread(self.client.play)
+
+    async def get_status(self):
+        """Get current MPD status."""
+        return await asyncio.to_thread(self.client.status)
+
+    async def setup_autoplay(self):
+        """Set up MPD for auto-play: clear queue, add all songs, enable repeat/random, and start playing."""
+        logging.info("Setting up MPD auto-play...")
+
+        # Clear existing queue
+        logging.info("Clearing MPD queue...")
+        await self.clear_queue()
+        logging.info("Cleared MPD queue")
+
+        # Get all songs and add them
+        logging.info("Listing all songs in library...")
+        all_songs = await self.list_all()
+        song_count = 0
+        for item in all_songs:
+            if "file" in item:
+                try:
+                    await asyncio.to_thread(self.client.add, item["file"])
+                    song_count += 1
+                except CommandError as e:
+                    logging.warning(f"Failed to add {item['file']}: {e}")
+
+        logging.info(f"Added {song_count} songs to queue")
+
+        # Enable repeat and random
+        logging.info("Enabling repeat and random modes...")
+        await self.set_repeat(True)
+        await self.set_random(True)
+        logging.info("Enabled repeat and random modes")
+
+        # Start playing
+        if song_count > 0:
+            logging.info("Starting playback...")
+            await self.play(0)
+            logging.info("Started playback - MPD auto-play configured!")
+        else:
+            logging.warning("No songs found in library, playback not started")

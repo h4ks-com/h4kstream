@@ -41,9 +41,27 @@ services:
     volumes:
     - ${VOLUME_PATH}/music:/music
     - ${VOLUME_PATH}/playlist:/var/lib/mpd/playlists:rw
+    - ./mpd/mpd.conf:/etc/mpd.conf:ro
     ports:
     - '6600:6600'
-    - '8000:8000'
+    - '8001:8001'
+
+  liquidsoap:
+    image: savonet/liquidsoap:v2.3.0
+    container_name: liquidsoap
+    volumes:
+    - ./liquidsoap/radio.liq:/etc/liquidsoap/radio.liq:ro
+    environment:
+    - ICECAST_HOST=icecast
+    - ICECAST_PORT=8000
+    - ICECAST_PASSWORD=${ICECAST_SOURCE_PASSWORD}
+    - MPD_HOST=mpd
+    - MPD_PORT=8001
+    depends_on:
+    - mpd
+    - icecast
+    restart: unless-stopped
+    command: /etc/liquidsoap/radio.liq
 
   icecast:
     image: infiniteproject/icecast:latest

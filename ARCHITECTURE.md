@@ -13,7 +13,9 @@ Music streaming platform with web-based control interface. Manages YouTube video
   - MPD client integration for playback control
   - Redis for state/queue management
   - RESTful API with OpenAPI spec
+  - Auto-play initialization via FastAPI lifespan
 - **Port**: 8383
+- **Auto-Play**: Configured on startup via lifespan function (loads all songs, enables repeat/random, starts playback)
 
 ### 2. Frontend (React/TypeScript)
 - **Framework**: React 18 + TypeScript
@@ -31,21 +33,31 @@ Music streaming platform with web-based control interface. Manages YouTube video
 - **Config**: Custom mpd.conf
 - **Features**:
   - Multi-format audio playback
-  - Playlist management
-  - HTTP audio output to Icecast
-- **Port**: 6600 (control), 8000 (HTTP stream)
+  - Auto-play on startup (via backend FastAPI lifespan)
+  - HTTP audio output (Vorbis, 44100Hz)
+- **Port**: 6600 (control), 8001 (HTTP stream)
+
+### 4. Liquidsoap
+- **Purpose**: Stream relay and audio processing
+- **Config**: liquidsoap/radio.liq
+- **Features**:
+  - Relays MPD to Icecast
+  - Transcodes Vorbis → Opus (128kbps)
+  - Fallback to blank audio if MPD disconnects
+  - Foundation for future custom streams/mixing
+- **Stream**: http://mpd:8001/ → Icecast mount /radio
 
 ## Infrastructure Services
 
 - **Redis**: State management and queue storage (port 6379)
-- **Icecast**: Live audio streaming server (port 8005)
+- **Icecast**: Live audio streaming server (port 8005, mount: /radio)
 - **Caddy**: Reverse proxy (port 80)
 
 ## Data Flow
 ```
-User → Frontend → Backend API → MPD → Audio Files
-                      ↓              ↓
-                    Redis        Icecast → Stream Output
+User → Frontend → Backend API → MPD (Vorbis) → Liquidsoap (Opus) → Icecast → Stream Output (http://localhost:8005/radio)
+                      ↓              ↑
+                    Redis    Auto-play (lifespan)
                       ↓
                   yt-dlp (download)
 ```
@@ -62,7 +74,8 @@ User → Frontend → Backend API → MPD → Audio Files
   ├── components/      - UI components
   └── api/             - Generated API client
 
-/mpd/                  - MPD configuration
+/mpd/                  - MPD configuration and startup script
+/liquidsoap/           - Liquidsoap relay configuration
 /data/                 - Persistent data
 ```
 
@@ -110,4 +123,15 @@ Docker Compose orchestrates all services with:
 - Backend: `backend/.env`, `backend/pyproject.toml`
 - Frontend: `frontend/package.json`, `frontend/tsconfig.json`
 - MPD: `mpd/mpd.conf`
+- Liquidsoap: `liquidsoap/radio.liq`
 - Docker: `compose.yaml`
+
+## Streaming
+- **Listen**: http://localhost:8005/radio
+- **Codec**: Opus 128kbps, 48kHz
+- **Auto-start**: Music begins playing automatically on `docker compose up`
+  - Backend lifespan connects to MPD on startup
+  - Loads all songs from /music directory
+  - Enables repeat and random modes
+  - Starts playback automatically
+  - Manual trigger available: `POST /admin/setup-autoplay` (requires admin token)

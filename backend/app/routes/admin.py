@@ -1,3 +1,4 @@
+import logging
 import shutil
 from pathlib import Path
 from uuid import uuid4
@@ -23,6 +24,8 @@ from app.services.youtube_dl import YoutubeDownloadException
 from app.services.youtube_dl import download_song
 from app.settings import MUSIC_DIR
 from app.settings import SONGS_DIR
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/admin",
@@ -117,3 +120,21 @@ async def admin_clear_queue(mpd_client: MPDClient = Depends(dep_mpd_client)) -> 
     """Admin endpoint to clear all songs from queue."""
     await mpd_client.clear_queue()
     return SuccessResponse()
+
+
+@router.post(
+    "/setup-autoplay",
+    response_model=SuccessResponse,
+    summary="Setup MPD Auto-play",
+    description="Manually trigger MPD auto-play setup (load all songs, enable repeat/random, start playing)",
+    responses={500: {"model": ErrorResponse}},
+)
+async def setup_autoplay(mpd_client: MPDClient = Depends(dep_mpd_client)) -> SuccessResponse:
+    """Manually trigger MPD auto-play setup."""
+    try:
+        logger.info("Manual auto-play setup triggered")
+        await mpd_client.setup_autoplay()
+        return SuccessResponse(message="Auto-play configured successfully")
+    except Exception as e:
+        logger.error(f"Failed to setup auto-play: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to setup auto-play: {str(e)}")

@@ -32,5 +32,5 @@ COPY app/ /app/app/
 # Expose port
 EXPOSE 8000
 
-# Run FastAPI
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run FastAPI using python -m to ensure proper module initialization
+CMD ["uv", "run", "python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
