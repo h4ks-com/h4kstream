@@ -1,5 +1,6 @@
 import os
 
+from pydantic import Field
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
@@ -12,8 +13,11 @@ class Settings(BaseSettings):
     CHECK_WORKING_PROVIDERS: bool = True
     DEBUG: bool = False
     ADMIN_API_TOKEN: str = "changeme"
+    JWT_SECRET: str = Field(default_factory=lambda: os.urandom(24).hex())
     MPD_HOST: str = "localhost"
     MPD_PORT: int = 6600
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
     VOLUME_PATH: str = "./volumes"
     model_config = SettingsConfigDict(
         env_file="../.env",

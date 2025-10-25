@@ -10,10 +10,15 @@ services:
     - ${VOLUME_PATH}/songs:/songs
     environment:
     - REDIS_HOST=redis
+    - REDIS_PORT=6379
     - ICECAST_HOST=icecast
     - MPD_HOST=mpd
     - MPD_PORT=6600
     - VOLUME_PATH=./backend/volumes
+    - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
+    - JWT_SECRET=${JWT_SECRET}
+    - DEBUG=${DEBUG}
+    - RELOAD=${RELOAD}
     depends_on:
     - redis
     - icecast

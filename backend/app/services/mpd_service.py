@@ -1,7 +1,11 @@
 import asyncio
 import logging
 
+from mpd import CommandError
 from mpd import MPDClient as OriginalMPDClient
+
+from app.exceptions import FileNotFoundInMPDError
+from app.exceptions import SongNotFoundError
 
 
 class MPDClient:
@@ -20,6 +24,10 @@ class MPDClient:
         return await asyncio.to_thread(self.client.playlistinfo)
 
     async def add_local_song(self, filename: str, mainloop: bool = False):
+        """Add a song to the MPD queue.
+
+        :raises FileNotFoundInMPDError: If the file is not found in MPD database
+        """
         if mainloop:
             # TODO
             pass
@@ -29,15 +37,35 @@ class MPDClient:
             try:
                 await asyncio.to_thread(self.client.add, f"{filename}")
                 print(f"Added {filename}")
-            except Exception as e:
+            except CommandError as e:
+                if "No such directory" in str(e) or "No such file" in str(e):
+                    raise FileNotFoundInMPDError(f"File '{filename}' not found in MPD database")
                 print(f"Error: {e}, reconnecting")
+                try:
+                    await self.disconnect()
+                except Exception:
+                    pass
                 await self.connect()
-                await asyncio.to_thread(self.client.add, f"{filename}")
-                print(f"Added {filename} after reconnect")
+                try:
+                    await asyncio.to_thread(self.client.add, f"{filename}")
+                    print(f"Added {filename} after reconnect")
+                except CommandError as retry_error:
+                    if "No such directory" in str(retry_error) or "No such file" in str(retry_error):
+                        raise FileNotFoundInMPDError(f"File '{filename}' not found in MPD database")
+                    raise
         return filename
 
     async def remove_song(self, song_id: int):
-        await asyncio.to_thread(self.client.deleteid, song_id)
+        """Remove a song from the queue by ID.
+
+        :raises SongNotFoundError: If the song ID doesn't exist
+        """
+        try:
+            await asyncio.to_thread(self.client.deleteid, song_id)
+        except CommandError as e:
+            if "No such song" in str(e):
+                raise SongNotFoundError(f"Song with ID {song_id} not found")
+            raise
 
     async def update_database(self, path: str = ""):
         print(f"Updating database with {path}")
@@ -54,3 +82,7 @@ class MPDClient:
             if 'updating_db' not in status:
                 break
             await asyncio.sleep(0.1)
+
+    async def clear_queue(self):
+        """Clear all songs from the MPD queue."""
+        await asyncio.to_thread(self.client.clear)
