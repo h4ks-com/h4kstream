@@ -20,6 +20,8 @@ repos:
     - "httpx==0.28.1"
     - "python-dotenv==1.1.1"
     - "pytest>=8.4.2"
+    - "redis>=5.2.1"
+    - "types-redis>=4.6.0.20241004"
+    - "pyjwt>=2.10.0"
     args:
-    - --ignore-missing-imports
     - --disable-error-code=attr-defined

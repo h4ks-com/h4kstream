@@ -7,9 +7,7 @@ class TokenCreateRequest(BaseModel):
     """Request model for creating JWT tokens."""
 
     duration_seconds: int = Field(..., ge=1, le=86400, description="Token validity duration in seconds (max 1 day)")
-    max_queue_songs: int | None = Field(
-        None, ge=1, le=100, description="Maximum songs allowed in queue simultaneously"
-    )
+    max_queue_songs: int | None = Field(None, ge=1, le=100, description="Maximum songs allowed in queue simultaneously")
     max_add_requests: int | None = Field(
         None,
         ge=1,

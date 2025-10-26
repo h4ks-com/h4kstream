@@ -67,14 +67,12 @@ async def add_song(
 
     if current_queue_count >= max_songs:
         raise HTTPException(
-            status_code=403,
-            detail=f"Queue limit exceeded: {current_queue_count}/{max_songs} songs in queue"
+            status_code=403, detail=f"Queue limit exceeded: {current_queue_count}/{max_songs} songs in queue"
         )
 
     if current_add_count >= max_adds:
         raise HTTPException(
-            status_code=403,
-            detail=f"Add request limit exceeded: {current_add_count}/{max_adds} total requests used"
+            status_code=403, detail=f"Add request limit exceeded: {current_add_count}/{max_adds} total requests used"
         )
 
     filename = uuid4().hex + ".mp3"

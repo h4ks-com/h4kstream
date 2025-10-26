@@ -8,7 +8,8 @@ def jwt_token_with_limit(client: httpx.Client, admin_headers: dict[str, str]) ->
     """Create a JWT token with limit of 3 for testing."""
     response = client.post("/admin/token", json={"duration_seconds": 3600, "max_queue_songs": 3}, headers=admin_headers)
     assert response.status_code == 200
-    return response.json()["token"]
+    token: str = response.json()["token"]
+    return token
 
 
 @pytest.fixture

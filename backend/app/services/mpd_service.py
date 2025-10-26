@@ -7,6 +7,8 @@ from mpd import MPDClient as OriginalMPDClient
 from app.exceptions import FileNotFoundInMPDError
 from app.exceptions import SongNotFoundError
 
+logger = logging.getLogger(__name__)
+
 
 class MPDClient:
     def __init__(self, host: str, port: int):
@@ -33,16 +35,15 @@ class MPDClient:
             # TODO
             pass
         else:
-            logging.debug(f"Adding {filename} to MPD queue.")
-            print(f"Adding {filename}")
+            logger.debug(f"Adding {filename} to MPD queue.")
             try:
                 song_id = await asyncio.to_thread(self.client.addid, f"{filename}")
-                print(f"Added {filename} with song_id={song_id}")
+                logger.debug(f"Added {filename} with song_id={song_id}")
                 return song_id
             except CommandError as e:
                 if "No such directory" in str(e) or "No such file" in str(e):
                     raise FileNotFoundInMPDError(f"File '{filename}' not found in MPD database")
-                print(f"Error: {e}, reconnecting")
+                logger.warning(f"MPD error: {e}, reconnecting...")
                 try:
                     await self.disconnect()
                 except Exception:
@@ -50,7 +51,7 @@ class MPDClient:
                 await self.connect()
                 try:
                     song_id = await asyncio.to_thread(self.client.addid, f"{filename}")
-                    print(f"Added {filename} after reconnect with song_id={song_id}")
+                    logger.info(f"Added {filename} after reconnect with song_id={song_id}")
                     return song_id
                 except CommandError as retry_error:
                     if "No such directory" in str(retry_error) or "No such file" in str(retry_error):
@@ -70,18 +71,18 @@ class MPDClient:
             raise
 
     async def update_database(self, path: str = ""):
-        print(f"Updating database with {path}")
+        logger.debug(f"Updating MPD database: {path}")
         try:
             await asyncio.to_thread(self.client.update, path)
             await self._wait_for_update()
-            print("Updated database")
+            logger.debug("MPD database updated successfully")
         except Exception as e:
-            print(f"Update failed: {e}")
+            logger.error(f"MPD database update failed: {e}")
 
     async def _wait_for_update(self):
         while True:
             status = await asyncio.to_thread(self.client.status)
-            if 'updating_db' not in status:
+            if "updating_db" not in status:
                 break
             await asyncio.sleep(0.1)
 

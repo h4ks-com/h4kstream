@@ -20,6 +20,7 @@ services:
     - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
     - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
     - JWT_SECRET=${JWT_SECRET}
+    - LOG_LEVEL=${LOG_LEVEL:-INFO}
     - DEBUG=${DEBUG}
     - RELOAD=${RELOAD}
     depends_on:
@@ -33,6 +34,23 @@ services:
   redis:
     image: redis:alpine
     container_name: redis
+    command:
+    - redis-server
+    - --save
+    - '60'
+    - '1'
+    - --save
+    - '300'
+    - '10'
+    - --save
+    - '900'
+    - '1000'
+    - --appendonly
+    - 'yes'
+    - --appendfsync
+    - everysec
+    volumes:
+    - ./data/redis:/data
     ports:
     - '6379:6379'
 

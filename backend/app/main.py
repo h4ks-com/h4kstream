@@ -8,6 +8,13 @@ from app.routes import public
 from app.services.mpd_service import MPDClient
 from app.settings import settings
 
+# Configure global logging
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
 logger = logging.getLogger(__name__)
 
 

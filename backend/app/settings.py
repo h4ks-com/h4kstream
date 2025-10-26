@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     RELOAD: bool = False
     CHECK_WORKING_PROVIDERS: bool = True
     DEBUG: bool = False
+    LOG_LEVEL: str = "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
     ADMIN_API_TOKEN: str = "changeme"  # Comma-separated list of admin tokens
     LIQUIDSOAP_TOKEN: str = "liquidsoap-secret"  # Liquidsoap internal token
     JWT_SECRET: str = Field(default_factory=lambda: os.urandom(24).hex())
@@ -40,6 +41,15 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("LOG_LEVEL")
+    def validate_log_level(cls, value: str) -> str:
+        """Validate log level is valid."""
+        valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        value_upper = value.upper()
+        if value_upper not in valid_levels:
+            raise ValueError(f"LOG_LEVEL must be one of {valid_levels}, got {value}")
+        return value_upper
 
     @field_validator("VOLUME_PATH")
     def validate_volumes_path(cls, value):
