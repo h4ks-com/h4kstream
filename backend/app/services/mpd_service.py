@@ -26,6 +26,7 @@ class MPDClient:
     async def add_local_song(self, filename: str, mainloop: bool = False):
         """Add a song to the MPD queue.
 
+        :returns: The MPD song ID of the added song
         :raises FileNotFoundInMPDError: If the file is not found in MPD database
         """
         if mainloop:
@@ -35,8 +36,9 @@ class MPDClient:
             logging.debug(f"Adding {filename} to MPD queue.")
             print(f"Adding {filename}")
             try:
-                await asyncio.to_thread(self.client.add, f"{filename}")
-                print(f"Added {filename}")
+                song_id = await asyncio.to_thread(self.client.addid, f"{filename}")
+                print(f"Added {filename} with song_id={song_id}")
+                return song_id
             except CommandError as e:
                 if "No such directory" in str(e) or "No such file" in str(e):
                     raise FileNotFoundInMPDError(f"File '{filename}' not found in MPD database")
@@ -47,13 +49,13 @@ class MPDClient:
                     pass
                 await self.connect()
                 try:
-                    await asyncio.to_thread(self.client.add, f"{filename}")
-                    print(f"Added {filename} after reconnect")
+                    song_id = await asyncio.to_thread(self.client.addid, f"{filename}")
+                    print(f"Added {filename} after reconnect with song_id={song_id}")
+                    return song_id
                 except CommandError as retry_error:
                     if "No such directory" in str(retry_error) or "No such file" in str(retry_error):
                         raise FileNotFoundInMPDError(f"File '{filename}' not found in MPD database")
                     raise
-        return filename
 
     async def remove_song(self, song_id: int):
         """Remove a song from the queue by ID.
@@ -99,12 +101,20 @@ class MPDClient:
         """Enable or disable random mode."""
         await asyncio.to_thread(self.client.random, 1 if enabled else 0)
 
+    async def set_consume(self, enabled: bool):
+        """Enable or disable consume mode (auto-remove songs after playback)."""
+        await asyncio.to_thread(self.client.consume, 1 if enabled else 0)
+
     async def play(self, position: int | None = None):
         """Start playback at the given position (or resume if None)."""
         if position is not None:
             await asyncio.to_thread(self.client.play, position)
         else:
             await asyncio.to_thread(self.client.play)
+
+    async def pause(self):
+        """Pause playback (toggle pause state)."""
+        await asyncio.to_thread(self.client.pause, 1)
 
     async def get_status(self):
         """Get current MPD status."""

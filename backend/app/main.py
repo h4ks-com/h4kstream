@@ -8,31 +8,52 @@ from app.routes import public
 from app.services.mpd_service import MPDClient
 from app.settings import settings
 
-# Configure logging
 logger = logging.getLogger(__name__)
+
+
+async def setup_mpd_instance(
+    client: MPDClient, name: str, enable_repeat: bool = False, enable_random: bool = False
+) -> None:
+    """Setup and start MPD instance if it has songs in queue."""
+    try:
+        await client.connect()
+        status = await client.get_status()
+        queue_length = int(status.get("playlistlength", 0))
+
+        if queue_length > 0:
+            if enable_repeat:
+                await client.set_repeat(True)
+            if enable_random:
+                await client.set_random(True)
+
+            mode_info = []
+            if enable_repeat:
+                mode_info.append("looping")
+            if enable_random:
+                mode_info.append("random")
+            mode_str = f", {' + '.join(mode_info)} enabled" if mode_info else ""
+
+            logger.info(f"{name}: {queue_length} songs{mode_str}, starting playback")
+            await client.play()
+        else:
+            logger.info(f"{name} empty")
+    except Exception as e:
+        logger.error(f"Failed to setup {name}: {e}", exc_info=True)
+    finally:
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Resume playback on startup if queue has songs."""
-    mpd_client = MPDClient(settings.MPD_HOST, settings.MPD_PORT)
-    try:
-        await mpd_client.connect()
-        status = await mpd_client.get_status()
-        queue_length = int(status.get("playlistlength", 0))
+    """Resume playback on startup for both MPD instances."""
+    mpd_user = MPDClient(settings.MPD_USER_HOST, settings.MPD_USER_PORT)
+    mpd_fallback = MPDClient(settings.MPD_FALLBACK_HOST, settings.MPD_FALLBACK_PORT)
 
-        if queue_length > 0:
-            logger.info(f"Found {queue_length} songs in queue, starting playback")
-            await mpd_client.play()
-        else:
-            logger.info("Queue is empty, not starting playback")
-    except Exception as e:
-        logger.error(f"Failed to resume playback: {e}", exc_info=True)
-    finally:
-        try:
-            await mpd_client.disconnect()
-        except Exception as ex:
-            logger.warning(f"Failed to disconnect from MPD: {ex}")
+    await setup_mpd_instance(mpd_user, "User queue")
+    await setup_mpd_instance(mpd_fallback, "Fallback playlist", enable_repeat=True, enable_random=True)
 
     yield
 

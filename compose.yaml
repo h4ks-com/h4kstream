@@ -12,17 +12,21 @@ services:
     - REDIS_HOST=redis
     - REDIS_PORT=6379
     - ICECAST_HOST=icecast
-    - MPD_HOST=mpd
-    - MPD_PORT=6600
+    - MPD_USER_HOST=mpd-user
+    - MPD_USER_PORT=6600
+    - MPD_FALLBACK_HOST=mpd-fallback
+    - MPD_FALLBACK_PORT=6601
     - VOLUME_PATH=./backend/volumes
     - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
+    - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
     - JWT_SECRET=${JWT_SECRET}
     - DEBUG=${DEBUG}
     - RELOAD=${RELOAD}
     depends_on:
     - redis
     - icecast
-    - mpd
+    - mpd-user
+    - mpd-fallback
     ports:
     - '8383:8000'
 
@@ -32,12 +36,10 @@ services:
     ports:
     - '6379:6379'
 
-  mpd:
+  mpd-user:
     image: gists/mpd:latest
-    container_name: mpd
+    container_name: mpd-user
     user: root
-    environment:
-    - VOLUME_PATH=./backend/volumes
     volumes:
     - ${VOLUME_PATH}/music:/music
     - ${VOLUME_PATH}/playlist:/var/lib/mpd/playlists:rw
@@ -45,6 +47,18 @@ services:
     ports:
     - '6600:6600'
     - '8001:8001'
+
+  mpd-fallback:
+    image: gists/mpd:latest
+    container_name: mpd-fallback
+    user: root
+    volumes:
+    - ${VOLUME_PATH}/music:/music
+    - ${VOLUME_PATH}/playlist-fallback:/var/lib/mpd/playlists:rw
+    - ./mpd/mpd-fallback.conf:/etc/mpd.conf:ro
+    ports:
+    - '6601:6601'
+    - '8002:8002'
 
   liquidsoap:
     image: savonet/liquidsoap:v2.3.0
@@ -55,10 +69,13 @@ services:
     - ICECAST_HOST=icecast
     - ICECAST_PORT=8000
     - ICECAST_PASSWORD=${ICECAST_SOURCE_PASSWORD}
-    - MPD_HOST=mpd
-    - MPD_PORT=8001
+    - MPD_USER_HOST=mpd-user
+    - MPD_USER_PORT=8001
+    - MPD_FALLBACK_HOST=mpd-fallback
+    - MPD_FALLBACK_PORT=8002
     depends_on:
-    - mpd
+    - mpd-user
+    - mpd-fallback
     - icecast
     restart: unless-stopped
     command: /etc/liquidsoap/radio.liq

@@ -1,25 +1,9 @@
-import os
-
 import httpx
-import pytest
-from dotenv import load_dotenv
-
-load_dotenv("../.env")
-
-API_URL = os.getenv("API_URL", "http://localhost:8383")
-ADMIN_TOKEN = os.getenv("ADMIN_API_TOKEN", "changeme")
 
 
-@pytest.fixture
-def client() -> httpx.Client:
-    """Create HTTP client for testing."""
-    return httpx.Client(base_url=API_URL, timeout=30.0)
-
-
-def test_admin_token_auth(client: httpx.Client) -> None:
+def test_admin_token_auth(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that admin token authentication works."""
-    headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
-    response = client.post("/admin/clear", headers=headers)
+    response = client.post("/admin/clear", headers=admin_headers)
     assert response.status_code == 200
     assert response.json() == {"status": "success"}
 
@@ -31,20 +15,17 @@ def test_admin_token_auth_fails_with_invalid_token(client: httpx.Client) -> None
     assert response.status_code == 401
 
 
-def test_create_jwt_token(client: httpx.Client) -> None:
+def test_create_jwt_token(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test JWT token creation endpoint."""
-    headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
-    response = client.post("/admin/token", json={"duration_seconds": 3600}, headers=headers)
+    response = client.post("/admin/token", json={"duration_seconds": 3600}, headers=admin_headers)
     assert response.status_code == 200
     data = response.json()
     assert "token" in data
     assert len(data["token"]) > 0
 
 
-def test_jwt_token_validation(client: httpx.Client) -> None:
+def test_jwt_token_validation(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that valid JWT tokens are accepted for authenticated endpoints."""
-    admin_headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
-
     token_response = client.post("/admin/token", json={"duration_seconds": 3600}, headers=admin_headers)
     assert token_response.status_code == 200
     jwt_token = token_response.json()["token"]
@@ -55,10 +36,8 @@ def test_jwt_token_validation(client: httpx.Client) -> None:
     assert delete_response.status_code in [200, 404, 500]
 
 
-def test_full_auth_flow(client: httpx.Client) -> None:
+def test_full_auth_flow(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test complete auth flow: admin clears, creates token, verifies token works."""
-    admin_headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
-
     clear_response = client.post("/admin/clear", headers=admin_headers)
     assert clear_response.status_code == 200
 
@@ -72,14 +51,12 @@ def test_full_auth_flow(client: httpx.Client) -> None:
     assert len(jwt_token) > 0
 
 
-def test_jwt_max_duration_enforcement(client: httpx.Client) -> None:
+def test_jwt_max_duration_enforcement(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that JWT token duration validation rejects values over 1 day."""
-    headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
-
-    response = client.post("/admin/token", json={"duration_seconds": 100000}, headers=headers)
+    response = client.post("/admin/token", json={"duration_seconds": 100000}, headers=admin_headers)
     assert response.status_code == 422
 
-    valid_response = client.post("/admin/token", json={"duration_seconds": 86400}, headers=headers)
+    valid_response = client.post("/admin/token", json={"duration_seconds": 86400}, headers=admin_headers)
     assert valid_response.status_code == 200
 
 
@@ -108,21 +85,17 @@ def test_public_list_works_without_auth(client: httpx.Client) -> None:
     assert isinstance(response.json(), list)
 
 
-def test_admin_can_access_admin_endpoints(client: httpx.Client) -> None:
+def test_admin_can_access_admin_endpoints(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that admin token can access all admin endpoints."""
-    headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
-
-    clear_response = client.post("/admin/clear", headers=headers)
+    clear_response = client.post("/admin/clear", headers=admin_headers)
     assert clear_response.status_code == 200
 
-    token_response = client.post("/admin/token", json={"duration_seconds": 1800}, headers=headers)
+    token_response = client.post("/admin/token", json={"duration_seconds": 1800}, headers=admin_headers)
     assert token_response.status_code == 200
 
 
-def test_jwt_token_cannot_access_admin_endpoints(client: httpx.Client) -> None:
+def test_jwt_token_cannot_access_admin_endpoints(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that JWT tokens cannot access admin-only endpoints."""
-    admin_headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
-
     token_response = client.post("/admin/token", json={"duration_seconds": 3600}, headers=admin_headers)
     assert token_response.status_code == 200
     jwt_token = token_response.json()["token"]
@@ -136,19 +109,21 @@ def test_jwt_token_cannot_access_admin_endpoints(client: httpx.Client) -> None:
     assert create_token_response.status_code == 401
 
 
-def test_admin_token_works_on_public_endpoints(client: httpx.Client) -> None:
-    """Test that admin token can be used on public authenticated endpoints."""
-    admin_headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
-
+def test_admin_token_not_allowed_on_public_endpoints(client: httpx.Client, admin_headers: dict[str, str]) -> None:
+    """Test that admin tokens are rejected on public authenticated endpoints (requires JWT for user tracking)."""
     delete_response = client.delete("/public/delete/999", headers=admin_headers)
-    assert delete_response.status_code == 404
+    assert delete_response.status_code == 403
+    assert "Admin token not allowed" in delete_response.json()["detail"]
 
 
-def test_delete_non_existent_song_returns_404(client: httpx.Client) -> None:
+def test_delete_non_existent_song_returns_404(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that deleting a non-existent song returns 404, not 500."""
-    admin_headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    token_response = client.post("/admin/token", json={"duration_seconds": 3600}, headers=admin_headers)
+    assert token_response.status_code == 200
+    jwt_token = token_response.json()["token"]
+    jwt_headers = {"Authorization": f"Bearer {jwt_token}"}
 
-    response = client.delete("/public/delete/99999", headers=admin_headers)
+    response = client.delete("/public/delete/99999", headers=jwt_headers)
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 

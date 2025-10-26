@@ -1,11 +1,31 @@
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import model_validator
 
 
 class TokenCreateRequest(BaseModel):
     """Request model for creating JWT tokens."""
 
     duration_seconds: int = Field(..., ge=1, le=86400, description="Token validity duration in seconds (max 1 day)")
+    max_queue_songs: int | None = Field(
+        None, ge=1, le=100, description="Maximum songs allowed in queue simultaneously"
+    )
+    max_add_requests: int | None = Field(
+        None,
+        ge=1,
+        le=1000,
+        description="Total number of times user can invoke add endpoint (lifetime limit, persists after deletes)",
+    )
+
+    @model_validator(mode="after")
+    def validate_add_requests(self) -> "TokenCreateRequest":
+        """Validate that max_add_requests >= max_queue_songs."""
+        if self.max_add_requests is not None and self.max_queue_songs is not None:
+            if self.max_add_requests < self.max_queue_songs:
+                raise ValueError(
+                    f"max_add_requests ({self.max_add_requests}) must be >= max_queue_songs ({self.max_queue_songs})"
+                )
+        return self
 
 
 class TokenCreateResponse(BaseModel):

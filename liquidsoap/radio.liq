@@ -1,27 +1,57 @@
 #!/usr/bin/liquidsoap
 
-# Get environment variables (v2.3.0 syntax)
+# Get environment variables
 icecast_host = environment.get("ICECAST_HOST")
 icecast_port = int_of_string(environment.get("ICECAST_PORT"))
 icecast_password = environment.get("ICECAST_PASSWORD")
-mpd_host = environment.get("MPD_HOST")
-mpd_port = environment.get("MPD_PORT")
+mpd_user_host = environment.get("MPD_USER_HOST")
+mpd_user_port = environment.get("MPD_USER_PORT")
+mpd_fallback_host = environment.get("MPD_FALLBACK_HOST")
+mpd_fallback_port = environment.get("MPD_FALLBACK_PORT")
 
-log("Starting Liquidsoap relay...")
-log("MPD source: http://#{mpd_host}:#{mpd_port}/")
-log("Icecast target: #{icecast_host}:#{icecast_port}/radio")
+# Suppress connection error logs
+settings.log.level.set(3)
 
-# Input from MPD HTTP stream (with retry and resilience)
-mpd_stream = input.http(timeout=10.0, "http://#{mpd_host}:#{mpd_port}/")
+log("Starting h4kstream Radio...")
+log("User queue: http://#{mpd_user_host}:#{mpd_user_port}/")
+log("Fallback: http://#{mpd_fallback_host}:#{mpd_fallback_port}/")
+log("Output: #{icecast_host}:#{icecast_port}/radio")
 
-# Generate white noise as fallback
-white_noise = amplify(0.1, noise())
+# User queue MPD (consume mode auto-removes songs after playback)
+mpd_user = input.http(
+  timeout=5.0,
+  "http://#{mpd_user_host}:#{mpd_user_port}/"
+)
 
-# Fallback chain: try MPD first, use white noise if unavailable
-# mksafe wraps the fallback to handle disconnections gracefully
-radio = mksafe(fallback(track_sensitive=false, [mpd_stream, white_noise]))
+# Fallback MPD (always looping with repeat/random)
+mpd_fallback = input.http(
+  timeout=5.0,
+  "http://#{mpd_fallback_host}:#{mpd_fallback_port}/"
+)
 
-# Output to Icecast with low-latency Opus
+# Emergency white noise - always available fallback
+emergency = noise()
+
+# Smooth cross-fade function
+def smooth(old, new) =
+  add(normalize=false, [
+    sequence([fade.out(duration=2.0, old), blank()]),
+    sequence([blank(duration=0.0), fade.in(duration=2.0, new)])
+  ])
+end
+
+# Create fallback chain with transitions
+# Liquidsoap automatically selects first available source
+radio = fallback(
+  track_sensitive=false,
+  transitions=[smooth, smooth],
+  [mpd_user, mpd_fallback, emergency]
+)
+
+# Safety wrapper to ensure stream never fails
+radio = mksafe(radio)
+
+# Output to Icecast
 output.icecast(
   %opus(bitrate=128, samplerate=48000),
   host = icecast_host,
@@ -29,10 +59,10 @@ output.icecast(
   password = icecast_password,
   mount = "/radio",
   name = "h4kstream Radio",
-  description = "Default Playlist",
+  description = "h4kstream - Your music, your queue",
   genre = "Various",
   url = "http://radio.h4ks.com",
   radio
 )
 
-log("Liquidsoap started - relaying MPD to Icecast")
+log("Liquidsoap started - continuous streaming with 3-tier failsafe")

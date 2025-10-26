@@ -36,22 +36,50 @@ class RedisService:
         """Delete a key from Redis."""
         await self.redis.delete(key)
 
-    async def set_user_song(self, user_id: str, song_data: dict):
-        """Store a song in the Redis database associated with a user.
+    async def add_user_song(self, user_id: str, song_id: str, song_filename: str) -> None:
+        """Track a song added by a user (for queue limits)."""
+        key = f"user:{user_id}:songs"
+        await self.redis.sadd(key, f"{song_id}:{song_filename}")
+        await self.redis.expire(key, 86400)
 
-        :param user_id: The ID of the user adding the song
-        :param song_data: Dictionary containing song data (e.g., title, URL)
-        """
-        await self.set(f"user:{user_id}:song", song_data)
+    async def remove_user_song(self, user_id: str, song_id: str) -> None:
+        """Remove a song from user's tracked songs."""
+        key = f"user:{user_id}:songs"
+        songs = await self.redis.smembers(key)
+        for song in songs:
+            if song.decode().startswith(f"{song_id}:"):
+                await self.redis.srem(key, song)
+                break
 
-    async def get_user_song(self, user_id: str) -> dict | None:
-        """Retrieve a song associated with a user from Redis.
+    async def get_user_song_count(self, user_id: str) -> int:
+        """Get count of songs currently in queue for user."""
+        key = f"user:{user_id}:songs"
+        return await self.redis.scard(key)
 
-        :param user_id: The ID of the user
-        :return: Song data or None if not found
-        """
-        return await self.get(f"user:{user_id}:song")
+    async def get_user_songs(self, user_id: str) -> list[dict[str, str]]:
+        """Get all songs added by user with their song_ids and filenames."""
+        key = f"user:{user_id}:songs"
+        songs = await self.redis.smembers(key)
+        result = []
+        for song in songs:
+            parts = song.decode().split(":", 1)
+            if len(parts) == 2:
+                result.append({"song_id": parts[0], "filename": parts[1]})
+        return result
 
-    async def clear_user_song(self, user_id: str):
-        """Delete the song associated with a user from Redis."""
-        await self.delete(f"user:{user_id}:song")
+    async def map_song_to_user(self, song_id: str, user_id: str) -> None:
+        """Map a song_id to user_id for cleanup tracking."""
+        await self.redis.setex(f"song:{song_id}:user", 86400, user_id)
+
+    async def increment_user_add_count(self, user_id: str) -> int:
+        """Increment and return total add requests count for user (lifetime counter)."""
+        key = f"user:{user_id}:add_count"
+        count = await self.redis.incr(key)
+        await self.redis.expire(key, 86400)
+        return count
+
+    async def get_user_add_count(self, user_id: str) -> int:
+        """Get total add requests count for user."""
+        key = f"user:{user_id}:add_count"
+        count = await self.redis.get(key)
+        return int(count) if count else 0

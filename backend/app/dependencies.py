@@ -20,7 +20,8 @@ def _extract_token(credentials: HTTPAuthorizationCredentials) -> str:
 
 
 def _is_admin_token(token: str) -> bool:
-    return secrets.compare_digest(token.encode("utf8"), settings.ADMIN_API_TOKEN.encode("utf8"))
+    """Check if token matches any valid admin token."""
+    return any(secrets.compare_digest(token.encode("utf8"), valid.encode("utf8")) for valid in settings.admin_tokens)
 
 
 def admin_auth(credentials: HTTPAuthorizationCredentials = Depends(security)) -> bool:
@@ -50,11 +51,26 @@ def jwt_or_admin_auth(credentials: HTTPAuthorizationCredentials = Depends(securi
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-async def dep_mpd_client() -> AsyncGenerator[MPDClient, None]:
-    client = MPDClient(settings.MPD_HOST, settings.MPD_PORT)
+async def dep_mpd_user() -> AsyncGenerator[MPDClient, None]:
+    """User queue MPD instance."""
+    client = MPDClient(settings.MPD_USER_HOST, settings.MPD_USER_PORT)
     await client.connect()
     yield client
     await client.disconnect()
+
+
+async def dep_mpd_fallback() -> AsyncGenerator[MPDClient, None]:
+    """Fallback playlist MPD instance."""
+    client = MPDClient(settings.MPD_FALLBACK_HOST, settings.MPD_FALLBACK_PORT)
+    await client.connect()
+    yield client
+    await client.disconnect()
+
+
+async def dep_mpd_client() -> AsyncGenerator[MPDClient, None]:
+    """Legacy: User MPD instance (for backwards compatibility)."""
+    async for client in dep_mpd_user():
+        yield client
 
 
 async def dep_redis_client() -> AsyncGenerator[RedisService, None]:
@@ -64,3 +80,17 @@ async def dep_redis_client() -> AsyncGenerator[RedisService, None]:
         yield client
     finally:
         await client.close()
+
+
+def get_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Extract JWT token from request (exclude admin tokens)."""
+    token = _extract_token(credentials)
+    if _is_admin_token(token):
+        raise HTTPException(status_code=403, detail="Admin token not allowed for this operation")
+    try:
+        validate_token(token)
+        return token
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
