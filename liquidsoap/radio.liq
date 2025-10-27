@@ -70,10 +70,10 @@ def on_livestream_connect(headers) =
   response = http.post(headers=auth_headers, data=body, connect_url)
   log("Connect callback response: #{response}")
 
-  # Pause MPD user queue when livestream starts
-  pause_url = "http://#{backend_host}:#{backend_port}/internal/mpd/pause"
+  # Pause user queue when livestream starts
+  pause_url = "http://#{backend_host}:#{backend_port}/admin/playback/pause?playlist=user"
   pause_response = http.post(headers=auth_headers, pause_url)
-  log("MPD pause response: #{pause_response}")
+  log("User queue pause response: #{pause_response}")
 end
 
 # Disconnection callback for live streaming
@@ -89,10 +89,10 @@ def on_livestream_disconnect() =
   response = http.post(headers=auth_headers, data=body, disconnect_url)
   log("Disconnect callback response: #{response}")
 
-  # Resume MPD user queue when livestream ends
-  resume_url = "http://#{backend_host}:#{backend_port}/internal/mpd/resume"
+  # Resume user queue when livestream ends
+  resume_url = "http://#{backend_host}:#{backend_port}/admin/playback/resume?playlist=user"
   resume_response = http.post(headers=auth_headers, resume_url)
-  log("MPD resume response: #{resume_response}")
+  log("User queue resume response: #{resume_response}")
 
   current_livestream_token := ""
 end
@@ -119,23 +119,10 @@ mpd_fallback = input.http(
   "http://#{mpd_fallback_host}:#{mpd_fallback_port}/"
 )
 
-# Emergency white noise - always available fallback
 emergency = amplify(0.1, noise())
 
-# Smooth cross-fade function - overlaps old (fading out) with new (fading in)
-def smooth(old, new) =
-  add(normalize=false, [
-    fade.out(duration=2.0, old),
-    fade.in(duration=2.0, new)
-  ])
-end
-
-# Create fallback chain with transitions
-# Liquidsoap automatically selects first available source
-# Priority: live > user queue > fallback playlist > white noise
 radio = fallback(
   track_sensitive=false,
-  transitions=[smooth, smooth, smooth],
   [live, mpd_user, mpd_fallback, emergency]
 )
 

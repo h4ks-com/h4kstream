@@ -2,6 +2,9 @@ from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
 
+from app.types import PlaybackAction
+from app.types import PlaylistType
+
 
 class TokenCreateRequest(BaseModel):
     """Request model for creating JWT tokens."""
@@ -36,6 +39,13 @@ class SuccessResponse(BaseModel):
     """Generic success response."""
 
     status: str = Field(default="success", description="Operation status")
+
+
+class SongAddedResponse(BaseModel):
+    """Response for song addition with song ID."""
+
+    status: str = Field(default="success", description="Operation status")
+    song_id: int = Field(..., description="MPD song ID of the added song")
 
 
 class SongItem(BaseModel):
@@ -102,3 +112,10 @@ class LivestreamDisconnectRequest(BaseModel):
     """Request model for livestream disconnection tracking."""
 
     token: str = Field(..., description="JWT streaming token")
+
+
+class PlaybackControlRequest(BaseModel):
+    """Request model for playback control operations."""
+
+    playlist: PlaylistType = Field(default="user", description="Target playlist (user or radio)")
+    action: PlaybackAction = Field(..., description="Playback action (play, pause, resume)")

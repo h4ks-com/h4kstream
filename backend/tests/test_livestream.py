@@ -94,7 +94,21 @@ async def test_validate_and_reserve_slot_success(livestream_service):
 
 async def test_validate_and_reserve_slot_expired_token(livestream_service):
     """Test slot reservation with expired token."""
-    token, _ = generate_livestream_token(-10)
+    # Create a token that expired 10 seconds ago
+    from datetime import timedelta
+    from uuid import uuid4
+
+    from app.settings import settings
+
+    expiration = datetime.now(UTC) - timedelta(seconds=10)
+    payload = {
+        "exp": expiration,
+        "type": "livestream",
+        "user_id": uuid4().hex,
+        "max_streaming_seconds": 3600,
+    }
+    token = jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
+
     success, reason = await livestream_service.validate_and_reserve_slot(token, "192.168.1.1")
 
     assert success is False

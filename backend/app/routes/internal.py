@@ -1,3 +1,9 @@
+"""Internal API endpoints for Liquidsoap callbacks.
+
+These endpoints are called by Liquidsoap for livestream authentication and connection tracking. Requires admin token
+(LIQUIDSOAP_TOKEN).
+"""
+
 import logging
 
 from fastapi import APIRouter
@@ -12,7 +18,6 @@ from app.models import LivestreamConnectRequest
 from app.models import LivestreamDisconnectRequest
 from app.models import SuccessResponse
 from app.services.livestream_service import LivestreamService
-from app.services.mpd_instances import mpd_user
 
 logger = logging.getLogger(__name__)
 
@@ -66,41 +71,3 @@ async def livestream_disconnect(
     """Handle livestream disconnection and update total time."""
     await service.handle_disconnect(request.token)
     return SuccessResponse()
-
-
-@router.post(
-    "/mpd/pause",
-    response_model=SuccessResponse,
-    summary="Pause MPD User Queue",
-    description="Internal endpoint to pause the user MPD queue when livestream starts.",
-)
-async def mpd_pause() -> SuccessResponse:
-    """Pause MPD user queue playback."""
-    try:
-        await mpd_user.connect()
-        await mpd_user.pause()
-        await mpd_user.disconnect()
-        logger.info("MPD user queue paused")
-        return SuccessResponse()
-    except Exception as e:
-        logger.error(f"Failed to pause MPD: {e}")
-        return SuccessResponse()
-
-
-@router.post(
-    "/mpd/resume",
-    response_model=SuccessResponse,
-    summary="Resume MPD User Queue",
-    description="Internal endpoint to resume the user MPD queue when livestream ends.",
-)
-async def mpd_resume() -> SuccessResponse:
-    """Resume MPD user queue playback."""
-    try:
-        await mpd_user.connect()
-        await mpd_user.resume()
-        await mpd_user.disconnect()
-        logger.info("MPD user queue resumed")
-        return SuccessResponse()
-    except Exception as e:
-        logger.error(f"Failed to resume MPD: {e}")
-        return SuccessResponse()
