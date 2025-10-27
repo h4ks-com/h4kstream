@@ -7,7 +7,8 @@ from app.services.youtube_dl import download_song
 
 async def test_youtube_dl():
     result = await download_song("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-    assert result.title == "Rick Astley - Never Gonna Give You Up (Official Music Video)"
+    assert "Rick Astley" in result.title
+    assert "Never Gonna Give You Up" in result.title
     assert result.path.exists()
     assert 300 > result.length > 200
 

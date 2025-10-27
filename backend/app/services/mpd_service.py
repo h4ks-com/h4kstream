@@ -114,8 +114,12 @@ class MPDClient:
             await asyncio.to_thread(self.client.play)
 
     async def pause(self):
-        """Pause playback (toggle pause state)."""
+        """Pause playback."""
         await asyncio.to_thread(self.client.pause, 1)
+
+    async def resume(self):
+        """Resume playback (unpause)."""
+        await asyncio.to_thread(self.client.pause, 0)
 
     async def get_status(self):
         """Get current MPD status."""

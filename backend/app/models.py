@@ -60,3 +60,45 @@ class ErrorResponse(BaseModel):
     """Error response model."""
 
     detail: str = Field(..., description="Error message")
+
+
+class LivestreamTokenCreateRequest(BaseModel):
+    """Request model for creating livestream tokens."""
+
+    max_streaming_seconds: int = Field(
+        ..., ge=60, le=86400, description="Maximum streaming time in seconds (1 min to 24 hours)"
+    )
+
+
+class LivestreamTokenResponse(BaseModel):
+    """Response model for livestream token creation."""
+
+    token: str = Field(..., description="JWT token for streaming authentication")
+    expires_at: str = Field(..., description="ISO format expiration timestamp")
+    max_streaming_seconds: int = Field(..., description="Maximum allowed streaming time in seconds")
+
+
+class LivestreamAuthRequest(BaseModel):
+    """Request model for livestream authentication."""
+
+    token: str = Field(..., description="JWT streaming token")
+    address: str = Field(..., description="Source IP address")
+
+
+class LivestreamAuthResponse(BaseModel):
+    """Response model for livestream authentication."""
+
+    success: bool = Field(..., description="Whether authentication succeeded")
+    reason: str | None = Field(None, description="Failure reason if not successful")
+
+
+class LivestreamConnectRequest(BaseModel):
+    """Request model for livestream connection tracking."""
+
+    token: str = Field(..., description="JWT streaming token")
+
+
+class LivestreamDisconnectRequest(BaseModel):
+    """Request model for livestream disconnection tracking."""
+
+    token: str = Field(..., description="JWT streaming token")

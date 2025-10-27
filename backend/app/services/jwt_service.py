@@ -78,3 +78,38 @@ def get_max_add_requests(token: str) -> int:
     """Extract max_add_requests from JWT token."""
     payload = decode_token(token)
     return payload.get("max_add_requests", settings.DEFAULT_MAX_ADD_REQUESTS)
+
+
+def generate_livestream_token(max_streaming_seconds: int) -> tuple[str, datetime]:
+    """Generate a JWT token for livestreaming with time limit.
+
+    :param max_streaming_seconds: Maximum allowed streaming time in seconds
+    :return: Tuple of (encoded JWT token, expiration datetime)
+    """
+    max_duration = 86400
+    if max_streaming_seconds > max_duration:
+        max_streaming_seconds = max_duration
+
+    expiration = datetime.now(UTC) + timedelta(hours=24)
+    payload = {
+        "exp": expiration,
+        "type": "livestream",
+        "user_id": uuid4().hex,
+        "max_streaming_seconds": max_streaming_seconds,
+    }
+    token = jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
+    return token, expiration
+
+
+def decode_livestream_token(token: str) -> dict:
+    """Decode a livestream JWT token and return payload.
+
+    :param token: JWT token to decode
+    :return: Token payload with user_id and max_streaming_seconds
+    :raises jwt.ExpiredSignatureError: If token has expired
+    :raises jwt.InvalidTokenError: If token is invalid or not a livestream token
+    """
+    payload = decode_token(token)
+    if payload.get("type") != "livestream":
+        raise jwt.InvalidTokenError("Token is not a livestream token")
+    return payload

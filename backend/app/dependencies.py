@@ -2,12 +2,14 @@ import secrets
 from collections.abc import AsyncGenerator
 
 import jwt
+import redis.asyncio as redis
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.security import HTTPBearer
 
 from app.services.jwt_service import validate_token
+from app.services.livestream_service import LivestreamService
 from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
 from app.settings import settings
@@ -80,6 +82,16 @@ async def dep_redis_client() -> AsyncGenerator[RedisService, None]:
         yield client
     finally:
         await client.close()
+
+
+async def dep_livestream_service() -> AsyncGenerator[LivestreamService, None]:
+    """Livestream service with Redis backend."""
+    redis_client = redis.from_url(f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}")
+    service = LivestreamService(redis_client)
+    try:
+        yield service
+    finally:
+        await redis_client.close()
 
 
 def get_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:

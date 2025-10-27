@@ -18,10 +18,13 @@ from app.dependencies import dep_mpd_user
 from app.exceptions import FileNotFoundInMPDError
 from app.exceptions import SongNotFoundError
 from app.models import ErrorResponse
+from app.models import LivestreamTokenCreateRequest
+from app.models import LivestreamTokenResponse
 from app.models import SongItem
 from app.models import SuccessResponse
 from app.models import TokenCreateRequest
 from app.models import TokenCreateResponse
+from app.services.jwt_service import generate_livestream_token
 from app.services.jwt_service import generate_token
 from app.services.mpd_service import MPDClient
 from app.services.youtube_dl import YoutubeDownloadException
@@ -53,6 +56,20 @@ async def create_token(request: TokenCreateRequest) -> TokenCreateResponse:
     """Create a temporary JWT token with duration, queue limit, and add request limit."""
     token = generate_token(request.duration_seconds, request.max_queue_songs, request.max_add_requests)
     return TokenCreateResponse(token=token)
+
+
+@router.post(
+    "/livestream/token",
+    response_model=LivestreamTokenResponse,
+    summary="Create Livestream Token",
+    description="Create a livestream token with time limit. User can stream until time limit is reached.",
+)
+async def create_livestream_token(request: LivestreamTokenCreateRequest) -> LivestreamTokenResponse:
+    """Create a livestream token with specified time limit."""
+    token, expires_at = generate_livestream_token(request.max_streaming_seconds)
+    return LivestreamTokenResponse(
+        token=token, expires_at=expires_at.isoformat(), max_streaming_seconds=request.max_streaming_seconds
+    )
 
 
 @router.post(

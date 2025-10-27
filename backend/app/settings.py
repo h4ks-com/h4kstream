@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     MPD_FALLBACK_HOST: str = "localhost"
     MPD_FALLBACK_PORT: int = 6601
 
+    LIQUIDSOAP_TELNET_HOST: str = "liquidsoap"
+    LIQUIDSOAP_TELNET_PORT: int = 1234
+
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     VOLUME_PATH: str = "./volumes"

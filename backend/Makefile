@@ -15,6 +15,6 @@ check:
 	@echo "✅ All checks passed!"
 
 test:
-	@echo "Running tests..."
-	uv run pytest
+	@echo "Running tests in parallel..."
+	uv run pytest -n auto
 	@echo "✅ Tests completed!"
