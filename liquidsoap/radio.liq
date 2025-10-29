@@ -83,7 +83,6 @@ def on_livestream_disconnect() =
 
   disconnect_url = "http://#{backend_host}:#{backend_port}/internal/livestream/disconnect"
   auth_headers = [("Authorization", "Bearer #{liquidsoap_token}"), ("Content-Type", "application/json")]
-  # Use json.stringify to properly encode the token
   body = json.stringify({token = password})
 
   response = http.post(headers=auth_headers, data=body, disconnect_url)
@@ -97,6 +96,32 @@ def on_livestream_disconnect() =
   current_livestream_token := ""
 end
 
+# Track metadata reporting to backend
+def report_metadata(source_name, metadata) =
+  title = metadata["title"]
+  artist = metadata["artist"]
+
+  metadata_url = "http://#{backend_host}:#{backend_port}/internal/metadata/update"
+  auth_headers = [("Authorization", "Bearer #{liquidsoap_token}"), ("Content-Type", "application/json")]
+
+  body = json.stringify({
+    source = source_name,
+    metadata = {
+      title = title,
+      artist = artist,
+      genre = null(),
+      description = null()
+    }
+  })
+
+  try
+    response = http.post(headers=auth_headers, data=body, metadata_url)
+    log("Metadata update for #{source_name}: #{title} - #{artist}")
+  catch err do
+    log("Failed to update metadata: #{err}")
+  end
+end
+
 # Live stream harbor input (highest priority)
 live = input.harbor(
   id="live",
@@ -106,18 +131,21 @@ live = input.harbor(
   on_connect=on_livestream_connect,
   on_disconnect=on_livestream_disconnect
 )
+live = source.on_metadata(live, fun (m) -> report_metadata("livestream", m))
 
 # User queue MPD (consume mode auto-removes songs after playback)
 mpd_user = input.http(
   timeout=5.0,
   "http://#{mpd_user_host}:#{mpd_user_port}/"
 )
+mpd_user = source.on_metadata(mpd_user, fun (m) -> report_metadata("user", m))
 
 # Fallback MPD (always looping with repeat/random)
 mpd_fallback = input.http(
   timeout=5.0,
   "http://#{mpd_fallback_host}:#{mpd_fallback_port}/"
 )
+mpd_fallback = source.on_metadata(mpd_fallback, fun (m) -> report_metadata("fallback", m))
 
 emergency = amplify(0.1, noise())
 

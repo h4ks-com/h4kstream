@@ -8,6 +8,8 @@ from fastapi import FastAPI
 from app.routes import admin
 from app.routes import internal
 from app.routes import public
+from app.routes.metadata import internal_router as metadata_internal_router
+from app.routes.metadata import metadata_router
 from app.services.livestream_service import LivestreamService
 from app.services.mpd_service import MPDClient
 from app.settings import settings
@@ -107,3 +109,5 @@ app = FastAPI(
 app.include_router(public.router)
 app.include_router(admin.router)
 app.include_router(internal.router)
+app.include_router(metadata_router)
+app.include_router(metadata_internal_router)

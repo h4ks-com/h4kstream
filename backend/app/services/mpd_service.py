@@ -17,7 +17,13 @@ class MPDClient:
         self.client = OriginalMPDClient()
 
     async def connect(self):
-        await asyncio.to_thread(self.client.connect, self.host, self.port)
+        """Connect to MPD if not already connected."""
+        try:
+            # Try to ping to check if already connected
+            await asyncio.to_thread(self.client.ping)
+        except Exception:
+            # Not connected, so connect now
+            await asyncio.to_thread(self.client.connect, self.host, self.port)
 
     async def disconnect(self):
         await asyncio.to_thread(self.client.disconnect)
@@ -124,6 +130,10 @@ class MPDClient:
     async def get_status(self):
         """Get current MPD status."""
         return await asyncio.to_thread(self.client.status)
+
+    async def get_current_song(self):
+        """Get currently playing song info."""
+        return await asyncio.to_thread(self.client.currentsong)
 
     async def setup_autoplay(self):
         """Set up MPD for auto-play: clear queue, add all songs, enable repeat/random, and start playing."""

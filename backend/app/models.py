@@ -45,7 +45,7 @@ class SongAddedResponse(BaseModel):
     """Response for song addition with song ID."""
 
     status: str = Field(default="success", description="Operation status")
-    song_id: int = Field(..., description="MPD song ID of the added song")
+    song_id: str = Field(..., description="Prefixed song ID (u-{id} for user, f-{id} for fallback)")
 
 
 class SongItem(BaseModel):
@@ -119,3 +119,35 @@ class PlaybackControlRequest(BaseModel):
 
     playlist: PlaylistType = Field(default="user", description="Target playlist (user or radio)")
     action: PlaybackAction = Field(..., description="Playback action (play, pause, resume)")
+
+
+class NowPlayingMetadata(BaseModel):
+    """Metadata for currently playing track."""
+
+    title: str | None = Field(None, description="Track title")
+    artist: str | None = Field(None, description="Track artist")
+    genre: str | None = Field(None, description="Track genre")
+    description: str | None = Field(None, description="Track description")
+
+
+class MetadataUpdateRequest(BaseModel):
+    """Request for updating track metadata (from Liquidsoap)."""
+
+    source: str = Field(..., description="Source type: user, fallback, or livestream")
+    metadata: NowPlayingMetadata = Field(..., description="Track metadata")
+
+
+class MetadataSetRequest(BaseModel):
+    """Request for setting custom livestream metadata (from streamer)."""
+
+    title: str | None = Field(None, description="Stream title")
+    artist: str | None = Field(None, description="Artist/streamer name")
+    genre: str | None = Field(None, description="Music genre")
+    description: str | None = Field(None, description="Stream description")
+
+
+class NowPlayingResponse(BaseModel):
+    """Response for current playing track information."""
+
+    source: str = Field(..., description="Current source: user, fallback, or livestream")
+    metadata: NowPlayingMetadata = Field(..., description="Track metadata")

@@ -64,12 +64,12 @@ class Playlist:
 # ============================================================================
 
 
-def queue_delete(song_id: int) -> str:
+def queue_delete(song_id: str) -> str:
     """Get queue delete endpoint with song_id."""
     return QUEUE_DELETE.format(song_id=song_id)
 
 
-def admin_queue_delete(song_id: int) -> str:
+def admin_queue_delete(song_id: str) -> str:
     """Get admin queue delete endpoint with song_id."""
     return ADMIN_QUEUE_DELETE.format(song_id=song_id)
 

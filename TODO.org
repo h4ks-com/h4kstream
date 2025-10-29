@@ -7,12 +7,14 @@ https://chatgpt.com/c/67436428-aff0-8003-a47a-d006df6bdc40
 - [x] liquidsoap listens to mdp and outputs to iceast 
 - [x] Implement the other endpoints with rate limit using redis. We probably limit the user queue to 3 songs
 - [x] live user: https://www.liquidsoap.info/doc-2.2.5/harbor.html
-- [ ] Pause user queue on live stream start and resume on end... tricky
+- [x] Pause user queue on live stream start and resume on end... tricky
 - [ ] Implement an IRC bot binding when MPD changes or stream the bot echoes to the channel (webhooks?, subscription)
+- [ ] Transitions in liquidsoap between live and user queue
+- [ ] Trim silence from audio files
 - [ ] Implement frontend [0/4]
   - [ ] File upload
   - [ ] Youtube url
   - [ ] Youtube search
-  - [ ] Start custom stream
+  - [ ] Start custom stream (microphone)
 
 - [ ] Archive and list shows from s3 bucket

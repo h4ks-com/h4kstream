@@ -3,14 +3,15 @@
 # FFmpeg Live Streaming Script for h4kstream
 # ============================================================================
 #
-# This script gets a streaming token and streams an audio file to h4kstream
+# This script gets a streaming token and streams audio with embedded metadata
 #
 # Usage:
-#   ./ffmpeg-stream.sh <audio-file> [duration-seconds]
+#   ./ffmpeg-stream.sh <audio-file> [title] [artist] [genre] [duration-seconds]
 #
 # Examples:
 #   ./ffmpeg-stream.sh music.mp3
-#   ./ffmpeg-stream.sh podcast.m4a 7200
+#   ./ffmpeg-stream.sh music.mp3 "My Song" "My Band" "Rock"
+#   ./ffmpeg-stream.sh podcast.m4a "Episode 1" "Podcast Name" "Talk" 7200
 #
 # Requirements:
 #   - ffmpeg
@@ -24,40 +25,46 @@ set -e
 # Configuration
 H4KSTREAM_URL="${H4KSTREAM_URL:-http://localhost:8383}"
 STREAM_PORT="${STREAM_PORT:-8003}"
-ADMIN_TOKEN="${ADMIN_API_TOKEN}"
 DEFAULT_DURATION=3600  # 1 hour
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Load admin token from .env if not set
-if [ -z "$ADMIN_TOKEN" ] && [ -f "../.env" ]; then
-    export $(grep ADMIN_API_TOKEN ../.env | xargs)
-    ADMIN_TOKEN="${ADMIN_API_TOKEN}"
+# Auto-detect admin token from .env
+if [ -f "../.env" ]; then
+    export $(grep ADMIN_API_TOKEN ../.env | xargs 2>/dev/null || true)
 fi
+ADMIN_TOKEN="${ADMIN_API_TOKEN:-}"
 
 # Check if admin token is available
 if [ -z "$ADMIN_TOKEN" ]; then
     echo -e "${RED}Error: ADMIN_API_TOKEN not set${NC}"
-    echo "Set it via environment variable or in ../.env file"
+    echo "Set it in ../.env file"
     exit 1
 fi
 
-# Check arguments
+# Parse arguments
 if [ $# -lt 1 ]; then
-    echo "Usage: $0 <audio-file> [duration-seconds]"
+    echo "Usage: $0 <audio-file> [title] [artist] [genre] [duration-seconds]"
     echo ""
     echo "Examples:"
     echo "  $0 music.mp3"
-    echo "  $0 podcast.m4a 7200"
+    echo "  $0 music.mp3 \"My Song\" \"My Band\" \"Rock\""
+    echo "  $0 podcast.m4a \"Episode 1\" \"Podcast Name\" \"Talk\" 7200"
+    echo ""
+    echo "Metadata is embedded in the stream and detected by the system automatically."
     exit 1
 fi
 
 AUDIO_FILE="$1"
-DURATION="${2:-$DEFAULT_DURATION}"
+STREAM_TITLE="${2:-Live Stream}"
+STREAM_ARTIST="${3:-Unknown Artist}"
+STREAM_GENRE="${4:-Live}"
+DURATION="${5:-$DEFAULT_DURATION}"
 
 # Check if file exists
 if [ ! -f "$AUDIO_FILE" ]; then
@@ -77,8 +84,13 @@ echo -e "${GREEN}=== h4kstream Live Streaming ===${NC}"
 echo "File: $AUDIO_FILE"
 echo "Duration limit: ${DURATION}s"
 echo ""
+echo -e "${BLUE}Stream Metadata:${NC}"
+echo "  Title:  $STREAM_TITLE"
+echo "  Artist: $STREAM_ARTIST"
+echo "  Genre:  $STREAM_GENRE"
+echo ""
 
-# Get streaming token
+# Get streaming token (admin creates temporary user token)
 echo -e "${YELLOW}Getting streaming token...${NC}"
 TOKEN_RESPONSE=$(curl -s -X POST "${H4KSTREAM_URL}/admin/livestream/token" \
     -H "Authorization: Bearer ${ADMIN_TOKEN}" \
@@ -105,9 +117,10 @@ echo "Expires: $EXPIRES_AT"
 echo ""
 
 # Start streaming
-echo -e "${YELLOW}Starting stream...${NC}"
+echo -e "${YELLOW}Starting stream with embedded metadata...${NC}"
 echo "Stream URL: icecast://source:***@localhost:${STREAM_PORT}/live"
 echo "Listen at: http://localhost:8005/radio"
+echo "Metadata: http://localhost:8383/metadata/now"
 echo ""
 echo -e "${GREEN}Press Ctrl+C to stop${NC}"
 echo ""
@@ -115,13 +128,22 @@ echo ""
 # Stream with ffmpeg
 # -re: Read input at native frame rate (real-time)
 # -i: Input file
+# -metadata: Embed metadata in the stream (Vorbis comments for Ogg)
 # -c:a libvorbis: Encode audio with Vorbis codec
 # -b:a 128k: Audio bitrate 128 kbps
 # -f ogg: Output format Ogg
+# -ice_name, -ice_description, -ice_genre: Icecast metadata
 ffmpeg -re -i "$AUDIO_FILE" \
+    -metadata title="$STREAM_TITLE" \
+    -metadata artist="$STREAM_ARTIST" \
+    -metadata genre="$STREAM_GENRE" \
     -c:a libvorbis \
     -b:a 128k \
     -f ogg \
+    -content_type audio/ogg \
+    -ice_name "$STREAM_TITLE" \
+    -ice_genre "$STREAM_GENRE" \
+    -ice_description "Livestream: $STREAM_ARTIST - $STREAM_TITLE" \
     "icecast://source:${TOKEN}@localhost:${STREAM_PORT}/live"
 
 echo ""

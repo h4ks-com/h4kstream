@@ -28,6 +28,7 @@ from app.services import queue_service
 from app.services.jwt_service import generate_livestream_token
 from app.services.jwt_service import generate_token
 from app.services.playback_service import get_mpd_client
+from app.services.redis_service import parse_song_id
 from app.services.youtube_dl import YoutubeDownloadException
 from app.types import PlaylistType
 
@@ -91,6 +92,7 @@ async def create_livestream_token(request: LivestreamTokenCreateRequest) -> Live
 async def admin_add_song(
     url: str | None = Form(None),
     song_name: str | None = Form(None),
+    artist: str | None = Form(None),
     file: UploadFile | None = None,
     playlist: PlaylistType = Query("user", description="Target playlist (user or fallback)"),
 ) -> SongAddedResponse:
@@ -100,7 +102,7 @@ async def admin_add_song(
     try:
         await mpd_client.connect()
         song_id = await queue_service.add_song(
-            playlist=playlist, mpd_client=mpd_client, url=url, file=file, song_name=song_name
+            playlist=playlist, mpd_client=mpd_client, url=url, file=file, song_name=song_name, artist_name=artist
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -128,7 +130,7 @@ async def admin_list_songs(
 
     try:
         await mpd_client.connect()
-        return await queue_service.list_songs(mpd_client)
+        return await queue_service.list_songs(mpd_client, playlist)
     finally:
         await mpd_client.disconnect()
 
@@ -141,15 +143,25 @@ async def admin_list_songs(
     responses={404: {"model": ErrorResponse, "description": "Song not found"}},
 )
 async def admin_delete_song(
-    song_id: int,
+    song_id: str,
     playlist: PlaylistType = Query("user", description="Target playlist (user or fallback)"),
 ) -> SuccessResponse:
     """Delete song from specified playlist."""
+    try:
+        mpd_id, parsed_playlist = parse_song_id(song_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if parsed_playlist != playlist:
+        raise HTTPException(
+            status_code=400, detail=f"Song ID prefix '{parsed_playlist}' doesn't match playlist '{playlist}'"
+        )
+
     mpd_client = get_mpd_client(playlist)
 
     try:
         await mpd_client.connect()
-        await queue_service.delete_song(song_id=song_id, playlist=playlist, mpd_client=mpd_client)
+        await queue_service.delete_song(song_id=mpd_id, playlist=playlist, mpd_client=mpd_client)
     except SongNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     finally:

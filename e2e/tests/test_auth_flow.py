@@ -39,8 +39,8 @@ def test_jwt_token_validation(client: httpx.Client, admin_headers: dict[str, str
 
     jwt_headers = {"Authorization": f"Bearer {jwt_token}"}
 
-    delete_response = client.delete(queue_delete(999), headers=jwt_headers)
-    assert delete_response.status_code in [200, 404, 500]
+    delete_response = client.delete(queue_delete("u-999"), headers=jwt_headers)
+    assert delete_response.status_code in [200, 400, 404, 500]
 
 
 def test_full_auth_flow(client: httpx.Client, admin_headers: dict[str, str]) -> None:
@@ -81,7 +81,7 @@ def test_public_add_requires_auth(client: httpx.Client) -> None:
 
 def test_public_delete_requires_auth(client: httpx.Client) -> None:
     """Test that public delete endpoint requires authentication."""
-    response = client.delete(queue_delete(1))
+    response = client.delete(queue_delete("u-1"))
     assert response.status_code == 403
 
 
@@ -118,7 +118,7 @@ def test_jwt_token_cannot_access_admin_endpoints(client: httpx.Client, admin_hea
 
 def test_admin_token_not_allowed_on_public_endpoints(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that admin tokens are rejected on public authenticated endpoints (requires JWT for user tracking)."""
-    delete_response = client.delete(queue_delete(999), headers=admin_headers)
+    delete_response = client.delete(queue_delete("u-999"), headers=admin_headers)
     assert delete_response.status_code == 403
     assert "Admin token not allowed" in delete_response.json()["detail"]
 
@@ -130,7 +130,7 @@ def test_delete_non_existent_song_returns_404(client: httpx.Client, admin_header
     jwt_token = token_response.json()["token"]
     jwt_headers = {"Authorization": f"Bearer {jwt_token}"}
 
-    response = client.delete(queue_delete(99999), headers=jwt_headers)
+    response = client.delete(queue_delete("u-99999"), headers=jwt_headers)
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 

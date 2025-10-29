@@ -28,6 +28,7 @@ from app.services.jwt_service import get_max_queue_songs
 from app.services.jwt_service import get_user_id
 from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
+from app.services.redis_service import parse_song_id
 from app.services.youtube_dl import YoutubeDownloadException
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ router = APIRouter(
 async def add_song(
     url: str | None = Form(None),
     song_name: str | None = Form(None),
+    artist: str | None = Form(None),
     file: UploadFile | None = None,
     mpd_client: MPDClient = Depends(dep_mpd_user),
     redis_client: RedisService = Depends(dep_redis_client),
@@ -83,7 +85,6 @@ async def add_song(
             status_code=403, detail=f"Add request limit exceeded: {current_add_count}/{max_adds} total requests used"
         )
 
-    # Add song using unified service
     try:
         song_id = await queue_service.add_song(
             playlist="user",
@@ -91,6 +92,7 @@ async def add_song(
             url=url,
             file=file,
             song_name=song_name,
+            artist_name=artist,
             redis_client=redis_client,
             user_id=user_id,
         )
@@ -116,7 +118,7 @@ async def add_song(
     responses={400: {"model": ErrorResponse, "description": "Invalid limit parameter"}},
 )
 async def list_songs(
-    limit: int = Query(20, ge=1, le=20, description="Maximum number of songs to return (1-20)")
+    limit: int = Query(20, ge=1, le=20, description="Maximum number of songs to return (1-20)"),
 ) -> list[SongItem]:
     """Get songs from user queue and fallback playlist."""
     user_mpd = playback_service.get_mpd_client("user")
@@ -143,7 +145,7 @@ async def list_songs(
     responses={404: {"model": ErrorResponse, "description": "Song not found"}},
 )
 async def delete_song(
-    song_id: int,
+    song_id: str,
     mpd_client: MPDClient = Depends(dep_mpd_user),
     redis_client: RedisService = Depends(dep_redis_client),
     token: str = Depends(get_jwt_token),
@@ -152,9 +154,15 @@ async def delete_song(
     user_id = get_user_id(token)
 
     try:
+        mpd_id, playlist = parse_song_id(song_id)
+        if playlist != "user":
+            raise HTTPException(status_code=400, detail="Can only delete from user queue")
+
         await queue_service.delete_song(
-            song_id=song_id, playlist="user", mpd_client=mpd_client, redis_client=redis_client, user_id=user_id
+            song_id=mpd_id, playlist=playlist, mpd_client=mpd_client, redis_client=redis_client, user_id=user_id
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except SongNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

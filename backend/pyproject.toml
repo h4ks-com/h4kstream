@@ -13,6 +13,7 @@ dependencies = [
     "python-multipart>=0.0.20",
     "pyjwt>=2.10.1",
     "httpx>=0.28.1",
+    "mutagen>=1.47.0",
 ]
 
 [tool.uv]
@@ -50,8 +51,11 @@ force-single-line = true
 
 [tool.ruff.lint]
 extend-select = [
-    "F", "W", "I", "UP"
+    "F", "W", "I", "UP", "TID", "E402"
 ]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
 
 [tool.docformatter]
 wrap-summaries = 120

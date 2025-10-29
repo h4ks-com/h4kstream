@@ -1,7 +1,6 @@
 """Centralized playback control service.
 
-Provides unified play/pause/resume operations for both user queue
-and radio playlist.
+Provides unified play/pause/resume operations for both user queue and radio playlist.
 """
 
 import logging

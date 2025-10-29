@@ -134,13 +134,13 @@ def test_admin_endpoints_reject_jwt_tokens(client: httpx.Client, admin_headers: 
 
 def test_delete_nonexistent_song_from_user_queue(client: httpx.Client, jwt_headers: dict[str, str]) -> None:
     """Test that deleting non-existent song from user queue returns 404."""
-    response = client.delete(queue_delete(99999), headers=jwt_headers)
+    response = client.delete(queue_delete("u-99999"), headers=jwt_headers)
     assert response.status_code == 404
 
 
 def test_delete_nonexistent_song_from_fallback(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that deleting non-existent song from radio playlist returns 404."""
-    response = client.delete(admin_queue_delete(99999) + f"?playlist={Playlist.FALLBACK}", headers=admin_headers)
+    response = client.delete(admin_queue_delete("f-99999") + f"?playlist={Playlist.FALLBACK}", headers=admin_headers)
     assert response.status_code == 404
 
 

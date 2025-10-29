@@ -1,7 +1,6 @@
 """Centralized queue management service.
 
-Provides unified operations for both user queue and radio playlist,
-eliminating code duplication across route handlers.
+Provides unified operations for both user queue and radio playlist, eliminating code duplication across route handlers.
 """
 
 import logging
@@ -15,6 +14,7 @@ from yt_dlp.utils import sanitize_filename
 from app.models import SongItem
 from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
+from app.services.redis_service import format_song_id
 from app.services.youtube_dl import download_song
 from app.settings import MUSIC_FALLBACK_DIR
 from app.settings import MUSIC_USER_DIR
@@ -30,9 +30,10 @@ async def add_song(
     url: str | None = None,
     file: UploadFile | None = None,
     song_name: str | None = None,
+    artist_name: str | None = None,
     redis_client: RedisService | None = None,
     user_id: str | None = None,
-) -> int:
+) -> str:
     """Add a song to the specified playlist.
 
     Unified implementation for:
@@ -44,10 +45,11 @@ async def add_song(
     :param mpd_client: MPD client for the target playlist
     :param url: Optional YouTube/download URL
     :param file: Optional uploaded file
-    :param song_name: Optional song name (used with file upload)
+    :param song_name: Optional song name/title (used with file upload or to override metadata)
+    :param artist_name: Optional artist name (used with file upload or to override metadata)
     :param redis_client: Optional Redis client (required for user queue with tracking)
     :param user_id: Optional user ID (required for user queue with tracking)
-    :return: MPD song ID of the added song
+    :return: Prefixed song ID (u-{id} or f-{id})
     :raises ValueError: If both url and file provided, or neither provided
     :raises FileNotFoundInMPDError: If MPD can't find the added file
     """
@@ -57,45 +59,55 @@ async def add_song(
     if not url and not file:
         raise ValueError("No valid URL or file provided")
 
-    # Determine target directory based on playlist type
     music_path = Path(MUSIC_USER_DIR if playlist == "user" else MUSIC_FALLBACK_DIR)
     filename = uuid4().hex + ".mp3"
     target_path = music_path / filename
 
-    # Download or upload file
+    final_title = song_name
+    final_artist = artist_name
+
     if url:
         result = await download_song(url)
         shutil.move(str(result.path), str(target_path))
+
+        if not final_title:
+            final_title = result.title
+        if not final_artist:
+            final_artist = result.artist
     elif file:
         song_path = Path(SONGS_DIR) / sanitize_filename(song_name or file.filename or filename)
         with open(song_path, "wb") as f:
             f.write(await file.read())
         shutil.move(str(song_path), str(target_path))
 
-    # Update MPD database and add song
     await mpd_client.update_database()
-    song_id = await mpd_client.add_local_song(target_path.name)
+    mpd_song_id = await mpd_client.add_local_song(target_path.name)
 
-    # Track in Redis if user queue with tracking enabled
     if redis_client and user_id:
-        await redis_client.add_user_song(user_id, str(song_id), target_path.name)
-        await redis_client.map_song_to_user(str(song_id), user_id)
+        await redis_client.add_user_song(user_id, str(mpd_song_id), target_path.name)
+        await redis_client.map_song_to_user(str(mpd_song_id), user_id)
         await redis_client.increment_user_add_count(user_id)
 
-    # Configure playlist behavior
+    if redis_client:
+        metadata = {
+            "title": final_title,
+            "artist": final_artist,
+            "genre": None,
+            "description": None,
+        }
+        await redis_client.set_metadata(playlist, metadata)
+
     if playlist == "user":
-        # User queue: consume mode (auto-remove after playback)
         await mpd_client.set_consume(True)
     else:
-        # Radio playlist: repeat and random enabled
         await mpd_client.set_repeat(True)
         await mpd_client.set_random(True)
 
-    # Always start playback
     await mpd_client.play()
 
-    logger.info(f"Added song to {playlist} playlist: {target_path.name} (ID: {song_id})")
-    return song_id
+    prefixed_id = format_song_id(mpd_song_id, playlist)
+    logger.info(f"Added song to {playlist} playlist: {target_path.name} (ID: {prefixed_id})")
+    return prefixed_id
 
 
 async def delete_song(
@@ -123,14 +135,20 @@ async def delete_song(
     logger.info(f"Deleted song {song_id} from {playlist} playlist")
 
 
-async def list_songs(mpd_client: MPDClient) -> list[SongItem]:
+async def list_songs(mpd_client: MPDClient, playlist: PlaylistType | None = None) -> list[SongItem]:
     """List all songs in the queue.
 
     :param mpd_client: MPD client for the target playlist
+    :param playlist: Playlist type for ID prefixing (optional, defaults to no prefix)
     :return: List of songs in the queue
     """
     queue = await mpd_client.get_queue()
-    return [SongItem(**song) for song in queue]
+    songs = []
+    for song in queue:
+        if playlist:
+            song["id"] = format_song_id(int(song["id"]), playlist)
+        songs.append(SongItem(**song))
+    return songs
 
 
 async def clear_queue(mpd_client: MPDClient, playlist: PlaylistType) -> None:
@@ -151,19 +169,17 @@ async def get_next_songs(user_mpd_client: MPDClient, radio_mpd_client: MPDClient
     :param limit: Maximum number of songs to return (1-20)
     :return: List of upcoming songs (user queue first, then radio if needed)
     """
-    # Get songs from user queue first
-    user_songs = await list_songs(user_mpd_client)
+    user_songs = await list_songs(user_mpd_client, "user")
 
-    # If user queue has enough songs, return up to limit
     if len(user_songs) >= limit:
         return user_songs[:limit]
 
-    # Otherwise, get additional songs from radio queue
     remaining = limit - len(user_songs)
-    radio_songs = await list_songs(radio_mpd_client)
+    radio_songs = await list_songs(radio_mpd_client, "fallback")
 
-    # Combine: all user songs + remaining from radio
     combined = user_songs + radio_songs[:remaining]
 
-    logger.info(f"Returning {len(combined)} songs: {len(user_songs)} from user, {len(combined) - len(user_songs)} from radio")
+    logger.info(
+        f"Returning {len(combined)} songs: {len(user_songs)} from user, {len(combined) - len(user_songs)} from radio"
+    )
     return combined

@@ -25,3 +25,13 @@ repos:
     - "pyjwt>=2.10.0"
     args:
     - --disable-error-code=attr-defined
+
+- repo: local
+  hooks:
+  - id: no-scoped-imports
+    name: No scoped imports (must be at top of file)
+    entry: bash -c 'if grep -rn "^[[:space:]].*\bimport\b" e2e/tests --include="*.py" | grep -v "^[^:]*:[[:space:]]*#"; then
+      echo "❌ Found scoped imports - all imports must be at top of file"; exit 1; fi'
+    language: system
+    files: ^e2e/.*\.py$
+    pass_filenames: false

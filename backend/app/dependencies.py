@@ -106,3 +106,12 @@ def get_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security))
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def dep_liquidsoap_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> bool:
+    """Validate Liquidsoap internal token."""
+    token = _extract_token(credentials)
+    is_valid = secrets.compare_digest(token.encode("utf8"), settings.LIQUIDSOAP_TOKEN.encode("utf8"))
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return True
