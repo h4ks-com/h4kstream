@@ -10,7 +10,7 @@ https://chatgpt.com/c/67436428-aff0-8003-a47a-d006df6bdc40
 - [x] Pause user queue on live stream start and resume on end... tricky
 - [ ] Implement an IRC bot binding when MPD changes or stream the bot echoes to the channel (webhooks?, subscription)
 - [ ] Transitions in liquidsoap between live and user queue
-- [ ] Trim silence from audio files
+- [x] Trim silence from audio files
 - [ ] Implement frontend [0/4]
   - [ ] File upload
   - [ ] Youtube url

@@ -151,3 +151,75 @@ class NowPlayingResponse(BaseModel):
 
     source: str = Field(..., description="Current source: user, fallback, or livestream")
     metadata: NowPlayingMetadata = Field(..., description="Track metadata")
+
+
+# =============================================================================
+# Webhook Models
+# =============================================================================
+
+
+class WebhookSubscriptionRequest(BaseModel):
+    """Request model for creating webhook subscriptions."""
+
+    url: str = Field(..., description="Webhook endpoint URL (will receive POST requests)")
+    events: list[str] = Field(
+        ...,
+        min_length=1,
+        description="Event types to subscribe to: song_changed, livestream_started, livestream_ended, queue_switched",
+    )
+    signing_key: str = Field(
+        ..., min_length=16, description="Secret key for HMAC signature verification (min 16 chars)"
+    )
+    description: str | None = Field(None, description="Optional description of webhook purpose")
+
+    @model_validator(mode="after")
+    def validate_events(self) -> "WebhookSubscriptionRequest":
+        """Validate event types are recognized."""
+        valid_events = {"song_changed", "livestream_started", "livestream_ended", "queue_switched"}
+        for event in self.events:
+            if event not in valid_events:
+                raise ValueError(f"Invalid event type: {event}. Must be one of {valid_events}")
+        return self
+
+
+class WebhookSubscriptionResponse(BaseModel):
+    """Response model for webhook subscription creation."""
+
+    webhook_id: str = Field(..., description="Unique webhook identifier")
+    url: str = Field(..., description="Webhook endpoint URL")
+    events: list[str] = Field(..., description="Subscribed event types")
+    description: str | None = Field(None, description="Webhook description")
+    created_at: str = Field(..., description="ISO format creation timestamp")
+
+
+class WebhookSubscription(BaseModel):
+    """Full webhook subscription details."""
+
+    webhook_id: str = Field(..., description="Unique webhook identifier")
+    url: str = Field(..., description="Webhook endpoint URL")
+    events: list[str] = Field(..., description="Subscribed event types")
+    description: str | None = Field(None, description="Webhook description")
+    created_at: str = Field(..., description="ISO format creation timestamp")
+
+
+class WebhookDelivery(BaseModel):
+    """Webhook delivery attempt log."""
+
+    webhook_id: str = Field(..., description="Webhook identifier")
+    event_type: str = Field(..., description="Event type delivered")
+    url: str = Field(..., description="Destination URL")
+    status: str = Field(..., description="Delivery status: success or failed")
+    status_code: int | None = Field(None, description="HTTP status code (if request succeeded)")
+    error: str | None = Field(None, description="Error message (if delivery failed)")
+    timestamp: str = Field(..., description="ISO format delivery timestamp")
+
+
+class WebhookStats(BaseModel):
+    """Webhook delivery statistics."""
+
+    webhook_id: str = Field(..., description="Webhook identifier")
+    total_deliveries: int = Field(..., description="Total delivery attempts")
+    success_count: int = Field(..., description="Successful deliveries")
+    failure_count: int = Field(..., description="Failed deliveries")
+    success_rate: float = Field(..., description="Success rate (0.0-1.0)")
+    last_delivery: str | None = Field(None, description="ISO format timestamp of last delivery attempt")

@@ -1,11 +1,10 @@
 services:
   main:
-    image: python:3.12-slim
     container_name: main
     build:
       context: ./backend
+      dockerfile: Dockerfile
     volumes:
-    - ./backend/app:/app/app
     - ./data:/app/data
     - ${VOLUME_PATH}/music:/music
     - ${VOLUME_PATH}/songs:/songs
@@ -31,6 +30,31 @@ services:
     - mpd-fallback
     ports:
     - '8383:8000'
+
+  webhook_worker:
+    container_name: webhook_worker
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["uv", "run", "python", "-m", "app.services.webhook_worker"]
+    environment:
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+    - MPD_USER_HOST=mpd-user
+    - MPD_USER_PORT=6600
+    - MPD_FALLBACK_HOST=mpd-fallback
+    - MPD_FALLBACK_PORT=6601
+    - LIQUIDSOAP_TELNET_HOST=liquidsoap
+    - LIQUIDSOAP_TELNET_PORT=1234
+    - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+    depends_on:
+    - redis
+    - liquidsoap
+    - mpd-user
+    - mpd-fallback
+    restart: unless-stopped
 
   redis:
     image: redis:alpine

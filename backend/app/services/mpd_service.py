@@ -135,6 +135,17 @@ class MPDClient:
         """Get currently playing song info."""
         return await asyncio.to_thread(self.client.currentsong)
 
+    async def idle(self, subsystems: list[str] | None = None):
+        """Wait for MPD subsystem changes (blocking until state change).
+
+        :param subsystems: List of subsystems to monitor (e.g., ['player', 'playlist']) If None, monitors all subsystems
+        :return: List of changed subsystems
+        """
+        if subsystems:
+            return await asyncio.to_thread(self.client.idle, *subsystems)
+        else:
+            return await asyncio.to_thread(self.client.idle)
+
     async def setup_autoplay(self):
         """Set up MPD for auto-play: clear queue, add all songs, enable repeat/random, and start playing."""
         logging.info("Setting up MPD auto-play...")

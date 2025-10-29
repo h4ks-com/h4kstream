@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.security import HTTPBearer
 
+from app.services.event_publisher import EventPublisher
 from app.services.jwt_service import validate_token
 from app.services.livestream_service import LivestreamService
 from app.services.mpd_service import MPDClient
@@ -115,3 +116,13 @@ def dep_liquidsoap_token(credentials: HTTPAuthorizationCredentials = Depends(sec
     if not is_valid:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return True
+
+
+async def dep_event_publisher() -> AsyncGenerator[EventPublisher, None]:
+    """Event publisher for webhook notifications."""
+    redis_client = redis.from_url(f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}")
+    publisher = EventPublisher(redis_client)
+    try:
+        yield publisher
+    finally:
+        await redis_client.close()

@@ -65,17 +65,16 @@ class TestAdminPlaybackEndpoints:
         assert response.json() == {"status": "success"}
         mock_mpd.play.assert_called_once()
 
-    def test_admin_play_radio_playlist(self, admin_token, mock_mpd):
-        """Test /admin/playback/play with playlist=radio."""
+    def test_admin_play_fallback_playlist(self, admin_token, mock_mpd):
+        """Test /admin/playback/play with playlist=fallback."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
             response = client.post(
-                "/admin/playback/play?playlist=radio",
+                "/admin/playback/play?playlist=fallback",
                 headers={"Authorization": f"Bearer {admin_token}"}
             )
 
         assert response.status_code == 200
-        mock_mpd.set_repeat.assert_called_once_with(True)
-        mock_mpd.set_random.assert_called_once_with(True)
+        assert response.json() == {"status": "success"}
         mock_mpd.play.assert_called_once()
 
     def test_admin_pause(self, admin_token, mock_mpd):
@@ -121,11 +120,11 @@ class TestAdminQueueEndpoints:
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    def test_admin_list_radio_playlist(self, admin_token, mock_mpd):
-        """Test /admin/queue/list with playlist=radio."""
+    def test_admin_list_fallback_playlist(self, admin_token, mock_mpd):
+        """Test /admin/queue/list with playlist=fallback."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
             response = client.get(
-                "/admin/queue/list?playlist=radio",
+                "/admin/queue/list?playlist=fallback",
                 headers={"Authorization": f"Bearer {admin_token}"}
             )
 
@@ -147,7 +146,7 @@ class TestAdminQueueEndpoints:
         """Test /admin/queue/{song_id} delete endpoint."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
             response = client.delete(
-                "/admin/queue/42?playlist=user",
+                "/admin/queue/u-42?playlist=user",
                 headers={"Authorization": f"Bearer {admin_token}"}
             )
 

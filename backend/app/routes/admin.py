@@ -13,6 +13,7 @@ from fastapi import Query
 from fastapi import UploadFile
 
 from app.dependencies import admin_auth
+from app.dependencies import dep_redis_client
 from app.exceptions import FileNotFoundInMPDError
 from app.exceptions import SongNotFoundError
 from app.models import ErrorResponse
@@ -28,6 +29,7 @@ from app.services import queue_service
 from app.services.jwt_service import generate_livestream_token
 from app.services.jwt_service import generate_token
 from app.services.playback_service import get_mpd_client
+from app.services.redis_service import RedisService
 from app.services.redis_service import parse_song_id
 from app.services.youtube_dl import YoutubeDownloadException
 from app.types import PlaylistType
@@ -95,6 +97,7 @@ async def admin_add_song(
     artist: str | None = Form(None),
     file: UploadFile | None = None,
     playlist: PlaylistType = Query("user", description="Target playlist (user or fallback)"),
+    redis_client: RedisService = Depends(dep_redis_client),
 ) -> SongAddedResponse:
     """Add song to specified playlist without restrictions."""
     mpd_client = get_mpd_client(playlist)
@@ -102,7 +105,13 @@ async def admin_add_song(
     try:
         await mpd_client.connect()
         song_id = await queue_service.add_song(
-            playlist=playlist, mpd_client=mpd_client, url=url, file=file, song_name=song_name, artist_name=artist
+            playlist=playlist,
+            mpd_client=mpd_client,
+            url=url,
+            file=file,
+            song_name=song_name,
+            artist_name=artist,
+            redis_client=redis_client,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

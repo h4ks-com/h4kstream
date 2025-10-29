@@ -12,6 +12,7 @@ from fastapi import UploadFile
 from yt_dlp.utils import sanitize_filename
 
 from app.models import SongItem
+from app.services.event_publisher import EventPublisher
 from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
 from app.services.redis_service import format_song_id
@@ -107,6 +108,24 @@ async def add_song(
 
     prefixed_id = format_song_id(mpd_song_id, playlist)
     logger.info(f"Added song to {playlist} playlist: {target_path.name} (ID: {prefixed_id})")
+
+    # Publish song_changed event
+    if redis_client:
+        try:
+            event_publisher = EventPublisher(redis_client.redis)
+            await event_publisher.publish(
+                event_type="song_changed",
+                data={
+                    "song_id": prefixed_id,
+                    "playlist": playlist,
+                    "title": final_title,
+                    "artist": final_artist,
+                },
+                description=f"Song added to {playlist} queue: {final_title or target_path.name}",
+            )
+        except Exception as e:
+            logger.error(f"Failed to publish song_changed event: {e}")
+
     return prefixed_id
 
 

@@ -155,9 +155,8 @@ def test_metadata_livestream_switching(client: httpx.Client, admin_headers: dict
 def test_metadata_set_livestream(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test setting custom livestream metadata (admin can pre-set before stream starts).
 
-    This is an optional admin feature to set default metadata that will be used
-    if the stream doesn't provide its own metadata. In normal operation, metadata
-    should come from the stream itself.
+    This is an optional admin feature to set default metadata that will be used if the stream doesn't provide its own
+    metadata. In normal operation, metadata should come from the stream itself.
     """
     response = client.post(
         "/internal/metadata/set",

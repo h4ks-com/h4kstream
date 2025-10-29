@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 
 from app.dependencies import admin_auth
+from app.dependencies import dep_event_publisher
 from app.dependencies import dep_liquidsoap_token
 from app.dependencies import dep_mpd_fallback
 from app.dependencies import dep_mpd_user
@@ -19,6 +20,7 @@ from app.models import MetadataUpdateRequest
 from app.models import NowPlayingMetadata
 from app.models import NowPlayingResponse
 from app.models import SuccessResponse
+from app.services.event_publisher import EventPublisher
 from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
 
@@ -102,9 +104,13 @@ async def get_now_playing(
 async def update_metadata(
     request: MetadataUpdateRequest,
     redis_client: RedisService = Depends(dep_redis_client),
+    event_publisher: EventPublisher = Depends(dep_event_publisher),
 ) -> SuccessResponse:
     """Liquidsoap reports current track metadata."""
     new_metadata = request.metadata.model_dump()
+
+    # Get old active source to detect queue switches
+    old_source = await redis_client.get_active_source()
 
     # Track livestream activity - keep flag alive with metadata updates
     if request.source == "livestream":
@@ -131,6 +137,31 @@ async def update_metadata(
     await redis_client.set_active_source(request.source)
 
     logger.info(f"Updated metadata for source '{request.source}': {merged}")
+
+    # Publish queue_switched event if source changed
+    if old_source and old_source != request.source:
+        description = f"Switched from {old_source} to {request.source}"
+        await event_publisher.publish(
+            event_type="queue_switched",
+            data={"from_source": old_source, "to_source": request.source},
+            description=description,
+        )
+        logger.info(f"Published queue_switched event: {description}")
+
+    # Publish song_changed event
+    title = merged.get("title", "Unknown")
+    artist = merged.get("artist", "Unknown")
+    description = f"Playing next: {title}"
+    if artist and artist != "Unknown":
+        description += f" by {artist}"
+
+    await event_publisher.publish(
+        event_type="song_changed",
+        data={"source": request.source, "metadata": merged},
+        description=description,
+    )
+    logger.debug(f"Published song_changed event for {request.source}")
+
     return SuccessResponse()
 
 

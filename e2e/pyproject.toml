@@ -41,3 +41,6 @@ extend-select = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "webhook: webhook-related tests that require sequential execution",
+]

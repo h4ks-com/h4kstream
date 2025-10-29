@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 
 from app.dependencies import admin_auth
+from app.dependencies import dep_event_publisher
 from app.dependencies import dep_livestream_service
 from app.dependencies import dep_redis_client
 from app.models import ErrorResponse
@@ -18,6 +19,7 @@ from app.models import LivestreamAuthResponse
 from app.models import LivestreamConnectRequest
 from app.models import LivestreamDisconnectRequest
 from app.models import SuccessResponse
+from app.services.event_publisher import EventPublisher
 from app.services.livestream_service import LivestreamService
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,7 @@ async def livestream_connect(
     request: LivestreamConnectRequest,
     service: LivestreamService = Depends(dep_livestream_service),
     redis_client=Depends(dep_redis_client),
+    event_publisher: EventPublisher = Depends(dep_event_publisher),
 ) -> SuccessResponse:
     """Track livestream connection start time."""
     logger.info(f"Livestream connect endpoint called with token: {request.token[:20]}...")
@@ -63,6 +66,19 @@ async def livestream_connect(
     logger.info(f"track_connection_start returned: {result}")
     await redis_client.set_livestream_active(ttl_seconds=3600)
     logger.info("Set livestream active flag with 3600s TTL")
+
+    # Extract user_id from result (returned by track_connection_start)
+    user_id = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
+
+    # Publish livestream_started event
+    description = "A livestream was started"
+    await event_publisher.publish(
+        event_type="livestream_started",
+        data={"user_id": user_id},
+        description=description,
+    )
+    logger.info(f"Published livestream_started event for user {user_id}")
+
     return SuccessResponse()
 
 
@@ -77,8 +93,23 @@ async def livestream_disconnect(
     request: LivestreamDisconnectRequest,
     service: LivestreamService = Depends(dep_livestream_service),
     redis_client=Depends(dep_redis_client),
+    event_publisher: EventPublisher = Depends(dep_event_publisher),
 ) -> SuccessResponse:
     """Handle livestream disconnection and update total time."""
-    await service.handle_disconnect(request.token)
+    result = await service.handle_disconnect(request.token)
     await redis_client.clear_livestream_active()
+
+    # Extract user_id and duration from result
+    user_id = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
+    duration_seconds = result.get("elapsed_seconds", 0) if isinstance(result, dict) else 0
+
+    # Publish livestream_ended event
+    description = f"Livestream ended after {duration_seconds} seconds"
+    await event_publisher.publish(
+        event_type="livestream_ended",
+        data={"user_id": user_id, "duration_seconds": duration_seconds, "reason": "disconnect"},
+        description=description,
+    )
+    logger.info(f"Published livestream_ended event for user {user_id} (duration: {duration_seconds}s)")
+
     return SuccessResponse()
