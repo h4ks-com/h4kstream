@@ -1,5 +1,6 @@
 import logging
 import pathlib
+import subprocess
 import urllib.parse
 from enum import StrEnum
 from enum import auto
@@ -91,6 +92,36 @@ async def download_song(url: str, mainloop: bool = False) -> YoutubeDownloadResu
 
             if not video_path.exists():
                 raise YoutubeDownloadException(YoutubeErrorType.DOWNLOAD_ERROR)
+
+            # Remove silence from beginning and end using FFmpeg
+            try:
+                temp_path = video_path.with_suffix(".trimmed.mp3")
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-i",
+                        str(video_path),
+                        "-af",
+                        "silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=-1:stop_duration=0.5:stop_threshold=-50dB",
+                        "-c:a",
+                        "libmp3lame",
+                        "-q:a",
+                        "2",  # VBR quality 2 (roughly 190 kbps)
+                        str(temp_path),
+                        "-y",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                # Replace original with trimmed version
+                temp_path.replace(video_path)
+                logger.info(f"Removed silence from {video_path.name}")
+            except subprocess.CalledProcessError as e:
+                logger.warning(f"Failed to remove silence: {e.stderr}")
+                # Continue anyway - silence removal is optional
+            except Exception as e:
+                logger.warning(f"Failed to remove silence: {e}")
 
             # Manually write ID3 tags using mutagen to ensure they're properly embedded
             try:
