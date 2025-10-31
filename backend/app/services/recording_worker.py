@@ -213,22 +213,12 @@ class RecordingWorker:
             show = db.exec(select(Show).where(Show.show_name == session.show_name)).first()
 
             if not show:
-                if session.show_name == "livestream":
-                    # For default livestream, skip saving (backward compatibility)
-                    logger.warning(
-                        f"Default show 'livestream' not configured in database. "
-                        f"Recording {session.filename} will not be saved. "
-                        f"Create a 'livestream' show via API to enable recording storage."
-                    )
-                    return
-                else:
-                    logger.error(
-                        f"Show '{session.show_name}' not found in database. "
-                        f"Recording {session.filename} cannot be saved without a valid show."
-                    )
-                    os.remove(session.filepath)
-                    logger.info(f"Deleted orphaned recording file: {session.filename}")
-                    return
+                # Auto-create show if it doesn't exist
+                show = Show(show_name=session.show_name)
+                db.add(show)
+                db.commit()
+                db.refresh(show)
+                logger.info(f"Auto-created show '{session.show_name}' for recording {session.filename}")
 
             recording = LivestreamRecording(
                 show_id=show.id,

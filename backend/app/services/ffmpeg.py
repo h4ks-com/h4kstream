@@ -36,7 +36,7 @@ async def trim_silence(
             "-i",
             str(input_path),
             "-af",
-            "silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=-1:stop_duration=0.5:stop_threshold=-50dB",
+            "silenceremove=start_periods=1:start_duration=0.05:start_threshold=-30dB:stop_periods=-1:stop_duration=0.3:stop_threshold=-30dB",
             "-c:a",
             output_codec,
             "-q:a",

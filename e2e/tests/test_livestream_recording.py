@@ -84,7 +84,8 @@ def test_livestream_recording_with_5_second_minimum() -> None:
         ffmpeg_process.kill()
         pytest.fail("FFmpeg timed out")
 
-    time.sleep(3)
+    # Wait for recording worker to: stop recording, trim silence, save to DB
+    time.sleep(6)
 
     response = httpx.get(f"{BASE_URL}/recordings/list?show_name={show_name}")
     assert response.status_code == 200

@@ -3,6 +3,7 @@
 Tests the new unified admin endpoints with playlist parameters.
 """
 
+import os
 from unittest.mock import AsyncMock
 from unittest.mock import patch
 
@@ -17,17 +18,18 @@ client = TestClient(app)
 @pytest.fixture
 def admin_token():
     """Get admin token from environment."""
-    import os
     return os.getenv("ADMIN_API_TOKEN", "test-admin-token-12345")
 
 
 @pytest.fixture
 def mock_mpd():
     """Mock MPD operations for isolated testing."""
-    with patch("app.services.queue_service.download_song") as mock_dl, \
-         patch("app.services.playback_service.MPDClient") as mock_client:
+    with patch("app.services.queue_service.download_song") as mock_dl, patch(
+        "app.services.playback_service.MPDClient"
+    ) as mock_client:
         # Mock download
         from unittest.mock import MagicMock
+
         mock_dl.return_value = MagicMock(path="/tmp/test.mp3")
 
         # Mock MPD client
@@ -56,10 +58,7 @@ class TestAdminPlaybackEndpoints:
     def test_admin_play_default_user_queue(self, admin_token, mock_mpd):
         """Test /admin/playback/play defaults to user queue."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
-            response = client.post(
-                "/admin/playback/play",
-                headers={"Authorization": f"Bearer {admin_token}"}
-            )
+            response = client.post("/admin/playback/play", headers={"Authorization": f"Bearer {admin_token}"})
 
         assert response.status_code == 200
         assert response.json() == {"status": "success"}
@@ -69,8 +68,7 @@ class TestAdminPlaybackEndpoints:
         """Test /admin/playback/play with playlist=fallback."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
             response = client.post(
-                "/admin/playback/play?playlist=fallback",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                "/admin/playback/play?playlist=fallback", headers={"Authorization": f"Bearer {admin_token}"}
             )
 
         assert response.status_code == 200
@@ -80,10 +78,7 @@ class TestAdminPlaybackEndpoints:
     def test_admin_pause(self, admin_token, mock_mpd):
         """Test /admin/playback/pause endpoint."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
-            response = client.post(
-                "/admin/playback/pause",
-                headers={"Authorization": f"Bearer {admin_token}"}
-            )
+            response = client.post("/admin/playback/pause", headers={"Authorization": f"Bearer {admin_token}"})
 
         assert response.status_code == 200
         mock_mpd.pause.assert_called_once()
@@ -91,10 +86,7 @@ class TestAdminPlaybackEndpoints:
     def test_admin_resume(self, admin_token, mock_mpd):
         """Test /admin/playback/resume endpoint."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
-            response = client.post(
-                "/admin/playback/resume",
-                headers={"Authorization": f"Bearer {admin_token}"}
-            )
+            response = client.post("/admin/playback/resume", headers={"Authorization": f"Bearer {admin_token}"})
 
         assert response.status_code == 200
         mock_mpd.resume.assert_called_once()
@@ -112,10 +104,7 @@ class TestAdminQueueEndpoints:
     def test_admin_list_default_user_queue(self, admin_token, mock_mpd):
         """Test /admin/queue/list defaults to user queue."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
-            response = client.get(
-                "/admin/queue/list",
-                headers={"Authorization": f"Bearer {admin_token}"}
-            )
+            response = client.get("/admin/queue/list", headers={"Authorization": f"Bearer {admin_token}"})
 
         assert response.status_code == 200
         assert isinstance(response.json(), list)
@@ -124,8 +113,7 @@ class TestAdminQueueEndpoints:
         """Test /admin/queue/list with playlist=fallback."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
             response = client.get(
-                "/admin/queue/list?playlist=fallback",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                "/admin/queue/list?playlist=fallback", headers={"Authorization": f"Bearer {admin_token}"}
             )
 
         assert response.status_code == 200
@@ -135,8 +123,7 @@ class TestAdminQueueEndpoints:
         """Test /admin/queue/clear endpoint."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
             response = client.post(
-                "/admin/queue/clear?playlist=user",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                "/admin/queue/clear?playlist=user", headers={"Authorization": f"Bearer {admin_token}"}
             )
 
         assert response.status_code == 200
@@ -146,8 +133,7 @@ class TestAdminQueueEndpoints:
         """Test /admin/queue/{song_id} delete endpoint."""
         with patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
             response = client.delete(
-                "/admin/queue/u-42?playlist=user",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                "/admin/queue/u-42?playlist=user", headers={"Authorization": f"Bearer {admin_token}"}
             )
 
         assert response.status_code == 200
