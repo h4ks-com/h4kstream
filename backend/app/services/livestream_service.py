@@ -6,6 +6,7 @@ from datetime import datetime
 
 import jwt
 import redis.asyncio as redis
+from sqlmodel import Session
 
 from app.services.jwt_service import decode_livestream_token
 from app.settings import settings
@@ -14,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class LivestreamService:
-    def __init__(self, redis_client: redis.Redis):
+    def __init__(self, redis_client: redis.Redis, db_session: Session | None = None):
         self.redis = redis_client
+        self.db_session = db_session
 
     async def validate_and_reserve_slot(
         self, token: str, address: str

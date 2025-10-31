@@ -1,13 +1,18 @@
 """Database configuration and session management."""
 
 import logging
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from sqlalchemy import create_engine
 from sqlalchemy import event
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlmodel import Session
+from sqlmodel import SQLModel
+from sqlmodel import create_engine
 
+from app.db.models import LivestreamRecording as LivestreamRecording
+from app.db.models import PendingUser as PendingUser
+from app.db.models import Show as Show
+from app.db.models import User as User
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -32,22 +37,20 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
     cursor.close()
 
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
-
-
-def get_db():
+def get_session():
     """Dependency for getting database session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    with Session(engine) as session:
+        yield session
+
+
+async def get_session_async() -> AsyncGenerator[Session, None]:
+    """Async dependency for getting database session."""
+    with Session(engine) as session:
+        yield session
 
 
 def init_db():
     """Initialize database tables."""
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    Base.metadata.create_all(bind=engine)
+    SQLModel.metadata.create_all(engine)
     logger.info(f"Database initialized at {DATABASE_PATH}")

@@ -78,8 +78,8 @@ class LivestreamTokenCreateRequest(BaseModel):
     max_streaming_seconds: int = Field(
         ..., ge=60, le=86400, description="Maximum streaming time in seconds (1 min to 24 hours)"
     )
-    show_name: str = Field(
-        "livestream", min_length=1, max_length=255, description="Unique identifier for the show (default: livestream)"
+    show_name: str | None = Field(
+        None, min_length=1, max_length=255, description="Optional show identifier (validates ownership if provided)"
     )
     min_recording_duration: int = Field(
         60, ge=1, le=3600, description="Minimum duration in seconds to keep recording (default 60)"

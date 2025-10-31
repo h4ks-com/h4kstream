@@ -7,7 +7,9 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.security import HTTPBearer
+from sqlmodel import Session
 
+from app.db import engine
 from app.services.event_publisher import EventPublisher
 from app.services.jwt_service import validate_token
 from app.services.livestream_service import LivestreamService
@@ -86,13 +88,15 @@ async def dep_redis_client() -> AsyncGenerator[RedisService, None]:
 
 
 async def dep_livestream_service() -> AsyncGenerator[LivestreamService, None]:
-    """Livestream service with Redis backend."""
+    """Livestream service with Redis and DB backend."""
     redis_client = redis.from_url(f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}")
-    service = LivestreamService(redis_client)
+    db_session = Session(engine)
+    service = LivestreamService(redis_client, db_session)
     try:
         yield service
     finally:
         await redis_client.close()
+        db_session.close()
 
 
 def get_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:

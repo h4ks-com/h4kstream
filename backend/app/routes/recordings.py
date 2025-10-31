@@ -9,9 +9,9 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlmodel import Session
 
-from app.db import get_db
+from app.db import get_session
 from app.db import recordings as recordings_db
 from app.dependencies import admin_auth
 from app.models import ErrorResponse
@@ -40,7 +40,7 @@ admin_router = APIRouter(
     description="List and search livestream recordings with filters and pagination",
 )
 async def list_recordings(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_session),
     show_name: str | None = Query(None, description="Filter by show name (exact match)"),
     search: str | None = Query(None, description="Search in title, artist, genre, description"),
     genre: str | None = Query(None, description="Filter by genre (exact match)"),
@@ -78,6 +78,7 @@ async def list_recordings(
 
     shows_dict: dict[str, list[RecordingMetadata]] = {}
     for recording in recordings:
+        assert recording.id is not None
         metadata = RecordingMetadata(
             id=recording.id,
             created_at=recording.created_at.isoformat(),
@@ -89,9 +90,10 @@ async def list_recordings(
             stream_url=f"{settings.ROOT_PATH}/recordings/stream/{recording.id}",
         )
 
-        if recording.show_name not in shows_dict:
-            shows_dict[recording.show_name] = []
-        shows_dict[recording.show_name].append(metadata)
+        show_name = recording.show.show_name
+        if show_name not in shows_dict:
+            shows_dict[show_name] = []
+        shows_dict[show_name].append(metadata)
 
     shows = [ShowRecordings(show_name=show_name, recordings=recs) for show_name, recs in shows_dict.items()]
 
@@ -110,7 +112,7 @@ async def list_recordings(
     description="Stream a livestream recording file",
     responses={404: {"model": ErrorResponse, "description": "Recording not found"}},
 )
-async def stream_recording(recording_id: int, db: Session = Depends(get_db)):
+async def stream_recording(recording_id: int, db: Session = Depends(get_session)):
     """Stream a recording file."""
     recording = recordings_db.get_recording(db, recording_id)
 
@@ -145,7 +147,7 @@ async def stream_recording(recording_id: int, db: Session = Depends(get_db)):
     description="Delete a livestream recording (file and database entry)",
     responses={404: {"model": ErrorResponse, "description": "Recording not found"}},
 )
-async def delete_recording(recording_id: int, db: Session = Depends(get_db)) -> SuccessResponse:
+async def delete_recording(recording_id: int, db: Session = Depends(get_session)) -> SuccessResponse:
     """Delete recording from database and filesystem."""
     recording = recordings_db.get_recording(db, recording_id)
 

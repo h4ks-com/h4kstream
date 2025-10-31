@@ -3,10 +3,12 @@
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import text
+from sqlmodel import Session
 
 from app.db.models import LivestreamRecording
+from app.db.models import Show
 
 
 def list_recordings(
@@ -20,10 +22,10 @@ def list_recordings(
     limit: int = 20,
 ) -> tuple[list[LivestreamRecording], int]:
     """List recordings with filters and pagination."""
-    query = db.query(LivestreamRecording)
+    query = db.query(LivestreamRecording).options(joinedload(LivestreamRecording.show))
 
     if show_name:
-        query = query.filter(LivestreamRecording.show_name == show_name)
+        query = query.join(Show).filter(Show.show_name == show_name)
 
     if genre:
         query = query.filter(LivestreamRecording.genre == genre)
@@ -41,7 +43,7 @@ def list_recordings(
         ).fetchall()
         matching_ids = [row[0] for row in fts_result]
         if matching_ids:
-            query = query.filter(LivestreamRecording.id.in_(matching_ids))
+            query = query.filter(LivestreamRecording.id.in_(matching_ids))  # type: ignore[union-attr]
         else:
             return [], 0
 

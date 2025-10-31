@@ -11,7 +11,10 @@ from fastapi import Form
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi import UploadFile
+from sqlmodel import select
 
+from app.db import get_session
+from app.db.models import Show
 from app.dependencies import admin_auth
 from app.dependencies import dep_redis_client
 from app.exceptions import FileNotFoundInMPDError
@@ -57,7 +60,11 @@ router = APIRouter(
 )
 async def create_token(request: TokenCreateRequest) -> TokenCreateResponse:
     """Create a temporary JWT token with duration, queue limit, and add request limit."""
-    token = generate_token(request.duration_seconds, request.max_queue_songs, request.max_add_requests)
+    token = generate_token(
+        duration_seconds=request.duration_seconds,
+        max_queue_songs=request.max_queue_songs,
+        max_add_requests=request.max_add_requests,
+    )
     return TokenCreateResponse(token=token)
 
 
@@ -65,12 +72,28 @@ async def create_token(request: TokenCreateRequest) -> TokenCreateResponse:
     "/livestream/token",
     response_model=LivestreamTokenResponse,
     summary="Create Livestream Token",
-    description="Create a livestream token with time limit and recording settings.",
+    description="Create a livestream token. Auto-creates show if show_name provided and doesn't exist.",
 )
-async def create_livestream_token(request: LivestreamTokenCreateRequest) -> LivestreamTokenResponse:
-    """Create a livestream token with specified time limit and recording settings."""
+async def create_livestream_token(
+    request: LivestreamTokenCreateRequest, session=Depends(get_session)
+) -> LivestreamTokenResponse:
+    """Create a livestream token with specified time limit and recording settings.
+
+    If show_name is provided and doesn't exist, auto-creates it without an owner. Admin tokens have no ownership
+    validation.
+    """
+    show_name = request.show_name
+
+    if show_name:
+        show = session.exec(select(Show).where(Show.show_name == show_name)).first()
+        if not show:
+            show = Show(show_name=show_name, owner_id=None, is_active=True)
+            session.add(show)
+            session.commit()
+            session.refresh(show)
+
     token, expires_at = generate_livestream_token(
-        request.max_streaming_seconds, request.show_name, request.min_recording_duration
+        request.max_streaming_seconds, show_name, None, request.min_recording_duration
     )
     return LivestreamTokenResponse(
         token=token, expires_at=expires_at.isoformat(), max_streaming_seconds=request.max_streaming_seconds

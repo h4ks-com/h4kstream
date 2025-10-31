@@ -10,10 +10,13 @@ from pathlib import Path
 
 from mutagen.oggvorbis import OggVorbis
 from redis import asyncio as aioredis
+from sqlmodel import Session
+from sqlmodel import select
 
-from app.db import SessionLocal
+from app.db import engine
 from app.db import init_db
 from app.db.models import LivestreamRecording
+from app.db.models import Show
 from app.services import ffmpeg
 from app.settings import settings
 
@@ -183,6 +186,15 @@ class RecordingWorker:
                 output_format="ogg",
             )
             duration = await ffmpeg.get_duration(session.filepath)
+
+            # Check duration again after trimming - recording might be too short after silence removal
+            if duration < session.min_duration:
+                os.remove(session.filepath)
+                logger.info(
+                    f"Deleted {session.filename} after trimming: too short "
+                    f"({duration:.1f}s < {session.min_duration}s)"
+                )
+                return
         except (TimeoutError, RuntimeError, OSError) as e:
             logger.warning(f"Skipping silence trimming for {session.filename}: {e}")
 
@@ -196,24 +208,44 @@ class RecordingWorker:
         # Write metadata to OGG file tags
         await asyncio.to_thread(self._write_ogg_metadata, session.filepath, metadata)
 
-        db = SessionLocal()
-        try:
+        with Session(engine) as db:
+            # Find or create show by show_name
+            show = db.exec(select(Show).where(Show.show_name == session.show_name)).first()
+
+            if not show:
+                if session.show_name == "livestream":
+                    # For default livestream, skip saving (backward compatibility)
+                    logger.warning(
+                        f"Default show 'livestream' not configured in database. "
+                        f"Recording {session.filename} will not be saved. "
+                        f"Create a 'livestream' show via API to enable recording storage."
+                    )
+                    return
+                else:
+                    logger.error(
+                        f"Show '{session.show_name}' not found in database. "
+                        f"Recording {session.filename} cannot be saved without a valid show."
+                    )
+                    os.remove(session.filepath)
+                    logger.info(f"Deleted orphaned recording file: {session.filename}")
+                    return
+
             recording = LivestreamRecording(
-                show_name=session.show_name,
+                show_id=show.id,
                 title=metadata.get("title"),
                 artist=metadata.get("artist"),
                 genre=metadata.get("genre"),
+                description=metadata.get("description"),
                 duration_seconds=duration,
                 file_path=session.filename,
             )
             db.add(recording)
             db.commit()
+            db.refresh(recording)
             logger.info(
                 f"Saved recording {session.filename} ({duration:.1f}s) to database "
-                f"(ID: {recording.id}, title: {recording.title or 'Untitled'})"
+                f"(ID: {recording.id}, show: {show.show_name}, title: {recording.title or 'Untitled'})"
             )
-        finally:
-            db.close()
 
 
 async def main() -> None:
