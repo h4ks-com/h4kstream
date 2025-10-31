@@ -9,11 +9,11 @@ https://chatgpt.com/c/67436428-aff0-8003-a47a-d006df6bdc40
 - [x] live user: https://www.liquidsoap.info/doc-2.2.5/harbor.html
 - [x] Pause user queue on live stream start and resume on end... tricky
 - [x] Trim silence from audio files
-- [ ] Archive and list shows from disk
-- [ ] Implement an IRC bot binding when MPD changes or stream the bot echoes to the channel (webhooks?, subscription)
+- [x] Archive and list shows from disk
+- [x] Implement an IRC bot binding when MPD changes or stream the bot echoes to the channel (webhooks?, subscription)
+- [x] Webhooks subscription time to live? So they cleanup after some time?
 - [ ] Transitions in liquidsoap between live and user queue. Should be configurable and pick randomly from multiple for each transition type: https://pixabay.com/sound-effects/search/radio/ should be configurable and in a volume with named known paths.
 - [ ] Check if for user mdp queues there is a limit in the endpoints for upload, limit to 30 min songs, dont even donwload nad just fail otherwise. for amins uploads there should be no limit. If file also make it possible to reject and also have a size limit. Also dont allow addign something already in playlist (next 5 or so?)
-- [ ] Webhooks subscription time to live? So they cleanup after some time?
 - [ ] Implement frontend [0/4]
   - [ ] Show current playlist
   - [ ] Show current stream info (live/user)

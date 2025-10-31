@@ -49,26 +49,44 @@ async def subscribe_webhook(
 
     The webhook will receive POST requests with JSON payloads when subscribed events occur. Each request includes
     X-Webhook-Signature header for HMAC verification.
+
+    If a webhook with the same URL and events already exists, updates its description and signing key
+    while preserving the original created_at timestamp.
     """
-    webhook_id = str(uuid4())
-    created_at = datetime.now(UTC).isoformat()
+    existing = await redis.find_webhook_by_url_and_events(request.url, request.events)
 
-    config = {
-        "url": request.url,
-        "events": request.events,
-        "signing_key": request.signing_key,
-        "description": request.description,
-        "created_at": created_at,
-    }
+    if existing:
+        webhook_id, existing_config = existing
+        created_at = existing_config["created_at"]
 
-    # Store webhook configuration
-    await redis.create_webhook(webhook_id, config)
+        config = {
+            "url": request.url,
+            "events": request.events,
+            "signing_key": request.signing_key,
+            "description": request.description,
+            "created_at": created_at,
+        }
 
-    # Index webhook by event types for fast lookup
-    for event_type in request.events:
-        await redis.add_webhook_to_event(event_type, webhook_id)
+        await redis.create_webhook(webhook_id, config)
+        logger.info(f"Updated existing webhook {webhook_id} for events {request.events}")
+    else:
+        webhook_id = str(uuid4())
+        created_at = datetime.now(UTC).isoformat()
 
-    logger.info(f"Created webhook subscription {webhook_id} for events {request.events}")
+        config = {
+            "url": request.url,
+            "events": request.events,
+            "signing_key": request.signing_key,
+            "description": request.description,
+            "created_at": created_at,
+        }
+
+        await redis.create_webhook(webhook_id, config)
+
+        for event_type in request.events:
+            await redis.add_webhook_to_event(event_type, webhook_id)
+
+        logger.info(f"Created webhook subscription {webhook_id} for events {request.events}")
 
     return WebhookSubscriptionResponse(
         webhook_id=webhook_id,

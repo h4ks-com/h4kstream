@@ -514,3 +514,95 @@ def test_webhook_test_endpoint(
 
     # Cleanup
     client.delete(f"/admin/webhooks/{webhook_id}", headers=admin_headers)
+
+
+@pytest.mark.webhook
+def test_webhook_duplicate_prevention(
+    client: httpx.Client,
+    admin_headers: dict[str, str],
+    webhook_server: str,
+) -> None:
+    """Test that webhooks with same URL and events are not duplicated."""
+    test_url = webhook_server
+    test_events = ["song_changed", "livestream_started"]
+    signing_key = "test-secret-key-duplicate"
+
+    # Create first webhook
+    response1 = client.post(
+        "/admin/webhooks/subscribe",
+        headers=admin_headers,
+        json={
+            "url": test_url,
+            "events": test_events,
+            "signing_key": signing_key,
+            "description": "First description",
+        },
+    )
+    assert response1.status_code == 200
+    webhook1_data = response1.json()
+    webhook1_id = webhook1_data["webhook_id"]
+    created_at1 = webhook1_data["created_at"]
+
+    # Create second webhook with same URL and events, different description
+    response2 = client.post(
+        "/admin/webhooks/subscribe",
+        headers=admin_headers,
+        json={
+            "url": test_url,
+            "events": test_events,
+            "signing_key": signing_key,
+            "description": "Updated description",
+        },
+    )
+    assert response2.status_code == 200
+    webhook2_data = response2.json()
+    webhook2_id = webhook2_data["webhook_id"]
+    created_at2 = webhook2_data["created_at"]
+
+    # Should return the same webhook_id (not duplicate)
+    assert webhook1_id == webhook2_id
+
+    # Should preserve original created_at
+    assert created_at1 == created_at2
+
+    # List all webhooks and verify only one exists
+    list_response = client.get("/admin/webhooks/list", headers=admin_headers)
+    assert list_response.status_code == 200
+    webhooks = list_response.json()
+
+    # Filter to our test webhooks
+    matching_webhooks = [w for w in webhooks if w["url"] == test_url and set(w["events"]) == set(test_events)]
+
+    # Should only have one webhook, not two
+    assert len(matching_webhooks) == 1
+    assert matching_webhooks[0]["webhook_id"] == webhook1_id
+    assert matching_webhooks[0]["description"] == "Updated description"
+    assert matching_webhooks[0]["created_at"] == created_at1
+
+    # Create webhook with different events (should create new one)
+    response3 = client.post(
+        "/admin/webhooks/subscribe",
+        headers=admin_headers,
+        json={
+            "url": test_url,
+            "events": ["queue_switched"],
+            "signing_key": signing_key,
+            "description": "Different events",
+        },
+    )
+    assert response3.status_code == 200
+    webhook3_data = response3.json()
+    webhook3_id = webhook3_data["webhook_id"]
+
+    # Should be a different webhook_id
+    assert webhook3_id != webhook1_id
+
+    # List again and verify we have two webhooks now
+    list_response = client.get("/admin/webhooks/list", headers=admin_headers)
+    webhooks = list_response.json()
+    test_webhooks = [w for w in webhooks if w["url"] == test_url]
+    assert len(test_webhooks) == 2
+
+    # Cleanup
+    client.delete(f"/admin/webhooks/{webhook1_id}", headers=admin_headers)
+    client.delete(f"/admin/webhooks/{webhook3_id}", headers=admin_headers)

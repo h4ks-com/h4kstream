@@ -218,6 +218,32 @@ class RedisService:
         all_webhooks = await self.redis.hgetall("webhooks:subscriptions")
         return {webhook_id.decode(): json.loads(config_json) for webhook_id, config_json in all_webhooks.items()}
 
+    async def find_webhook_by_url_and_events(self, url: str, events: list[str]) -> tuple[str, dict] | None:
+        """Find existing webhook with same URL and events.
+
+        Args:
+            url: Webhook URL
+            events: List of event types
+
+        Returns:
+            Tuple of (webhook_id, config) if found, None otherwise
+        """
+        all_webhooks = await self.list_webhooks()
+        sorted_events = sorted(events)
+
+        logger.info(f"Finding webhook: url={url}, events={sorted_events}")
+        logger.info(f"All webhooks: {all_webhooks}")
+
+        for webhook_id, config in all_webhooks.items():
+            logger.info(
+                f"Checking webhook {webhook_id}: url_match={config['url'] == url}, "
+                f"events={sorted(config['events'])}, events_match={sorted(config['events']) == sorted_events}"
+            )
+            if config["url"] == url and sorted(config["events"]) == sorted_events:
+                return (webhook_id, config)
+
+        return None
+
     async def add_webhook_to_event(self, event_type: str, webhook_id: str) -> None:
         """Add webhook to event subscription index.
 

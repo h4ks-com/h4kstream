@@ -379,29 +379,33 @@ docker logs webhook_worker | tail -20
 
 ## Best Practices
 
-1. **Signing Key Security**
+1. **Registration**
+   - Register webhooks on application startup (idempotent - same URL + events won't create duplicates)
+   - Duplicates update description and signing_key while preserving original created_at
+
+2. **Signing Key Security**
    - Use strong random keys (min 32 characters recommended)
    - Store keys securely (environment variables, secrets manager)
    - Never log signing keys
 
-2. **Endpoint Implementation**
+3. **Endpoint Implementation**
    - Always verify signatures before processing
    - Return 200 OK quickly (process asynchronously if needed)
    - Implement idempotency (same event might be delivered twice)
    - Use HTTPS for webhook URLs
 
-3. **Error Handling**
+4. **Error Handling**
    - Return 2xx for successful receipt (even if processing fails)
    - Return 4xx/5xx for genuine errors (delivery will be logged as failed)
    - Implement retry logic on your side if needed
    - Monitor delivery failure rates
 
-4. **Performance**
+5. **Performance**
    - Webhook delivery timeout is 5 seconds
    - Multiple webhooks delivered concurrently
    - Consider rate limiting on your endpoint
 
-5. **Security**
+6. **Security**
    - Use admin token for webhook management
    - Restrict webhook URLs (no localhost/private IPs in production)
    - Monitor for suspicious patterns in delivery logs
