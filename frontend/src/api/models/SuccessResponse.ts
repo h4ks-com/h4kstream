@@ -2,7 +2,12 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type AddSongRequest = {
-  url?: string | null;
-  file?: string | null;
-};
+/**
+ * Generic success response.
+ */
+export type SuccessResponse = {
+  /**
+   * Operation status
+   */
+  status?: string
+}

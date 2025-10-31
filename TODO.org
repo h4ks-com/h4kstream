@@ -26,6 +26,6 @@ https://chatgpt.com/c/67436428-aff0-8003-a47a-d006df6bdc40
   - [ ] Get key for streaming manually
   - [ ] https://strudel.cc/workshop/getting-started/
 
-- [ ] Route everything over caddy. Load balancer based on request processing blocked. Multiple backends.
-- [ ] Keep internal EPs internal only
+- [x] Route everything over caddy. Load balancer based on request processing blocked. Multiple backends.
+- [x] Keep internal EPs internal only
 - [ ] Helm chart?

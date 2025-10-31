@@ -1,13 +1,44 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-h4ks-dark-900 text-gray-100;
+    margin: 0;
+    font-family: 'Monaco', 'Courier New', monospace;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer components {
+  .h4ks-btn {
+    @apply px-4 py-2 bg-h4ks-dark-700 border border-h4ks-green-800 text-h4ks-green-400
+           hover:bg-h4ks-dark-600 hover:border-h4ks-green-600 transition-colors
+           focus:outline-none focus:ring-2 focus:ring-h4ks-green-600 font-mono;
+  }
+
+  .h4ks-input {
+    @apply bg-h4ks-dark-700 border border-h4ks-green-800 text-gray-200
+           placeholder-gray-500 px-3 py-2 focus:outline-none focus:border-h4ks-green-600
+           focus:ring-1 focus:ring-h4ks-green-600;
+  }
+
+  .h4ks-input[type="date"] {
+    @apply text-gray-300;
+  }
+
+  .h4ks-input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7) sepia(1) saturate(5) hue-rotate(90deg);
+    cursor: pointer;
+  }
+
+  .h4ks-card {
+    @apply bg-h4ks-dark-700 border border-h4ks-green-800 p-4;
+  }
 }

@@ -2,6 +2,12 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type DeleteSongRequest = {
-  song_id: string;
-};
+/**
+ * Error response model.
+ */
+export type ErrorResponse = {
+  /**
+   * Error message
+   */
+  detail: string
+}

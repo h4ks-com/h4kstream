@@ -10,9 +10,11 @@
 }
 
 :80 {
-	# Frontend - serve static files (or proxy to frontend service when implemented)
-	handle / {
-		respond "Hackstream Radio - Frontend Coming Soon" 200
+	# Frontend - serve static files
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
 	}
 
 	# API endpoints with load balancing (least connections)
