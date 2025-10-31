@@ -1,7 +1,7 @@
 
 
 ## System Overview
-Music streaming platform with web-based control interface. Features live user streaming, dual-queue system with user submissions (limited, auto-cleanup), and admin fallback playlist (always looping). Manages YouTube video downloads, playlist management, live streaming with time tracking, and continuous audio output with 4-tier automatic failover.
+Music streaming platform with web-based control interface. Features live user streaming, dual-queue system with user submissions (limited, auto-cleanup), and admin fallback playlist (always looping). Manages YouTube video downloads, playlist management, live streaming with time tracking, continuous audio output with 4-tier automatic failover, webhook notifications, and automatic recording/archival of livestreams. All external services are proxied through Caddy for security and load balancing.
 
 ## Core Components
 
@@ -72,33 +72,208 @@ Music streaming platform with web-based control interface. Features live user st
 
 ## Infrastructure Services
 
-- **Redis**: State management and queue storage (port 6379)
-- **Icecast**: Live audio streaming server (port 8005, mount: /radio)
-- **Caddy**: Reverse proxy (port 80)
+### Caddy (Reverse Proxy & Load Balancer)
+- **Purpose**: API gateway, load balancer, and security layer
+- **Port**: 80 (only exposed port)
+- **Routes**:
+  - `/` → Frontend (static files or SPA)
+  - `/api` → Backend instances (load balanced, least_conn)
+  - `/radio` → Icecast output stream
+  - `/stream` → Liquidsoap harbor (livestream input)
+- **Security**: Blocks external access to `/api/internal/*` endpoints
+- **Load Balancing**: Multiple backend instances with least-connections policy
+
+### Redis
+- **Purpose**: State management, queue storage, pub/sub event system
+- **Port**: 6379 (internal only)
+- **Features**: Persistence with AOF + RDB snapshots
+
+### Icecast
+- **Purpose**: Final audio stream output
+- **Port**: 8000 (internal), exposed via Caddy at `/radio`
+- **Mount**: `/radio` (Opus 128kbps)
+
+### Worker Services
+
+**Webhook Worker**:
+- **Purpose**: Event processing and webhook delivery
+- **Features**:
+  - Subscribes to Redis pub/sub for events
+  - Delivers webhooks with HMAC signatures
+  - Monitors livestream time limits
+  - Monitors MPD instances for song changes
+  - Auto-resumes playback on startup
+
+**Recording Worker**:
+- **Purpose**: Livestream capture and archival
+- **Features**:
+  - Captures livestreams from Icecast output via ffmpeg
+  - Processes recordings (silence trimming, format conversion)
+  - Saves to database with metadata
+  - Enforces minimum duration requirements
 
 ## Data Flow
 ```
-┌─ Streamer (JWT) → Liquidsoap Harbor ──────────┐
-│                         ↓                      │
-│                   Auth Callback                │
-│                         ↓                      │
-│                   Backend API ─────────────────┤
-│                         ↓                      │
-│                   Redis                        │
-│             (slot + time tracking)             │
-│                                                │
-├─ User (JWT) → Backend API → User Queue MPD ───┤
-│                    ↓                           │
-│                  Redis                         ├→ Liquidsoap ─→ Icecast → Stream
-│              (track limits)                    │   (4-tier       (Opus)
-│                    ↓                           │    fallback
-│                 yt-dlp                         │    + fades)
-│                                                │      ↓
-│                                                │   Telnet
-└─ Admin → Backend API → Fallback MPD ──────────┘   (disconnect
-            ↑                ↓                        control)
-        Liquidsoap    (always looping)
-  (auth/connect/disconnect)
+External Access (Port 80)
+         │
+         ↓
+    ┌────────┐
+    │ CADDY  │  (Reverse Proxy & Load Balancer)
+    │        │  - Security layer
+    │        │  - Load balancing (least_conn)
+    └────┬───┘  - Blocks /api/internal/*
+         │
+    ┌────┴──────────────────────────────┐
+    │                                   │
+    ↓                                   ↓
+/api (Load Balanced)              /radio & /stream
+    │                                   │
+    ↓                                   ↓
+┌───────────────┐                 ┌──────────┐
+│ Backend x3    │←────────────────│Liquidsoap│
+│ (FastAPI)     │  Internal:      │          │
+│               │  - Auth         │  Harbor  │
+│ - JWT Auth    │  - Connect      │  :8003   │
+│ - yt-dlp      │  - Disconnect   │          │
+│ - MPD Control │  - Metadata     └─────┬────┘
+└───┬───────────┘                       │
+    │                                   │
+    ↓                                   ↓
+┌─────────────────────────────┐    ┌──────────┐
+│         REDIS               │    │ Icecast  │
+│  - Pub/Sub (events)        │    │  :8000   │
+│  - State (livestream)       │    │ /radio   │
+│  - Queue (webhooks)         │    └────┬─────┘
+└──┬──────────────────────┬───┘         │
+   │                      │             │
+   ↓                      ↓             ↓
+┌──────────────┐   ┌─────────────┐  ┌────────────┐
+│ Webhook      │   │ Recording   │  │ MPD User & │
+│ Worker       │   │ Worker      │  │ Fallback   │
+│              │   │             │  │            │
+│ - Delivers   │   │ - Captures  │  │ - Playlists│
+│   webhooks   │   │   streams   │  │ - Playback │
+│ - Monitors   │   │ - Processes │  │            │
+│   livestream │   │   audio     │  │            │
+│ - Song       │   │ - Archives  │  │            │
+│   changes    │   │             │  │            │
+└──────────────┘   └─────────────┘  └────────────┘
+```
+
+## Architecture Diagrams
+
+### System Overview
+```mermaid
+graph TB
+    Client[Client Browser/Streamer]
+    Caddy[Caddy<br/>Reverse Proxy & LB<br/>:80]
+
+    BE1[Backend 1<br/>:8000]
+    BE2[Backend 2<br/>:8000]
+    BE3[Backend 3<br/>:8000]
+
+    LS[Liquidsoap<br/>Audio Mixer<br/>:8003]
+    IC[Icecast<br/>Stream Output<br/>:8000]
+
+    Redis[(Redis<br/>State & Events)]
+
+    WW[Webhook Worker<br/>Event Processor]
+    RW[Recording Worker<br/>Stream Capture]
+
+    MPD_U[MPD User<br/>:6600]
+    MPD_F[MPD Fallback<br/>:6601]
+
+    Client -->|HTTP/HTTPS| Caddy
+    Caddy -->|/api<br/>Load Balanced| BE1
+    Caddy -->|/api<br/>Load Balanced| BE2
+    Caddy -->|/api<br/>Load Balanced| BE3
+    Caddy -->|/stream| LS
+    Caddy -->|/radio| IC
+
+    BE1 --> Redis
+    BE2 --> Redis
+    BE3 --> Redis
+
+    LS -->|Internal Callbacks| Caddy
+    LS --> IC
+    LS -->|Pull Stream| MPD_U
+    LS -->|Pull Stream| MPD_F
+
+    Redis -->|Pub/Sub| WW
+    Redis -->|Pub/Sub| RW
+
+    WW --> MPD_U
+    WW --> MPD_F
+
+    RW -->|Capture| IC
+
+    style Caddy fill:#f9f,stroke:#333,stroke-width:4px
+    style Redis fill:#faa,stroke:#333,stroke-width:2px
+    style LS fill:#aff,stroke:#333,stroke-width:2px
+```
+
+### Request Flow - User Adding Song
+```mermaid
+sequenceDiagram
+    actor User
+    participant Caddy
+    participant Backend
+    participant Redis
+    participant MPD
+
+    User->>Caddy: POST /api/queue/add
+    Caddy->>Backend: Forward (Load Balanced)
+    Backend->>Backend: Validate JWT
+    Backend->>Redis: Check queue limit
+    Redis-->>Backend: OK
+    Backend->>Backend: Download via yt-dlp
+    Backend->>MPD: Add to playlist
+    Backend->>Redis: Update queue count
+    Backend-->>Caddy: 200 {song_id}
+    Caddy-->>User: 200 {song_id}
+```
+
+### Request Flow - Livestream Authentication
+```mermaid
+sequenceDiagram
+    actor Streamer
+    participant Liquidsoap
+    participant Caddy
+    participant Backend
+    participant Redis
+
+    Streamer->>Liquidsoap: Connect to :8003/live
+    Liquidsoap->>Caddy: POST /api/internal/livestream/auth
+    Caddy->>Backend: Forward (Internal Route)
+    Backend->>Backend: Validate JWT token
+    Backend->>Redis: Try reserve slot
+    Redis-->>Backend: Slot reserved
+    Backend-->>Caddy: 200 {success: true}
+    Caddy-->>Liquidsoap: 200 {success: true}
+    Liquidsoap-->>Streamer: Connection accepted
+    Liquidsoap->>Caddy: POST /api/internal/livestream/connect
+```
+
+### Event Flow - Webhook Delivery
+```mermaid
+sequenceDiagram
+    participant MPD
+    participant WW as Webhook Worker
+    participant Redis
+    participant Webhook as External Webhook
+
+    MPD->>WW: Song change (idle)
+    WW->>Redis: PUBLISH events:song_changed
+    Redis->>WW: Event received
+    WW->>Redis: Get subscribed webhooks
+    Redis-->>WW: [webhook configs]
+
+    loop For each webhook
+        WW->>WW: Generate HMAC signature
+        WW->>Webhook: POST event + signature
+        Webhook-->>WW: 200 OK
+        WW->>Redis: Record delivery stats
+    end
 ```
 
 ## File Structure
