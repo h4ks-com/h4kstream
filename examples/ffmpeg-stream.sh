@@ -23,8 +23,8 @@
 set -e
 
 # Configuration
-H4KSTREAM_URL="${H4KSTREAM_URL:-http://localhost:8383}"
-STREAM_PORT="${STREAM_PORT:-8003}"
+H4KSTREAM_URL="${H4KSTREAM_URL:-http://localhost/api}"
+STREAM_URL="${STREAM_URL:-http://localhost/stream/live}"
 DEFAULT_DURATION=3600  # 1 hour
 
 # Colors for output
@@ -118,20 +118,25 @@ echo ""
 
 # Start streaming
 echo -e "${YELLOW}Starting stream with embedded metadata...${NC}"
-echo "Stream URL: icecast://source:***@localhost:${STREAM_PORT}/live"
-echo "Listen at: http://localhost:8005/radio"
-echo "Metadata: http://localhost:8383/metadata/now"
+echo "Stream URL: icecast://source:***@${STREAM_URL#*://}"
+echo "Listen at: http://localhost/radio"
+echo "Metadata: http://localhost/api/metadata/now"
 echo ""
 echo -e "${GREEN}Press Ctrl+C to stop${NC}"
 echo ""
 
-# Stream with ffmpeg
+# Stream with ffmpeg via Caddy reverse proxy using HTTP PUT
 # -re: Read input at native frame rate (real-time)
 # -i: Input file
 # -metadata: Embed metadata in the stream (Vorbis comments for Ogg)
 # -c:a libvorbis: Encode audio with Vorbis codec
 # -b:a 128k: Audio bitrate 128 kbps
 # -f ogg: Output format Ogg
+# -method PUT: Use HTTP PUT for streaming
+# -auth_type basic: HTTP basic authentication
+# -chunked_post 1: Enable chunked transfer encoding
+# -send_expect_100 0: Disable Expect headers
+# -content_type: MIME type for the stream
 # -ice_name, -ice_description, -ice_genre: Icecast metadata
 ffmpeg -re -i "$AUDIO_FILE" \
     -metadata title="$STREAM_TITLE" \
@@ -140,11 +145,15 @@ ffmpeg -re -i "$AUDIO_FILE" \
     -c:a libvorbis \
     -b:a 128k \
     -f ogg \
-    -content_type audio/ogg \
+    -method PUT \
+    -auth_type basic \
+    -chunked_post 1 \
+    -send_expect_100 0 \
+    -content_type application/ogg \
     -ice_name "$STREAM_TITLE" \
     -ice_genre "$STREAM_GENRE" \
     -ice_description "Livestream: $STREAM_ARTIST - $STREAM_TITLE" \
-    "icecast://source:${TOKEN}@localhost:${STREAM_PORT}/live"
+    "http://source:${TOKEN}@${STREAM_URL#*://}"
 
 echo ""
 echo -e "${GREEN}Stream ended${NC}"

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv("../.env")
 
-API_URL = os.getenv("API_URL", "http://localhost:8383")
+API_URL = os.getenv("API_URL", "http://localhost/api")
 ADMIN_TOKEN = os.getenv("ADMIN_API_TOKEN", "changeme")
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379

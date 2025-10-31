@@ -416,11 +416,15 @@ curl -X POST "http://localhost:8383/admin/livestream/token" \
 
 **Usage**:
 ```bash
-# Stream with ffmpeg using token
+# Stream with ffmpeg using token (HTTP PUT)
 ffmpeg -re -i input.mp3 \
   -c:a libvorbis -b:a 128k -f ogg \
-  "icecast://source:${TOKEN}@localhost:8003/live"
+  -method PUT -auth_type basic -chunked_post 1 \
+  -send_expect_100 0 -content_type application/ogg \
+  "http://source:${TOKEN}@localhost/stream/live"
 ```
+
+See [livestream.md](livestream.md) for complete streaming documentation.
 
 ---
 

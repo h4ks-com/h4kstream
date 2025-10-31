@@ -68,7 +68,7 @@ Music streaming platform with web-based control interface. Features live user st
   - Automatic failover with smooth 2s fade transitions
   - Telnet control interface (port 1234) for remote management
 - **Stream Output**: http://localhost:8005/radio
-- **Live Stream Input**: icecast://localhost:8003/live (requires token as password)
+- **Live Stream Input**: http://localhost/stream/live (HTTP PUT with token auth)
 
 ## Infrastructure Services
 
@@ -354,7 +354,7 @@ Docker Compose orchestrates all services with:
 **Token-Based Access**:
 - Admin creates time-limited streaming tokens via `/admin/livestream/token`
 - JWT tokens contain: `user_id`, `max_streaming_seconds`, `exp`
-- Users stream to `icecast://localhost:8003/live` using token as password
+- Users stream to `http://localhost/stream/live` via HTTP PUT with token auth
 
 **Slot Management** (First-Come-First-Served):
 - Only one streamer at a time (atomic slot reservation via Redis)
@@ -396,9 +396,10 @@ Docker Compose orchestrates all services with:
   - Manual trigger available: `POST /admin/setup-autoplay` (requires admin token)
 
 **Stream as a User** (Live Broadcasting):
-- **URL**: icecast://localhost:8003/live
-- **Authentication**: Use livestream JWT token as password
-- **Supported Clients**: OBS Studio, ffmpeg, Mixxx, any Icecast-compatible encoder
+- **URL**: http://localhost/stream/live
+- **Method**: HTTP PUT with chunked transfer encoding
+- **Authentication**: HTTP Basic Auth (username: `source`, password: token)
+- **Supported Clients**: ffmpeg with HTTP PUT support
 - **Token Creation**: `POST /admin/livestream/token` (admin only)
 - **Stream Priority**: Live streams take priority over all other audio sources
 - **Time Limit**: Enforced automatically based on token's `max_streaming_seconds`
@@ -411,16 +412,15 @@ TOKEN=$(curl -X POST http://localhost:8383/admin/livestream/token \
   -H "Content-Type: application/json" \
   -d '{"max_streaming_seconds": 3600}' | jq -r '.token')
 
-# Stream audio file to radio
-ffmpeg -re -i music.mp3 -c:a libvorbis -b:a 128k \
-  -f ogg icecast://source:$TOKEN@localhost:8003/live
+# Stream audio file via HTTP PUT
+ffmpeg -re -i music.mp3 \
+  -c:a libvorbis -b:a 128k -f ogg \
+  -method PUT -auth_type basic -chunked_post 1 \
+  -send_expect_100 0 -content_type application/ogg \
+  "http://source:${TOKEN}@localhost/stream/live"
 ```
 
-**Example - Streaming with OBS Studio**:
-1. Settings → Stream
-2. Service: Custom
-3. Server: `icecast://localhost:8003/live`
-4. Stream Key: `source:YOUR_LIVESTREAM_TOKEN`
+See [docs/livestream.md](docs/livestream.md) for complete streaming guide including metadata and recording settings.
 
 # Development
 

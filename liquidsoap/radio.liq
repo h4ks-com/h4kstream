@@ -13,6 +13,7 @@ mpd_fallback_host = environment.get("MPD_FALLBACK_HOST")
 mpd_fallback_port = environment.get("MPD_FALLBACK_PORT")
 backend_host = environment.get("BACKEND_HOST")
 backend_port = environment.get("BACKEND_PORT")
+backend_base_path = environment.get("BACKEND_BASE_PATH")
 liquidsoap_token = environment.get("LIQUIDSOAP_TOKEN")
 
 # Suppress connection error logs
@@ -41,7 +42,7 @@ def livestream_auth(auth_data) =
 
   log("Livestream auth attempt from #{address}")
 
-  auth_url = "http://#{backend_host}:#{backend_port}/internal/livestream/auth"
+  auth_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/internal/livestream/auth"
   headers = [("Authorization", "Bearer #{liquidsoap_token}"), ("Content-Type", "application/json")]
   body = '{"token": "#{password}", "address": "#{address}"}'
 
@@ -65,7 +66,7 @@ def on_livestream_connect(headers) =
 
   log("Livestream connected with token: #{string.length(password)} chars")
 
-  connect_url = "http://#{backend_host}:#{backend_port}/internal/livestream/connect"
+  connect_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/internal/livestream/connect"
   auth_headers = [("Authorization", "Bearer #{liquidsoap_token}"), ("Content-Type", "application/json")]
   # Use json.stringify to properly encode the token
   body = json.stringify({token = password})
@@ -74,7 +75,7 @@ def on_livestream_connect(headers) =
   log("Connect callback response: #{response}")
 
   # Pause user queue when livestream starts
-  pause_url = "http://#{backend_host}:#{backend_port}/admin/playback/pause?playlist=user"
+  pause_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/admin/playback/pause?playlist=user"
   pause_response = http.post(headers=auth_headers, pause_url)
   log("User queue pause response: #{pause_response}")
 end
@@ -84,7 +85,7 @@ def on_livestream_disconnect() =
   password = current_livestream_token()
   log("Livestream disconnected with token: #{string.length(password)} chars")
 
-  disconnect_url = "http://#{backend_host}:#{backend_port}/internal/livestream/disconnect"
+  disconnect_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/internal/livestream/disconnect"
   auth_headers = [("Authorization", "Bearer #{liquidsoap_token}"), ("Content-Type", "application/json")]
   body = json.stringify({token = password})
 
@@ -92,7 +93,7 @@ def on_livestream_disconnect() =
   log("Disconnect callback response: #{response}")
 
   # Resume user queue when livestream ends
-  resume_url = "http://#{backend_host}:#{backend_port}/admin/playback/resume?playlist=user"
+  resume_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/admin/playback/resume?playlist=user"
   resume_response = http.post(headers=auth_headers, resume_url)
   log("User queue resume response: #{resume_response}")
 
@@ -104,7 +105,7 @@ def report_metadata(source_name, metadata) =
   title = metadata["title"]
   artist = metadata["artist"]
 
-  metadata_url = "http://#{backend_host}:#{backend_port}/internal/metadata/update"
+  metadata_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/internal/metadata/update"
   auth_headers = [("Authorization", "Bearer #{liquidsoap_token}"), ("Content-Type", "application/json")]
 
   body = json.stringify({

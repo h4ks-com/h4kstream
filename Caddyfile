@@ -1,0 +1,107 @@
+# Hackstream Radio - Caddy Configuration
+# Reverse proxy, load balancer, and security gateway
+
+{
+	# Disable admin API for production
+	admin off
+
+	# Auto HTTPS is disabled for local development
+	auto_https off
+}
+
+:80 {
+	# Frontend - serve static files (or proxy to frontend service when implemented)
+	handle / {
+		respond "Hackstream Radio - Frontend Coming Soon" 200
+	}
+
+	# API endpoints with load balancing (least connections)
+	handle /api/* {
+		# Block external access to internal API endpoints
+		@internal_api {
+			path /api/internal/*
+		}
+
+		# Allow internal access only (from docker network)
+		handle @internal_api {
+			# Only allow from internal services, not external clients
+			@external_client {
+				not remote_ip 172.16.0.0/12 192.168.0.0/16 10.0.0.0/8
+			}
+			respond @external_client "Forbidden" 403
+
+			# Strip /api prefix and proxy to backend
+			uri strip_prefix /api
+			reverse_proxy {
+				to main-1:8000 main-2:8000 main-3:8000
+				lb_policy least_conn
+
+				# Health checks (backend sees requests at root level)
+				health_uri /health
+				health_interval 10s
+				health_timeout 5s
+			}
+		}
+
+		# Public API endpoints - strip /api prefix
+		uri strip_prefix /api
+		reverse_proxy {
+			to main-1:8000 main-2:8000 main-3:8000
+			lb_policy least_conn
+
+			# Health checks (backend sees requests at root level)
+			health_uri /health
+			health_interval 10s
+			health_timeout 5s
+
+			# Connection settings
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Prefix /api
+		}
+	}
+
+	# Radio stream - proxy to Icecast
+	handle /radio {
+		reverse_proxy icecast:8000 {
+			# Streaming-specific settings
+			flush_interval -1
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# Livestream input - proxy to Liquidsoap harbor
+	# Configured for ffmpeg HTTP PUT streaming with chunked transfer
+	handle /stream/* {
+		# Strip /stream prefix so liquidsoap receives /live
+		uri strip_prefix /stream
+
+		reverse_proxy liquidsoap:8003 {
+			# Preserve authentication and content headers
+			header_up Authorization {header.Authorization}
+			header_up Content-Type {header.Content-Type}
+			header_up X-Real-IP {remote_host}
+
+			# Streaming-optimized settings for chunked PUT requests
+			flush_interval -1
+
+			# Handle long-lived streaming connections
+			transport http {
+				read_buffer 4096
+				write_buffer 4096
+			}
+		}
+	}
+
+	# Health check endpoint
+	handle /health {
+		respond "OK" 200
+	}
+
+	# Logging
+	log {
+		output file /var/log/caddy/access.log
+		format json
+	}
+}

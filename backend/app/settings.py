@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     CHECK_WORKING_PROVIDERS: bool = True
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    ROOT_PATH: str = ""  # API root path prefix (e.g., "/api" when behind reverse proxy)
     ADMIN_API_TOKEN: str = "changeme"  # Comma-separated list of admin tokens
     LIQUIDSOAP_TOKEN: str = "liquidsoap-secret"  # Liquidsoap internal token
     JWT_SECRET: str = Field(default_factory=lambda: os.urandom(24).hex())

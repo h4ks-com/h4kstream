@@ -86,7 +86,7 @@ async def list_recordings(
             genre=recording.genre,
             description=recording.description,
             duration_seconds=recording.duration_seconds,
-            stream_url=f"/recordings/stream/{recording.id}",
+            stream_url=f"{settings.ROOT_PATH}/recordings/stream/{recording.id}",
         )
 
         if recording.show_name not in shows_dict:

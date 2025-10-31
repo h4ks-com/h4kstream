@@ -39,7 +39,17 @@ app = FastAPI(
     description="HTTP API for self-hosted radio system",
     version="1.0.0",
     lifespan=lifespan,
+    root_path=settings.ROOT_PATH,
+    swagger_ui_parameters={"url": f"{settings.ROOT_PATH}/openapi.json"} if settings.ROOT_PATH else None,
 )
+
+
+# Health check endpoint for load balancer
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for load balancers and monitoring."""
+    return {"status": "healthy", "service": "h4kstream-backend"}
+
 
 # Include routes
 app.include_router(public.router)

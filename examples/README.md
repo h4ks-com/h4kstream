@@ -8,7 +8,7 @@ This directory contains example configurations and scripts for streaming to h4ks
 
 ```bash
 # Replace YOUR_ADMIN_TOKEN with your actual admin token from .env
-curl -X POST http://localhost:8383/admin/livestream/token \
+curl -X POST http://localhost/api/admin/livestream/token \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"max_streaming_seconds": 3600}' | jq .
@@ -39,7 +39,9 @@ Or manually:
 TOKEN="your_token_here"
 ffmpeg -re -i music.mp3 \
   -c:a libvorbis -b:a 128k -f ogg \
-  icecast://source:$TOKEN@localhost:8003/live
+  -method PUT -auth_type basic -chunked_post 1 \
+  -send_expect_100 0 -content_type application/ogg \
+  "http://source:${TOKEN}@localhost/stream/live"
 ```
 
 #### Option B: DarkIce
@@ -49,14 +51,7 @@ For streaming from an audio device:
 1. Edit `darkice.cfg` and replace `YOUR_TOKEN_HERE` with your token
 2. Run: `darkice -c darkice.cfg`
 
-#### Option C: OBS Studio
-
-1. Settings → Stream
-2. Service: **Custom**
-3. Server: `icecast://localhost:8003/live`
-4. Stream Key: `source:YOUR_TOKEN`
-
-#### Option D: Mixxx DJ Software
+#### Option C: Mixxx DJ Software
 
 1. Preferences → Live Broadcasting
 2. Type: **Icecast 2**
@@ -70,7 +65,7 @@ For streaming from an audio device:
 
 Once streaming, listen at:
 ```
-http://localhost:8005/radio
+http://localhost/radio
 ```
 
 ## Streaming Limits
@@ -83,12 +78,15 @@ http://localhost:8005/radio
 
 ```bash
 # Get token and stream in one command
-TOKEN=$(curl -s -X POST http://localhost:8383/admin/livestream/token \
+TOKEN=$(curl -s -X POST http://localhost/api/admin/livestream/token \
   -H "Authorization: Bearer test-admin-token-12345" \
   -H "Content-Type: application/json" \
   -d '{"max_streaming_seconds": 3600}' | jq -r '.token') && \
-ffmpeg -re -i music.mp3 -c:a libvorbis -b:a 128k -f ogg \
-  icecast://source:$TOKEN@localhost:8003/live
+ffmpeg -re -i music.mp3 \
+  -c:a libvorbis -b:a 128k -f ogg \
+  -method PUT -auth_type basic -chunked_post 1 \
+  -send_expect_100 0 -content_type application/ogg \
+  "http://source:${TOKEN}@localhost/stream/live"
 ```
 
 ## Troubleshooting
@@ -106,7 +104,8 @@ ffmpeg -re -i music.mp3 -c:a libvorbis -b:a 128k -f ogg \
 
 **Connection refused**
 - Make sure h4kstream is running: `docker compose up`
-- Check that port 8003 is accessible
+- Check that port 80 (Caddy) is accessible
+- Verify Caddy is routing `/stream/live` correctly
 
 ## Files
 
