@@ -78,6 +78,12 @@ class LivestreamTokenCreateRequest(BaseModel):
     max_streaming_seconds: int = Field(
         ..., ge=60, le=86400, description="Maximum streaming time in seconds (1 min to 24 hours)"
     )
+    show_name: str = Field(
+        "livestream", min_length=1, max_length=255, description="Unique identifier for the show (default: livestream)"
+    )
+    min_recording_duration: int = Field(
+        60, ge=1, le=3600, description="Minimum duration in seconds to keep recording (default 60)"
+    )
 
 
 class LivestreamTokenResponse(BaseModel):
@@ -100,6 +106,8 @@ class LivestreamAuthResponse(BaseModel):
 
     success: bool = Field(..., description="Whether authentication succeeded")
     reason: str | None = Field(None, description="Failure reason if not successful")
+    show_name: str | None = Field(None, description="Show name from token (if success)")
+    min_recording_duration: int | None = Field(None, description="Minimum recording duration in seconds (if success)")
 
 
 class LivestreamConnectRequest(BaseModel):
@@ -223,3 +231,38 @@ class WebhookStats(BaseModel):
     failure_count: int = Field(..., description="Failed deliveries")
     success_rate: float = Field(..., description="Success rate (0.0-1.0)")
     last_delivery: str | None = Field(None, description="ISO format timestamp of last delivery attempt")
+
+
+# =============================================================================
+# Recording Models
+# =============================================================================
+
+
+class RecordingMetadata(BaseModel):
+    """Recording metadata."""
+
+    id: int = Field(..., description="Recording ID")
+    created_at: str = Field(..., description="ISO format creation timestamp")
+    title: str | None = Field(None, description="Recording title")
+    artist: str | None = Field(None, description="Artist name")
+    genre: str | None = Field(None, description="Genre")
+    description: str | None = Field(None, description="Description")
+    duration_seconds: float = Field(..., description="Duration in seconds")
+    stream_url: str = Field(..., description="Relative URL to stream the recording")
+
+
+class ShowRecordings(BaseModel):
+    """Recordings grouped by show name."""
+
+    show_name: str = Field(..., description="Show name")
+    recordings: list[RecordingMetadata] = Field(..., description="List of recordings for this show")
+
+
+class RecordingsListResponse(BaseModel):
+    """Response for recordings list with pagination."""
+
+    shows: list[ShowRecordings] = Field(..., description="Recordings grouped by show")
+    total_shows: int = Field(..., description="Total number of shows")
+    total_recordings: int = Field(..., description="Total number of recordings")
+    page: int = Field(..., description="Current page number")
+    page_size: int = Field(..., description="Page size")

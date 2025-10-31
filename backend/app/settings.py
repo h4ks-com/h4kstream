@@ -25,6 +25,10 @@ class Settings(BaseSettings):
             tokens.append(self.LIQUIDSOAP_TOKEN.strip())
         return tokens
 
+    @property
+    def REDIS_URL(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
+
     MPD_USER_HOST: str = "localhost"
     MPD_USER_PORT: int = 6600
     MPD_FALLBACK_HOST: str = "localhost"
@@ -36,6 +40,11 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     VOLUME_PATH: str = "./volumes"
+    DATA_PATH: str = "/app/data"
+    RECORDINGS_PATH: str = "/app/data/recordings"
+
+    ICECAST_HOST: str = "icecast"
+    ICECAST_PORT: int = 8000
 
     DEFAULT_MAX_QUEUE_SONGS: int = 3
     DEFAULT_MAX_ADD_REQUESTS: int = 10

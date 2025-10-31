@@ -65,11 +65,13 @@ async def create_token(request: TokenCreateRequest) -> TokenCreateResponse:
     "/livestream/token",
     response_model=LivestreamTokenResponse,
     summary="Create Livestream Token",
-    description="Create a livestream token with time limit. User can stream until time limit is reached.",
+    description="Create a livestream token with time limit and recording settings.",
 )
 async def create_livestream_token(request: LivestreamTokenCreateRequest) -> LivestreamTokenResponse:
-    """Create a livestream token with specified time limit."""
-    token, expires_at = generate_livestream_token(request.max_streaming_seconds)
+    """Create a livestream token with specified time limit and recording settings."""
+    token, expires_at = generate_livestream_token(
+        request.max_streaming_seconds, request.show_name, request.min_recording_duration
+    )
     return LivestreamTokenResponse(
         token=token, expires_at=expires_at.isoformat(), max_streaming_seconds=request.max_streaming_seconds
     )

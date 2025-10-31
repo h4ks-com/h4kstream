@@ -13,6 +13,7 @@ import sys
 import redis.asyncio as redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 
+from app.db import init_db
 from app.services.event_publisher import EventPublisher
 from app.services.livestream_service import LivestreamService
 from app.services.mpd_service import MPDClient
@@ -92,6 +93,9 @@ class WebhookWorker:
 
     async def initialize(self) -> None:
         """Initialize Redis connections and services."""
+        init_db()
+        logger.info("Database initialized")
+
         self.redis_client = redis.from_url(self.redis_url)
         self.redis_service = RedisService(self.redis_url)
         self.livestream_service = LivestreamService(self.redis_client)
@@ -276,9 +280,7 @@ class WebhookWorker:
                 try:
                     # Wait for player or playlist changes (with 30s timeout to allow shutdown)
                     try:
-                        changes = await asyncio.wait_for(
-                            mpd_client.idle(["player", "playlist"]), timeout=30.0
-                        )
+                        changes = await asyncio.wait_for(mpd_client.idle(["player", "playlist"]), timeout=30.0)
                         logger.debug(f"MPD {playlist} changes: {changes}")
                     except TimeoutError:
                         continue  # No changes, check shutdown and continue
@@ -289,9 +291,7 @@ class WebhookWorker:
 
                     # Check if song changed
                     if new_song_id != current_song_id:
-                        logger.info(
-                            f"{playlist} song changed: {current_song_id} -> {new_song_id}"
-                        )
+                        logger.info(f"{playlist} song changed: {current_song_id} -> {new_song_id}")
                         current_song_id = new_song_id
 
                         if current_song and new_song_id is not None:
@@ -312,9 +312,7 @@ class WebhookWorker:
                                     },
                                     description=f"Song changed in {playlist} playlist",
                                 )
-                                logger.info(
-                                    f"Published song_changed event for {playlist}: {prefixed_id}"
-                                )
+                                logger.info(f"Published song_changed event for {playlist}: {prefixed_id}")
                             except (ConnectionError, OSError, ValueError, RuntimeError) as e:
                                 logger.error(f"Error publishing song_changed event: {e}", exc_info=True)
 
@@ -356,9 +354,7 @@ class WebhookWorker:
         pubsub_task = asyncio.create_task(self.pubsub_listener())
         livestream_monitor_task = asyncio.create_task(self.livestream_monitor_loop())
         user_mpd_monitor_task = asyncio.create_task(self.mpd_monitor_loop(self.user_mpd, "user"))
-        fallback_mpd_monitor_task = asyncio.create_task(
-            self.mpd_monitor_loop(self.fallback_mpd, "fallback")
-        )
+        fallback_mpd_monitor_task = asyncio.create_task(self.mpd_monitor_loop(self.fallback_mpd, "fallback"))
 
         logger.info("Webhook worker running (Ctrl+C to stop)")
 

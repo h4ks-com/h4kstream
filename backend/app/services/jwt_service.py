@@ -80,10 +80,14 @@ def get_max_add_requests(token: str) -> int:
     return payload.get("max_add_requests", settings.DEFAULT_MAX_ADD_REQUESTS)
 
 
-def generate_livestream_token(max_streaming_seconds: int) -> tuple[str, datetime]:
-    """Generate a JWT token for livestreaming with time limit.
+def generate_livestream_token(
+    max_streaming_seconds: int, show_name: str, min_recording_duration: int = 60
+) -> tuple[str, datetime]:
+    """Generate a JWT token for livestreaming with time limit and recording settings.
 
     :param max_streaming_seconds: Maximum allowed streaming time in seconds
+    :param show_name: Unique identifier for the show (required)
+    :param min_recording_duration: Minimum duration in seconds to keep recording (default 60)
     :return: Tuple of (encoded JWT token, expiration datetime)
     """
     max_duration = 86400
@@ -96,6 +100,8 @@ def generate_livestream_token(max_streaming_seconds: int) -> tuple[str, datetime
         "type": "livestream",
         "user_id": uuid4().hex,
         "max_streaming_seconds": max_streaming_seconds,
+        "show_name": show_name,
+        "min_recording_duration": min_recording_duration,
     }
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
     return token, expiration

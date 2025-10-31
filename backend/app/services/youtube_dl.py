@@ -14,6 +14,7 @@ from mutagen.id3 import TPE1
 from mutagen.id3 import TPE2
 from mutagen.mp3 import MP3
 
+from app.services import ffmpeg
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,9 @@ def _download_video_sync(url: str, target_dir: str) -> dict:
         return info_dict
 
 
-def _write_id3_tags_sync(video_path: pathlib.Path, video_title: str, video_artist: str | None, video_album: str | None) -> None:
+def _write_id3_tags_sync(
+    video_path: pathlib.Path, video_title: str, video_artist: str | None, video_album: str | None
+) -> None:
     """Synchronous function to write ID3 tags."""
     audio = MP3(str(video_path), ID3=ID3)
 
@@ -131,35 +134,16 @@ async def download_song(url: str, mainloop: bool = False) -> YoutubeDownloadResu
         if not video_path.exists():
             raise YoutubeDownloadException(YoutubeErrorType.DOWNLOAD_ERROR)
 
-        # Remove silence from beginning and end using async FFmpeg subprocess
+        # Trim silence from beginning and end
         try:
-            temp_path = video_path.with_suffix(".trimmed.mp3")
-            process = await asyncio.create_subprocess_exec(
-                "ffmpeg",
-                "-i",
-                str(video_path),
-                "-af",
-                "silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=-1:stop_duration=0.5:stop_threshold=-50dB",
-                "-c:a",
-                "libmp3lame",
-                "-q:a",
-                "2",  # VBR quality 2 (roughly 190 kbps)
-                str(temp_path),
-                "-y",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            await ffmpeg.trim_silence(
+                video_path,
+                output_codec="libmp3lame",
+                codec_quality="2",
+                output_format="mp3",
             )
-            stdout, stderr = await process.communicate()
-
-            if process.returncode != 0:
-                logger.warning(f"Failed to remove silence: {stderr.decode()}")
-            else:
-                # Replace original with trimmed version
-                await asyncio.to_thread(temp_path.replace, video_path)
-                logger.info(f"Removed silence from {video_path.name}")
-        except Exception as e:
-            logger.warning(f"Failed to remove silence: {e}")
-            # Continue anyway - silence removal is optional
+        except (TimeoutError, RuntimeError, OSError) as e:
+            logger.warning(f"Skipping silence trimming: {e}")
 
         # Manually write ID3 tags using mutagen in thread pool (non-blocking)
         try:

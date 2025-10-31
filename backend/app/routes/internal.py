@@ -43,8 +43,12 @@ async def livestream_auth(
     request: LivestreamAuthRequest, service: LivestreamService = Depends(dep_livestream_service)
 ) -> LivestreamAuthResponse:
     """Validate livestream token and atomically reserve streaming slot."""
-    success, reason = await service.validate_and_reserve_slot(request.token, request.address)
-    return LivestreamAuthResponse(success=success, reason=reason)
+    success, reason, show_name, min_recording_duration = await service.validate_and_reserve_slot(
+        request.token, request.address
+    )
+    return LivestreamAuthResponse(
+        success=success, reason=reason, show_name=show_name, min_recording_duration=min_recording_duration
+    )
 
 
 @router.post(
@@ -67,14 +71,18 @@ async def livestream_connect(
     await redis_client.set_livestream_active(ttl_seconds=3600)
     logger.info("Set livestream active flag with 3600s TTL")
 
-    # Extract user_id from result (returned by track_connection_start)
     user_id = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
+    show_name = result.get("show_name", "unknown") if isinstance(result, dict) else "unknown"
+    min_recording_duration = result.get("min_recording_duration", 60) if isinstance(result, dict) else 60
 
-    # Publish livestream_started event
     description = "A livestream was started"
     await event_publisher.publish(
         event_type="livestream_started",
-        data={"user_id": user_id},
+        data={
+            "user_id": user_id,
+            "show_name": show_name,
+            "min_recording_duration": min_recording_duration,
+        },
         description=description,
     )
     logger.info(f"Published livestream_started event for user {user_id}")

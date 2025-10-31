@@ -17,29 +17,33 @@ class LivestreamService:
     def __init__(self, redis_client: redis.Redis):
         self.redis = redis_client
 
-    async def validate_and_reserve_slot(self, token: str, address: str) -> tuple[bool, str | None]:
+    async def validate_and_reserve_slot(
+        self, token: str, address: str
+    ) -> tuple[bool, str | None, str | None, int | None]:
         """Validate livestream token and atomically reserve the streaming slot.
 
         :param token: JWT livestream token
         :param address: Source IP address
-        :return: Tuple of (success, failure_reason)
+        :return: Tuple of (success, failure_reason, show_name, min_recording_duration)
         """
         try:
             payload = decode_livestream_token(token)
         except jwt.ExpiredSignatureError:
-            return False, "Token has expired"
+            return False, "Token has expired", None, None
         except jwt.InvalidTokenError as e:
-            return False, f"Invalid token: {str(e)}"
+            return False, f"Invalid token: {str(e)}", None, None
 
         user_id = payload["user_id"]
         max_streaming_seconds = payload["max_streaming_seconds"]
+        show_name = payload.get("show_name")
+        min_recording_duration = payload.get("min_recording_duration", 60)
 
         total_used_key = f"livestream:user:{user_id}:total"
         total_used = await self.redis.get(total_used_key)
         total_used_seconds = int(total_used) if total_used else 0
 
         if total_used_seconds >= max_streaming_seconds:
-            return False, f"Streaming time limit exceeded ({total_used_seconds}/{max_streaming_seconds}s)"
+            return False, f"Streaming time limit exceeded ({total_used_seconds}/{max_streaming_seconds}s)", None, None
 
         active_key = "livestream:active"
         slot_reserved = await self.redis.setnx(
@@ -49,6 +53,8 @@ class LivestreamService:
                     "user_id": user_id,
                     "token": token,
                     "max_streaming_seconds": max_streaming_seconds,
+                    "show_name": show_name,
+                    "min_recording_duration": min_recording_duration,
                     "address": address,
                 }
             ),
@@ -59,28 +65,31 @@ class LivestreamService:
             if existing_data:
                 existing = json.loads(existing_data)
                 if existing.get("user_id") == user_id:
-                    return True, None
-                return False, "Streaming slot is already occupied by another user"
-            return False, "Streaming slot is occupied"
+                    return True, None, show_name, min_recording_duration
+                return False, "Streaming slot is already occupied by another user", None, None
+            return False, "Streaming slot is occupied", None, None
 
         await self.redis.expire(active_key, 120)
-        logger.info(f"Livestream slot reserved for user {user_id} from {address}")
-        return True, None
+        logger.info(f"Livestream slot reserved for user {user_id} (show: {show_name}) from {address}")
+        return True, None, show_name, min_recording_duration
 
-    async def track_connection_start(self, token: str) -> bool:
+    async def track_connection_start(self, token: str) -> dict[str, str | int]:
         """Track livestream connection start time.
 
         :param token: JWT livestream token
-        :return: True if tracking started successfully
+        :return: Dict with user_id, show_name, and min_recording_duration
         """
         logger.info(f"track_connection_start called with token: {token[:20]}...")
         try:
             payload = decode_livestream_token(token)
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
             logger.error(f"Failed to decode token in track_connection_start: {e}")
-            return False
+            return {"user_id": "unknown", "show_name": "unknown", "min_recording_duration": 60}
 
         user_id = payload["user_id"]
+        show_name = payload.get("show_name", "unknown")
+        min_recording_duration = payload.get("min_recording_duration", 60)
+
         session_start_key = f"livestream:session:{user_id}:start"
         active_key = "livestream:active"
         now = datetime.now(UTC).isoformat()
@@ -94,24 +103,25 @@ class LivestreamService:
         logger.info(f"Verified session start stored: {verify}")
 
         logger.info(f"Livestream session started for user {user_id} at {now}")
-        return True
+        return {"user_id": user_id, "show_name": show_name, "min_recording_duration": min_recording_duration}
 
-    async def handle_disconnect(self, token: str) -> bool:
+    async def handle_disconnect(self, token: str) -> dict[str, str | int]:
         """Handle livestream disconnection and update total time used.
 
         :param token: JWT livestream token
-        :return: True if disconnect handled successfully
+        :return: Dict with user_id and elapsed_seconds
         """
         try:
             payload = decode_livestream_token(token)
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-            return False
+            return {"user_id": "unknown", "elapsed_seconds": 0}
 
         user_id = payload["user_id"]
         session_start_key = f"livestream:session:{user_id}:start"
         total_used_key = f"livestream:user:{user_id}:total"
         active_key = "livestream:active"
 
+        elapsed_seconds = 0
         session_start_str = await self.redis.get(session_start_key)
         if session_start_str:
             session_start = datetime.fromisoformat(session_start_str.decode())
@@ -133,7 +143,7 @@ class LivestreamService:
                 await self.redis.delete(active_key)
                 logger.info(f"Livestream slot released for user {user_id}")
 
-        return True
+        return {"user_id": user_id, "elapsed_seconds": elapsed_seconds}
 
     async def get_active_session(self) -> dict | None:
         """Get currently active livestream session data.

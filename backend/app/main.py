@@ -3,12 +3,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.db import init_db
 from app.routes import admin
 from app.routes import internal
 from app.routes import public
 from app.routes import webhooks
 from app.routes.metadata import internal_router as metadata_internal_router
 from app.routes.metadata import metadata_router
+from app.routes.recordings import admin_router as recordings_admin_router
+from app.routes.recordings import router as recordings_router
 from app.settings import settings
 
 # Configure global logging
@@ -25,6 +28,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     logger.info("FastAPI application starting (MPD setup handled by webhook_worker)")
+    init_db()
+    logger.info("Database initialized")
     yield
     logger.info("FastAPI application shutting down")
 
@@ -43,3 +48,5 @@ app.include_router(internal.router)
 app.include_router(webhooks.router)
 app.include_router(metadata_router)
 app.include_router(metadata_internal_router)
+app.include_router(recordings_router)
+app.include_router(recordings_admin_router)

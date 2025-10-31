@@ -1,5 +1,8 @@
 #!/usr/bin/liquidsoap
 
+# Allow running as root
+settings.init.allow_root.set(true)
+
 # Get environment variables
 icecast_host = environment.get("ICECAST_HOST")
 icecast_port = int_of_string(environment.get("ICECAST_PORT"))
@@ -58,7 +61,7 @@ end
 # Connection callback for live streaming
 def on_livestream_connect(headers) =
   # Token was already stored during auth
-  password = !current_livestream_token
+  password = current_livestream_token()
 
   log("Livestream connected with token: #{string.length(password)} chars")
 
@@ -78,7 +81,7 @@ end
 
 # Disconnection callback for live streaming
 def on_livestream_disconnect() =
-  password = !current_livestream_token
+  password = current_livestream_token()
   log("Livestream disconnected with token: #{string.length(password)} chars")
 
   disconnect_url = "http://#{backend_host}:#{backend_port}/internal/livestream/disconnect"

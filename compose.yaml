@@ -16,7 +16,8 @@ services:
     - MPD_USER_PORT=6600
     - MPD_FALLBACK_HOST=mpd-fallback
     - MPD_FALLBACK_PORT=6601
-    - VOLUME_PATH=./backend/volumes
+    - DATA_PATH=/app/data
+    - RECORDINGS_PATH=/app/data/recordings
     - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
     - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
     - JWT_SECRET=${JWT_SECRET}
@@ -54,6 +55,29 @@ services:
     - liquidsoap
     - mpd-user
     - mpd-fallback
+    restart: unless-stopped
+
+  recording_worker:
+    container_name: recording_worker
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["uv", "run", "python", "-m", "app.services.recording_worker"]
+    volumes:
+    - ./data:/app/data
+    environment:
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+    - ICECAST_HOST=icecast
+    - ICECAST_PORT=8000
+    - DATA_PATH=/app/data
+    - RECORDINGS_PATH=/app/data/recordings
+    - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
+    - JWT_SECRET=${JWT_SECRET}
+    - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+    - redis
+    - icecast
     restart: unless-stopped
 
   redis:
@@ -106,6 +130,7 @@ services:
   liquidsoap:
     image: savonet/liquidsoap:v2.3.0
     container_name: liquidsoap
+    user: root
     volumes:
     - ./liquidsoap/radio.liq:/etc/liquidsoap/radio.liq:ro
     environment:

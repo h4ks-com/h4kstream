@@ -1,4 +1,4 @@
-# h4kstream Architecture
+
 
 ## System Overview
 Music streaming platform with web-based control interface. Features live user streaming, dual-queue system with user submissions (limited, auto-cleanup), and admin fallback playlist (always looping). Manages YouTube video downloads, playlist management, live streaming with time tracking, and continuous audio output with 4-tier automatic failover.
@@ -246,3 +246,10 @@ ffmpeg -re -i music.mp3 -c:a libvorbis -b:a 128k \
 2. Service: Custom
 3. Server: `icecast://localhost:8003/live`
 4. Stream Key: `source:YOUR_LIVESTREAM_TOKEN`
+
+# Development
+
+1. Implement features
+2. Check `make fix`
+2. Write test and e2e tests under e2e/
+3. `make test-e2e`
