@@ -78,7 +78,11 @@ const ShowModal: React.FC<ModalProps> = ({ showName, onClose }) => {
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    const secs = Math.floor(seconds % 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${secs}s`;
+    }
+    return `${minutes}m ${secs}s`;
   };
 
   const formatDate = (dateString: string) => {
@@ -86,8 +90,14 @@ const ShowModal: React.FC<ModalProps> = ({ showName, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-h4ks-dark-800 border border-h4ks-green-700 max-w-4xl w-full max-h-[80vh] flex flex-col">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-h4ks-dark-800 border border-h4ks-green-700 max-w-4xl w-full max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-4 border-b border-h4ks-green-900 flex justify-between items-center">
           <h2 className="text-h4ks-green-400 text-xl font-bold">{showName}</h2>
           <button
@@ -98,7 +108,7 @@ const ShowModal: React.FC<ModalProps> = ({ showName, onClose }) => {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 h4ks-scrollbar">
           {recordings.map((recording, index) => {
             const isLast = index === recordings.length - 1;
             return (
@@ -137,16 +147,40 @@ const ShowModal: React.FC<ModalProps> = ({ showName, onClose }) => {
                 <audio
                   controls
                   preload="none"
-                  className="w-full mt-2 h-8"
+                  className="w-full mt-2 h-8
+                    [&::-webkit-media-controls-panel]:bg-h4ks-dark-700
+                    [&::-webkit-media-controls-current-time-display]:text-h4ks-green-400
+                    [&::-webkit-media-controls-time-remaining-display]:text-h4ks-green-400"
                   src={recording.stream_url}
-                  onPlay={() => {
+                  onPlay={(e) => {
+                    const currentAudio = e.currentTarget;
+                    // Mute (not pause) the main radio stream
+                    const radioAudio = document.querySelector('audio[src="/radio"]') as HTMLAudioElement;
+                    if (radioAudio && !radioAudio.paused) {
+                      radioAudio.muted = true;
+                    }
+
                     // Pause any other archive audio players
                     const allAudios = document.querySelectorAll('audio');
                     allAudios.forEach((audio) => {
-                      if (audio.src !== recording.stream_url && !audio.paused) {
+                      if (audio !== currentAudio && audio.src !== '/radio' && !audio.paused) {
                         audio.pause();
                       }
                     });
+                  }}
+                  onPause={() => {
+                    // Unmute radio when archive is paused
+                    const radioAudio = document.querySelector('audio[src="/radio"]') as HTMLAudioElement;
+                    if (radioAudio && radioAudio.muted) {
+                      radioAudio.muted = false;
+                    }
+                  }}
+                  onEnded={() => {
+                    // Unmute radio when archive ends
+                    const radioAudio = document.querySelector('audio[src="/radio"]') as HTMLAudioElement;
+                    if (radioAudio && radioAudio.muted) {
+                      radioAudio.muted = false;
+                    }
                   }}
                 />
               </div>

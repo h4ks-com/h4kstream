@@ -107,6 +107,10 @@ async def livestream_disconnect(
     result = await service.handle_disconnect(request.token)
     await redis_client.clear_livestream_active()
 
+    # Clean up livestream metadata to prevent stale data in next stream
+    await redis_client.delete_metadata("livestream")
+    logger.info("Cleaned up livestream metadata from Redis")
+
     # Extract user_id and duration from result
     user_id = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
     duration_seconds = result.get("elapsed_seconds", 0) if isinstance(result, dict) else 0

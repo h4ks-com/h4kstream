@@ -85,6 +85,11 @@
 			header_up Content-Type {header.Content-Type}
 			header_up X-Real-IP {remote_host}
 
+			# Forward Icecast metadata headers
+			header_up ice-name {header.ice-name}
+			header_up ice-description {header.ice-description}
+			header_up ice-genre {header.ice-genre}
+
 			# Streaming-optimized settings for chunked PUT requests
 			flush_interval -1
 

@@ -137,7 +137,7 @@ echo ""
 # -chunked_post 1: Enable chunked transfer encoding
 # -send_expect_100 0: Disable Expect headers
 # -content_type: MIME type for the stream
-# -ice_name, -ice_description, -ice_genre: Icecast metadata
+# -headers: Icecast metadata headers (ice-name format: "Artist - Title")
 ffmpeg -re -i "$AUDIO_FILE" \
     -metadata title="$STREAM_TITLE" \
     -metadata artist="$STREAM_ARTIST" \
@@ -150,9 +150,7 @@ ffmpeg -re -i "$AUDIO_FILE" \
     -chunked_post 1 \
     -send_expect_100 0 \
     -content_type application/ogg \
-    -ice_name "$STREAM_TITLE" \
-    -ice_genre "$STREAM_GENRE" \
-    -ice_description "Livestream: $STREAM_ARTIST - $STREAM_TITLE" \
+    -headers "ice-name: $STREAM_ARTIST - $STREAM_TITLE"$'\r\n'"ice-genre: $STREAM_GENRE"$'\r\n'"ice-description: Livestream: $STREAM_ARTIST - $STREAM_TITLE"$'\r\n' \
     "http://source:${TOKEN}@${STREAM_URL#*://}"
 
 echo ""

@@ -135,6 +135,11 @@ class RedisService:
             return json.loads(value)
         return None
 
+    async def delete_metadata(self, source: str) -> None:
+        """Delete metadata for a source."""
+        key = f"metadata:{source}"
+        await self.redis.delete(key)
+
     async def set_active_source(self, source: str) -> None:
         """Set the currently active audio source."""
         await self.redis.set("metadata:active_source", source)

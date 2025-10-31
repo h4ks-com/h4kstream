@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from mutagen.oggvorbis import OggVorbis
 from redis import asyncio as aioredis
 
 from app.db import SessionLocal
@@ -28,6 +29,7 @@ class RecordingSession:
     filepath: Path
     process: asyncio.subprocess.Process
     started_at: float
+    metadata: dict[str, str | None]  # Capture metadata at recording start
 
 
 class RecordingWorker:
@@ -39,6 +41,7 @@ class RecordingWorker:
         init_db()
 
         self.redis = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        assert self.redis is not None, "Redis connection failed"
 
         pubsub = self.redis.pubsub()
         await pubsub.subscribe("events:livestream_started", "events:livestream_ended")
@@ -73,6 +76,26 @@ class RecordingWorker:
             logger.warning(f"Recording already active for user {user_id}")
             return
 
+        assert self.redis is not None, "Redis not initialized"
+
+        # Read metadata from Redis (Liquidsoap sends all fields immediately)
+        metadata: dict[str, str | None] = {"title": None, "artist": None, "genre": None, "description": None}
+
+        try:
+            metadata_json = await self.redis.get("metadata:livestream")
+            if metadata_json:
+                stored_metadata = json.loads(metadata_json)
+                metadata.update(stored_metadata)
+                logger.info(
+                    f"Captured metadata at recording start: "
+                    f"title={metadata.get('title')}, artist={metadata.get('artist')}, "
+                    f"genre={metadata.get('genre')}, description={metadata.get('description')}"
+                )
+            else:
+                logger.warning(f"No metadata found in Redis for user {user_id}, recording will be 'Untitled'")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid JSON in metadata:livestream: {e}")
+
         timestamp = int(time.time())
         filename = f"{show_name}_{timestamp}.mp3"
         filepath = Path(settings.RECORDINGS_PATH) / filename
@@ -100,6 +123,7 @@ class RecordingWorker:
             filepath=filepath,
             process=process,
             started_at=time.time(),
+            metadata=metadata,
         )
 
         logger.info(f"Started recording for {show_name} (user: {user_id}) -> {filename}")
@@ -112,7 +136,6 @@ class RecordingWorker:
             logger.warning(f"No active recording for user {user_id}")
             return
 
-        # Check if process is still running before terminating
         if session.process.returncode is None:
             session.process.terminate()
             await session.process.wait()
@@ -120,6 +143,25 @@ class RecordingWorker:
             logger.info(f"Recording process already exited for user {user_id}")
 
         await self._process_recording(session)
+
+    def _write_ogg_metadata(self, filepath: Path, metadata: dict[str, str | None]) -> None:
+        """Write metadata to OGG Vorbis file using mutagen."""
+        try:
+            audio = OggVorbis(str(filepath))
+
+            if metadata.get("title"):
+                audio["TITLE"] = metadata["title"]
+            if metadata.get("artist"):
+                audio["ARTIST"] = metadata["artist"]
+            if metadata.get("genre"):
+                audio["GENRE"] = metadata["genre"]
+            if metadata.get("description"):
+                audio["DESCRIPTION"] = metadata["description"]
+
+            audio.save()
+            logger.info(f"Wrote OGG metadata tags to {filepath.name}")
+        except Exception as e:
+            logger.warning(f"Failed to write OGG metadata to {filepath.name}: {e}")
 
     async def _process_recording(self, session: RecordingSession) -> None:
         if not session.filepath.exists():
@@ -133,7 +175,6 @@ class RecordingWorker:
             logger.info(f"Deleted {session.filename}: too short ({duration:.1f}s < {session.min_duration}s)")
             return
 
-        # Trim silence from livestream recording
         try:
             await ffmpeg.trim_silence(
                 session.filepath,
@@ -141,21 +182,36 @@ class RecordingWorker:
                 codec_quality="5",
                 output_format="ogg",
             )
-            # Recalculate duration after trimming
             duration = await ffmpeg.get_duration(session.filepath)
         except (TimeoutError, RuntimeError, OSError) as e:
             logger.warning(f"Skipping silence trimming for {session.filename}: {e}")
+
+        metadata = session.metadata
+        logger.info(
+            f"Using captured metadata: title={metadata.get('title')}, "
+            f"artist={metadata.get('artist')}, genre={metadata.get('genre')}, "
+            f"description={metadata.get('description')}"
+        )
+
+        # Write metadata to OGG file tags
+        await asyncio.to_thread(self._write_ogg_metadata, session.filepath, metadata)
 
         db = SessionLocal()
         try:
             recording = LivestreamRecording(
                 show_name=session.show_name,
+                title=metadata.get("title"),
+                artist=metadata.get("artist"),
+                genre=metadata.get("genre"),
                 duration_seconds=duration,
                 file_path=session.filename,
             )
             db.add(recording)
             db.commit()
-            logger.info(f"Saved recording {session.filename} ({duration:.1f}s) to database (ID: {recording.id})")
+            logger.info(
+                f"Saved recording {session.filename} ({duration:.1f}s) to database "
+                f"(ID: {recording.id}, title: {recording.title or 'Untitled'})"
+            )
         finally:
             db.close()
 

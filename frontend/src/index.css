@@ -42,3 +42,48 @@
     @apply bg-h4ks-dark-700 border border-h4ks-green-800 p-4;
   }
 }
+
+/* Dark theme for audio players */
+audio::-webkit-media-controls-panel {
+  background-color: #253033;
+}
+
+audio::-webkit-media-controls-current-time-display,
+audio::-webkit-media-controls-time-remaining-display {
+  color: #4ade80;
+}
+
+audio::-webkit-media-controls-play-button,
+audio::-webkit-media-controls-mute-button {
+  filter: invert(0.7) sepia(1) saturate(5) hue-rotate(90deg);
+}
+
+audio::-webkit-media-controls-timeline {
+  background-color: #2f3a3d;
+  border-radius: 2px;
+}
+
+audio::-webkit-media-controls-volume-slider {
+  background-color: #2f3a3d;
+  border-radius: 2px;
+}
+
+/* Custom scrollbar styling for archives modal */
+.h4ks-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.h4ks-scrollbar::-webkit-scrollbar-track {
+  background: #1a2426;
+  border-radius: 4px;
+}
+
+.h4ks-scrollbar::-webkit-scrollbar-thumb {
+  background: #2a5a3a;
+  border-radius: 4px;
+  border: 1px solid #1a5a2a;
+}
+
+.h4ks-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #3a6a4a;
+}

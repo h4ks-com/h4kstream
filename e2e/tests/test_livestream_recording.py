@@ -281,3 +281,104 @@ def test_recording_list_search_and_cleanup() -> None:
         response = httpx.get(f"{BASE_URL}/recordings/list", params={"show_name": show_name_2})
         assert response.status_code == 200
         assert response.json()["total_recordings"] == 0
+
+
+def test_recording_metadata_preservation() -> None:
+    """Test that metadata embedded in stream is saved to recording."""
+    show_name = f"test_metadata_{int(time.time())}"
+    test_metadata = {
+        "title": "My Test Stream",
+        "artist": "Test Artist",
+        "genre": "Electronic",
+        "description": "A test livestream recording",
+    }
+
+    response = httpx.post(
+        f"{BASE_URL}/admin/livestream/token",
+        headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
+        json={"max_streaming_seconds": 3600, "show_name": show_name, "min_recording_duration": 3},
+    )
+    assert response.status_code == 200
+    token = response.json()["token"]
+
+    # Stream with embedded Icecast metadata (simulating OBS/Mixxx)
+    # Liquidsoap will extract this and send to backend before triggering recording
+    # ice-name should be in "Artist - Title" format for proper parsing
+    ice_name = f"{test_metadata['artist']} - {test_metadata['title']}"
+
+    # For HTTP PUT, we need to send Icecast headers via -headers option
+    headers = (
+        f"ice-name: {ice_name}\r\n"
+        f"ice-genre: {test_metadata['genre']}\r\n"
+        f"ice-description: {test_metadata['description']}\r\n"
+    )
+
+    ffmpeg_process = subprocess.Popen(
+        [
+            "ffmpeg",
+            "-re",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=48000:cl=stereo",
+            "-t",
+            "5",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "128k",
+            "-f",
+            "mp3",
+            "-method",
+            "PUT",
+            "-auth_type",
+            "basic",
+            "-chunked_post",
+            "1",
+            "-send_expect_100",
+            "0",
+            "-content_type",
+            "audio/mpeg",
+            "-headers",
+            headers,
+            f"http://source:{token}@localhost/stream/live",
+            "-loglevel",
+            "error",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    try:
+        ffmpeg_process.communicate(timeout=15)
+    except subprocess.TimeoutExpired:
+        ffmpeg_process.kill()
+        pytest.fail("FFmpeg timed out")
+
+    time.sleep(3)
+
+    response = httpx.get(f"{BASE_URL}/recordings/list", params={"show_name": show_name})
+    assert response.status_code == 200
+    recordings_data = response.json()
+
+    assert recordings_data["total_recordings"] == 1
+    recording = recordings_data["shows"][0]["recordings"][0]
+
+    assert recording["title"] == test_metadata["title"], f"Expected title '{test_metadata['title']}', got '{recording.get('title')}'"
+    assert recording["artist"] == test_metadata["artist"], f"Expected artist '{test_metadata['artist']}', got '{recording.get('artist')}'"
+    assert recording["genre"] == test_metadata["genre"], f"Expected genre '{test_metadata['genre']}', got '{recording.get('genre')}'"
+
+    recording_id = recording["id"]
+
+    # Cleanup - delete the test recording
+    response = httpx.delete(
+        f"{BASE_URL}/admin/recordings/{recording_id}",
+        headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
+    )
+    assert response.status_code == 200, f"Failed to delete recording: {response.status_code} - {response.text}"
+
+    # Verify deletion worked
+    response = httpx.get(f"{BASE_URL}/recordings/list", params={"show_name": show_name})
+    assert response.status_code == 200
+    recordings_data = response.json()
+    assert recordings_data["total_recordings"] == 0, "Recording should be deleted"

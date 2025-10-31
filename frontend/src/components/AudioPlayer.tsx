@@ -37,11 +37,14 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
 export const AudioPlayer: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.7);
   const [error, setError] = useState<string | null>(null);
-  const [bufferLag, setBufferLag] = useState(0);
+  const [amplitude, setAmplitude] = useState(0);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -58,8 +61,14 @@ export const AudioPlayer: React.FC = () => {
           setIsPlaying(true);
           setError(null);
         } catch (err) {
-          console.error('Autoplay failed:', err);
-          setError('Click play to start streaming');
+          // NotAllowedError is expected - browser blocks autoplay without user interaction
+          // Don't show error, just wait for user to click play
+          if (err instanceof Error && err.name === 'NotAllowedError') {
+            console.log('Autoplay blocked by browser - waiting for user interaction');
+          } else {
+            console.error('Autoplay failed:', err);
+            setError('Click play to start streaming');
+          }
         }
       };
       playAudio();
@@ -70,25 +79,41 @@ export const AudioPlayer: React.FC = () => {
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !isPlaying) return;
 
-    // Check buffer lag every 2 seconds
-    const checkBuffer = () => {
-      try {
-        if (audio.buffered.length > 0) {
-          const bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
-          const currentTime = audio.currentTime;
-          const lag = bufferedEnd - currentTime;
-          setBufferLag(lag);
-        }
-      } catch (err) {
-        // Ignore buffer check errors
-      }
+    if (!audioContextRef.current) {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContext();
+      const analyser = audioContextRef.current.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+
+      const source = audioContextRef.current.createMediaElementSource(audio);
+      source.connect(analyser);
+      analyser.connect(audioContextRef.current.destination);
+    }
+
+    const analyser = analyserRef.current;
+    if (!analyser) return;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    const updateAmplitude = () => {
+      analyser.getByteFrequencyData(dataArray);
+      const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+      const normalizedAmplitude = Math.min((average / 255) * 0.5, 1.0);
+      setAmplitude(normalizedAmplitude);
+      animationFrameRef.current = requestAnimationFrame(updateAmplitude);
     };
 
-    const interval = setInterval(checkBuffer, 2000);
-    return () => clearInterval(interval);
-  }, []);
+    updateAmplitude();
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isPlaying]);
 
   const togglePlayPause = async () => {
     const audio = audioRef.current;
@@ -130,18 +155,12 @@ export const AudioPlayer: React.FC = () => {
     if (!audio) return;
 
     const wasPlaying = !audio.paused;
-
-    // Reload the stream to jump to live
     audio.load();
 
     if (wasPlaying) {
       audio.play().catch(console.error);
     }
-
-    setBufferLag(0);
   };
-
-  const showLiveButton = bufferLag > 3; // Show button if more than 3 seconds behind
 
   return (
     <div className="h4ks-card sticky top-0 z-10">
@@ -169,14 +188,14 @@ export const AudioPlayer: React.FC = () => {
                 <div className="text-gray-400 text-sm">
                   {isPlaying ? 'LIVE' : 'PAUSED'}
                 </div>
-                {showLiveButton && isPlaying && (
+                {isPlaying && (
                   <button
                     onClick={jumpToLive}
                     className="text-xs px-2 py-1 bg-orange-900 border border-orange-700 text-orange-300
                              hover:bg-orange-800 hover:border-orange-600 transition-colors rounded"
-                    title={`${Math.round(bufferLag)}s behind`}
+                    title="Sync playback to the live stream"
                   >
-                    ⏭ LIVE
+                    ⏭ SYNC
                   </button>
                 )}
               </div>
@@ -214,29 +233,17 @@ export const AudioPlayer: React.FC = () => {
         </div>
       </div>
 
-      {/* Buffer Lag Indicator */}
-      {isPlaying && bufferLag > 0.5 && (
-        <div className="mt-3 space-y-1">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-500">Stream Lag</span>
-            <span className={`font-mono ${
-              bufferLag < 2 ? 'text-h4ks-green-500' :
-              bufferLag < 5 ? 'text-yellow-500' :
-              bufferLag < 8 ? 'text-orange-500' :
-              'text-red-500'
-            }`}>
-              {bufferLag.toFixed(1)}s behind
-            </span>
-          </div>
+      {/* Amplitude Visualizer */}
+      {isPlaying && (
+        <div className="mt-3">
           <div className="relative w-full h-2 bg-h4ks-dark-600 border border-h4ks-green-900">
             <div
-              className={`h-full transition-all duration-300 ${
-                bufferLag < 2 ? 'bg-h4ks-green-600' :
-                bufferLag < 5 ? 'bg-yellow-600' :
-                bufferLag < 8 ? 'bg-orange-600' :
+              className={`h-full transition-all duration-75 ${
+                amplitude < 0.3 ? 'bg-h4ks-green-600' :
+                amplitude < 0.6 ? 'bg-orange-600' :
                 'bg-red-600'
               }`}
-              style={{ width: `${Math.min((bufferLag / 10) * 100, 100)}%` }}
+              style={{ width: `${amplitude * 100}%` }}
             />
           </div>
         </div>

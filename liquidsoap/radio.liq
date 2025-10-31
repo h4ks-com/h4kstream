@@ -66,9 +66,52 @@ def on_livestream_connect(headers) =
 
   log("Livestream connected with token: #{string.length(password)} chars")
 
-  connect_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/internal/livestream/connect"
+  # Debug: log all received headers
+  log("DEBUG: All headers received:")
+  list.iter(fun (pair) -> log("  #{fst(pair)}: #{snd(pair)}"), headers)
+
+  # Prepare auth headers for API calls
   auth_headers = [("Authorization", "Bearer #{liquidsoap_token}"), ("Content-Type", "application/json")]
-  # Use json.stringify to properly encode the token
+
+  # Extract initial metadata from Icecast headers (capitalized header names)
+  title = headers["Ice-Name"] ?? ""
+  description = headers["Ice-Description"] ?? ""
+  genre = headers["Ice-Genre"] ?? ""
+
+  # Parse artist from title if available (format: "Artist - Title")
+  # Split on " - " separator
+  parts = string.split(separator=" - ", title)
+
+  # Extract artist and title based on split result
+  artist =
+    if list.length(parts) >= 2 then
+      list.hd(default="", parts)
+    else
+      ""
+    end
+
+  parsed_title =
+    if list.length(parts) >= 2 then
+      string.concat(separator=" - ", list.tl(parts))
+    else
+      title
+    end
+
+  log("Parsed metadata - Title: #{parsed_title}, Artist: #{artist}, Genre: #{genre}")
+
+  # Set initial metadata in Redis BEFORE triggering recording
+  metadata_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/internal/metadata/set"
+  metadata_body = json.stringify({
+    title = parsed_title,
+    artist = artist,
+    genre = genre,
+    description = description
+  })
+  metadata_response = http.post(headers=auth_headers, data=metadata_body, metadata_url)
+  log("Initial metadata set response: #{metadata_response}")
+
+  # Now trigger the connect event which starts recording
+  connect_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/internal/livestream/connect"
   body = json.stringify({token = password})
 
   response = http.post(headers=auth_headers, data=body, connect_url)
@@ -104,6 +147,8 @@ end
 def report_metadata(source_name, metadata) =
   title = metadata["title"]
   artist = metadata["artist"]
+  genre = metadata["genre"]
+  description = metadata["description"]
 
   metadata_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/internal/metadata/update"
   auth_headers = [("Authorization", "Bearer #{liquidsoap_token}"), ("Content-Type", "application/json")]
@@ -113,14 +158,14 @@ def report_metadata(source_name, metadata) =
     metadata = {
       title = title,
       artist = artist,
-      genre = null(),
-      description = null()
+      genre = genre,
+      description = description
     }
   })
 
   try
     response = http.post(headers=auth_headers, data=body, metadata_url)
-    log("Metadata update for #{source_name}: #{title} - #{artist}")
+    log("Metadata update for #{source_name}: #{title} - #{artist} [#{genre}]")
   catch err do
     log("Failed to update metadata: #{err}")
   end
