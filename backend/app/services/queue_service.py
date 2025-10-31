@@ -4,6 +4,7 @@ Provides unified operations for both user queue and radio playlist, eliminating 
 """
 
 import logging
+import os
 import shutil
 from pathlib import Path
 from uuid import uuid4
@@ -13,16 +14,92 @@ from yt_dlp.utils import sanitize_filename
 
 from app.models import SongItem
 from app.services.event_publisher import EventPublisher
+from app.services.ffmpeg import get_duration
 from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
 from app.services.redis_service import format_song_id
 from app.services.youtube_dl import download_song
+from app.services.youtube_dl import get_video_info
 from app.settings import MUSIC_FALLBACK_DIR
 from app.settings import MUSIC_USER_DIR
 from app.settings import SONGS_DIR
+from app.settings import settings
 from app.types import PlaylistType
 
 logger = logging.getLogger(__name__)
+
+
+async def validate_file_size(file: UploadFile, max_size_mb: int) -> None:
+    """Validate uploaded file size.
+
+    :param file: Uploaded file
+    :param max_size_mb: Maximum allowed file size in MB
+    :raises ValueError: If file exceeds size limit
+    """
+    # Read file to check size
+    content = await file.read()
+    size_mb = len(content) / (1024 * 1024)
+
+    # Reset file pointer for later reading
+    await file.seek(0)
+
+    if size_mb > max_size_mb:
+        raise ValueError(f"File size ({size_mb:.1f}MB) exceeds maximum allowed size ({max_size_mb}MB)")
+
+
+async def validate_song_duration(file_path: Path, max_duration_seconds: int) -> None:
+    """Validate song duration using ffprobe.
+
+    :param file_path: Path to audio file
+    :param max_duration_seconds: Maximum allowed duration in seconds
+    :raises ValueError: If duration exceeds limit or cannot be determined
+    """
+    try:
+        duration = await get_duration(file_path)
+        if duration > max_duration_seconds:
+            max_minutes = max_duration_seconds / 60
+            actual_minutes = duration / 60
+            raise ValueError(
+                f"Song duration ({actual_minutes:.1f} min) exceeds maximum allowed duration ({max_minutes:.0f} min)"
+            )
+    except Exception as e:
+        logger.error(f"Failed to get duration for {file_path}: {e}")
+        raise ValueError(f"Failed to validate song duration: {e}")
+
+
+async def check_duplicate_in_queue(
+    song_name: str | None, artist_name: str | None, user_mpd: MPDClient, fallback_mpd: MPDClient, check_limit: int
+) -> bool:
+    """Check if song already exists in the next N songs of combined queue.
+
+    :param song_name: Song title
+    :param artist_name: Artist name
+    :param user_mpd: User queue MPD client (must be connected)
+    :param fallback_mpd: Fallback queue MPD client (must be connected)
+    :param check_limit: Number of songs to check in combined queue
+    :return: True if duplicate found, False otherwise
+    """
+    if not song_name:
+        # Can't detect duplicates without song name
+        return False
+
+    # Get next songs from combined queue (reuse existing logic)
+    next_songs = await get_next_songs(user_mpd, fallback_mpd, check_limit)
+
+    # Normalize for comparison
+    normalized_song = song_name.lower().strip()
+    normalized_artist = artist_name.lower().strip() if artist_name else ""
+
+    for song in next_songs:
+        existing_title = (song.title or "").lower().strip()
+        existing_artist = (song.artist or "").lower().strip()
+
+        # Match if title matches and artist matches (or no artist info)
+        if existing_title == normalized_song:
+            if not normalized_artist or not existing_artist or existing_artist == normalized_artist:
+                return True
+
+    return False
 
 
 async def add_song(
@@ -34,13 +111,16 @@ async def add_song(
     artist_name: str | None = None,
     redis_client: RedisService | None = None,
     user_id: str | None = None,
+    skip_validation: bool = False,
+    user_mpd_client: MPDClient | None = None,
+    fallback_mpd_client: MPDClient | None = None,
 ) -> str:
     """Add a song to the specified playlist.
 
     Unified implementation for:
-    - Public user queue additions (with redis tracking)
-    - Admin user queue additions (no redis tracking)
-    - Admin radio playlist additions (no redis tracking)
+    - Public user queue additions (with redis tracking and validation)
+    - Admin user queue additions (no redis tracking, no validation)
+    - Admin radio playlist additions (no redis tracking, no validation)
 
     :param playlist: Target playlist ("user" or "radio")
     :param mpd_client: MPD client for the target playlist
@@ -50,8 +130,11 @@ async def add_song(
     :param artist_name: Optional artist name (used with file upload or to override metadata)
     :param redis_client: Optional Redis client (required for user queue with tracking)
     :param user_id: Optional user ID (required for user queue with tracking)
+    :param skip_validation: If True, skip duration, file size, and duplicate validation (admin uploads)
+    :param user_mpd_client: User MPD client for duplicate checking (required if not skip_validation)
+    :param fallback_mpd_client: Fallback MPD client for duplicate checking (required if not skip_validation)
     :return: Prefixed song ID (u-{id} or f-{id})
-    :raises ValueError: If both url and file provided, or neither provided
+    :raises ValueError: If both url and file provided, or neither provided, or validation fails
     :raises FileNotFoundInMPDError: If MPD can't find the added file
     """
     if url and file:
@@ -67,19 +150,73 @@ async def add_song(
     final_title = song_name
     final_artist = artist_name
 
-    if url:
-        result = await download_song(url)
-        shutil.move(str(result.path), str(target_path))
+    # Temporary path for validation
+    temp_path: Path | None = None
 
-        if not final_title:
-            final_title = result.title
-        if not final_artist:
-            final_artist = result.artist
-    elif file:
-        song_path = Path(SONGS_DIR) / sanitize_filename(song_name or file.filename or filename)
-        with open(song_path, "wb") as f:
-            f.write(await file.read())
-        shutil.move(str(song_path), str(target_path))
+    try:
+        if url:
+            # Check video info before downloading to fail early
+            if not skip_validation:
+                video_info = await get_video_info(url)
+                video_duration = video_info.get("duration", 0)
+                if video_duration > settings.MAX_SONG_DURATION_SECONDS:
+                    max_minutes = settings.MAX_SONG_DURATION_SECONDS / 60
+                    actual_minutes = video_duration / 60
+                    raise ValueError(
+                        f"Song duration ({actual_minutes:.1f} min) exceeds maximum allowed duration ({max_minutes:.0f} min)"
+                    )
+
+            result = await download_song(url)
+            temp_path = Path(result.path)
+
+            if not final_title:
+                final_title = result.title
+            if not final_artist:
+                final_artist = result.artist
+        elif file:
+            # Validate file size first (before writing)
+            if not skip_validation:
+                await validate_file_size(file, settings.MAX_FILE_SIZE_MB)
+
+            file_temp_path = Path(SONGS_DIR) / sanitize_filename(song_name or file.filename or filename)
+            content = await file.read()
+            with open(file_temp_path, "wb") as f:
+                f.write(content)
+            temp_path = file_temp_path
+
+        # Validation checks (skip for admin uploads)
+        if not skip_validation:
+            if not temp_path:
+                raise ValueError("No file to validate")
+
+            if not user_mpd_client or not fallback_mpd_client:
+                raise ValueError("MPD clients required for duplicate validation")
+
+            # Validate duration (always validate actual file for defense in depth)
+            await validate_song_duration(temp_path, settings.MAX_SONG_DURATION_SECONDS)
+
+            # Check for duplicates in combined queue
+            is_duplicate = await check_duplicate_in_queue(
+                final_title, final_artist, user_mpd_client, fallback_mpd_client, settings.DUPLICATE_CHECK_LIMIT
+            )
+            if is_duplicate:
+                raise ValueError(
+                    f"Song '{final_title}' by '{final_artist or 'Unknown'}' is already in the next {settings.DUPLICATE_CHECK_LIMIT} songs"
+                )
+
+        # Move to final location
+        if not temp_path:
+            raise ValueError("No file to process")
+        shutil.move(str(temp_path), str(target_path))
+        temp_path = None
+    except Exception:
+        # Clean up temp file on error
+        if temp_path and temp_path.exists():
+            try:
+                os.unlink(temp_path)
+            except Exception as cleanup_error:
+                logger.error(f"Failed to clean up temp file {temp_path}: {cleanup_error}")
+        raise
 
     await mpd_client.update_database()
     mpd_song_id = await mpd_client.add_local_song(target_path.name)

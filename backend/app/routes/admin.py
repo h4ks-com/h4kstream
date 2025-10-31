@@ -88,7 +88,7 @@ async def create_livestream_token(request: LivestreamTokenCreateRequest) -> Live
     summary="Admin Add Song",
     description=(
         "Add a song to any playlist (user queue or fallback playlist). "
-        "Bypasses all queue limits and add request limits. "
+        "Bypasses all limits: queue limits, add request limits, duration limits, file size limits, and duplicate checks. "
         "Default: user queue"
     ),
     responses={400: {"model": ErrorResponse}},
@@ -101,7 +101,7 @@ async def admin_add_song(
     playlist: PlaylistType = Query("user", description="Target playlist (user or fallback)"),
     redis_client: RedisService = Depends(dep_redis_client),
 ) -> SongAddedResponse:
-    """Add song to specified playlist without restrictions."""
+    """Add song to specified playlist without any restrictions or validation."""
     mpd_client = get_mpd_client(playlist)
 
     try:
@@ -114,6 +114,7 @@ async def admin_add_song(
             song_name=song_name,
             artist_name=artist,
             redis_client=redis_client,
+            skip_validation=True,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -48,6 +48,12 @@ class Settings(BaseSettings):
 
     DEFAULT_MAX_QUEUE_SONGS: int = 3
     DEFAULT_MAX_ADD_REQUESTS: int = 10
+
+    # Upload limits
+    MAX_SONG_DURATION_SECONDS: int = 1800  # 30 minutes for user uploads
+    MAX_FILE_SIZE_MB: int = 50  # Maximum file size in MB
+    DUPLICATE_CHECK_LIMIT: int = 5  # Number of songs to check for duplicates
+
     model_config = SettingsConfigDict(
         env_file="../.env",
         env_file_encoding="utf-8",

@@ -50,8 +50,8 @@ async def subscribe_webhook(
     The webhook will receive POST requests with JSON payloads when subscribed events occur. Each request includes
     X-Webhook-Signature header for HMAC verification.
 
-    If a webhook with the same URL and events already exists, updates its description and signing key
-    while preserving the original created_at timestamp.
+    If a webhook with the same URL and events already exists, updates its description and signing key while preserving
+    the original created_at timestamp.
     """
     existing = await redis.find_webhook_by_url_and_events(request.url, request.events)
 

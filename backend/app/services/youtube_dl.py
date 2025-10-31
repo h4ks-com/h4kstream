@@ -110,6 +110,19 @@ def _write_id3_tags_sync(
     audio.save()
 
 
+async def get_video_info(url: str) -> dict:
+    """Extract video metadata without downloading.
+
+    :param url: YouTube/video URL
+    :return: Video info dict containing title, duration, artist, etc.
+    :raises YoutubeDownloadException: If URL invalid or is a playlist
+    """
+    if urllib.parse.urlparse(url).scheme not in ("http", "https"):
+        raise YoutubeDownloadException(YoutubeErrorType.INVALID_URL)
+
+    return await asyncio.to_thread(_extract_info_sync, url)
+
+
 async def download_song(url: str, mainloop: bool = False) -> YoutubeDownloadResult:
     """Download song from URL using async operations to avoid blocking."""
     if urllib.parse.urlparse(url).scheme not in ("http", "https"):

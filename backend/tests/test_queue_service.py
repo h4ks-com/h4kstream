@@ -59,6 +59,7 @@ class TestAddSong:
                 url="https://youtube.com/watch?v=test",
                 redis_client=mock_redis_client,
                 user_id="test_user",
+                skip_validation=True,
             )
 
             mock_download.assert_called_once_with("https://youtube.com/watch?v=test")
@@ -82,6 +83,7 @@ class TestAddSong:
                 playlist="radio",
                 mpd_client=mock_mpd_client,
                 url="https://youtube.com/watch?v=test",
+                skip_validation=True,
             )
 
             mock_mpd_client.set_consume.assert_not_called()
@@ -101,6 +103,7 @@ class TestAddSong:
                 playlist="user",
                 mpd_client=mock_mpd_client,
                 file=mock_file,
+                skip_validation=True,
             )
 
             mock_mpd_client.add_local_song.assert_called_once()
@@ -123,6 +126,139 @@ class TestAddSong:
                 playlist="user",
                 mpd_client=mock_mpd_client,
             )
+
+
+class TestUploadValidation:
+    """Test upload validation for duration, file size, and duplicates."""
+
+    async def test_file_size_validation_rejects_large_file(self):
+        """Test that files exceeding size limit are rejected."""
+        mock_file = MagicMock()
+        mock_file.read = AsyncMock(return_value=b"x" * (51 * 1024 * 1024))  # 51MB
+        mock_file.seek = AsyncMock()
+
+        with pytest.raises(ValueError, match="File size.*exceeds maximum"):
+            await queue_service.validate_file_size(mock_file, max_size_mb=50)
+
+    async def test_file_size_validation_accepts_valid_file(self):
+        """Test that files within size limit are accepted."""
+        mock_file = MagicMock()
+        mock_file.read = AsyncMock(return_value=b"x" * (10 * 1024 * 1024))  # 10MB
+        mock_file.seek = AsyncMock()
+
+        await queue_service.validate_file_size(mock_file, max_size_mb=50)
+        mock_file.seek.assert_called_once_with(0)
+
+    async def test_duration_validation_rejects_long_song(self):
+        """Test that songs exceeding duration limit are rejected."""
+        with patch("app.services.queue_service.get_duration") as mock_duration:
+            mock_duration.return_value = 2000  # 33 minutes
+
+            with pytest.raises(ValueError, match="Song duration.*exceeds maximum"):
+                await queue_service.validate_song_duration("/tmp/test.mp3", max_duration_seconds=1800)
+
+    async def test_duration_validation_accepts_valid_song(self):
+        """Test that songs within duration limit are accepted."""
+        with patch("app.services.queue_service.get_duration") as mock_duration:
+            mock_duration.return_value = 300  # 5 minutes
+
+            await queue_service.validate_song_duration("/tmp/test.mp3", max_duration_seconds=1800)
+
+    async def test_duplicate_detection_finds_duplicate(self):
+        """Test that duplicate songs are detected in queue."""
+        mock_user_mpd = AsyncMock()
+        mock_fallback_mpd = AsyncMock()
+
+        mock_user_mpd.get_queue = AsyncMock(return_value=[
+            {"id": "1", "file": "song1.mp3", "title": "Test Song", "artist": "Test Artist", "album": None, "time": "180", "pos": "0"},
+        ])
+        mock_fallback_mpd.get_queue = AsyncMock(return_value=[])
+
+        is_duplicate = await queue_service.check_duplicate_in_queue(
+            "Test Song", "Test Artist", mock_user_mpd, mock_fallback_mpd, check_limit=5
+        )
+
+        assert is_duplicate is True
+
+    async def test_duplicate_detection_case_insensitive(self):
+        """Test that duplicate detection is case-insensitive."""
+        mock_user_mpd = AsyncMock()
+        mock_fallback_mpd = AsyncMock()
+
+        mock_user_mpd.get_queue = AsyncMock(return_value=[
+            {"id": "1", "file": "song1.mp3", "title": "Test Song", "artist": "Test Artist", "album": None, "time": "180", "pos": "0"},
+        ])
+        mock_fallback_mpd.get_queue = AsyncMock(return_value=[])
+
+        is_duplicate = await queue_service.check_duplicate_in_queue(
+            "TEST SONG", "TEST ARTIST", mock_user_mpd, mock_fallback_mpd, check_limit=5
+        )
+
+        assert is_duplicate is True
+
+    async def test_duplicate_detection_no_duplicate(self):
+        """Test that non-duplicate songs are allowed."""
+        mock_user_mpd = AsyncMock()
+        mock_fallback_mpd = AsyncMock()
+
+        mock_user_mpd.get_queue = AsyncMock(return_value=[
+            {"id": "1", "file": "song1.mp3", "title": "Different Song", "artist": "Different Artist", "album": None, "time": "180", "pos": "0"},
+        ])
+        mock_fallback_mpd.get_queue = AsyncMock(return_value=[])
+
+        is_duplicate = await queue_service.check_duplicate_in_queue(
+            "Test Song", "Test Artist", mock_user_mpd, mock_fallback_mpd, check_limit=5
+        )
+
+        assert is_duplicate is False
+
+    async def test_add_song_with_validation_rejects_long_duration(self, mock_mpd_client, mock_redis_client):
+        """Test that user upload with >30 min duration is rejected."""
+        mock_file = MagicMock()
+        mock_file.filename = "long_song.mp3"
+        mock_file.read = AsyncMock(return_value=b"fake audio data")
+        mock_file.seek = AsyncMock()
+
+        mock_user_mpd = AsyncMock()
+        mock_fallback_mpd = AsyncMock()
+
+        with patch("builtins.open", mock_open()), \
+             patch("app.services.queue_service.get_duration") as mock_duration, \
+             patch("app.services.queue_service.shutil.move"):
+            mock_duration.return_value = 2000  # 33 minutes
+
+            with pytest.raises(ValueError, match="Song duration.*exceeds maximum"):
+                await queue_service.add_song(
+                    playlist="user",
+                    mpd_client=mock_mpd_client,
+                    file=mock_file,
+                    redis_client=mock_redis_client,
+                    user_id="test_user",
+                    skip_validation=False,
+                    user_mpd_client=mock_user_mpd,
+                    fallback_mpd_client=mock_fallback_mpd,
+                )
+
+    async def test_add_song_admin_skips_validation(self, mock_mpd_client):
+        """Test that admin upload with skip_validation=True bypasses all checks."""
+        mock_file = MagicMock()
+        mock_file.filename = "long_song.mp3"
+        mock_file.read = AsyncMock(return_value=b"x" * (100 * 1024 * 1024))  # 100MB
+        mock_file.seek = AsyncMock()
+
+        with patch("builtins.open", mock_open()), \
+             patch("app.services.queue_service.get_duration") as mock_duration, \
+             patch("app.services.queue_service.shutil.move"):
+            mock_duration.return_value = 5000  # Very long duration
+
+            await queue_service.add_song(
+                playlist="user",
+                mpd_client=mock_mpd_client,
+                file=mock_file,
+                skip_validation=True,
+            )
+
+            mock_mpd_client.add_local_song.assert_called_once()
 
 
 class TestDeleteSong:

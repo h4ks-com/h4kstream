@@ -49,11 +49,14 @@ router = APIRouter(
     summary="Add Song to User Queue",
     description=(
         "Add a song to your queue. Requires JWT token. "
-        "Subject to two limits: (1) max_queue_songs - simultaneous songs in queue, "
-        "(2) max_add_requests - total lifetime add requests (persists even after deletes)"
+        "Subject to limits: (1) max_queue_songs - simultaneous songs in queue, "
+        "(2) max_add_requests - total lifetime add requests, "
+        "(3) max_song_duration - song duration limit (30 min default), "
+        "(4) max_file_size - file size limit (50MB default), "
+        "(5) duplicate prevention - cannot add songs already in next 5 songs"
     ),
     responses={
-        400: {"model": ErrorResponse, "description": "Invalid request"},
+        400: {"model": ErrorResponse, "description": "Invalid request or validation failed"},
         403: {"model": ErrorResponse, "description": "Queue limit or add request limit exceeded"},
     },
 )
@@ -66,7 +69,7 @@ async def add_song(
     redis_client: RedisService = Depends(dep_redis_client),
     token: str = Depends(get_jwt_token),
 ) -> SongAddedResponse:
-    """Add a song to your user queue."""
+    """Add a song to your user queue with validation checks."""
     user_id = get_user_id(token)
     max_songs = get_max_queue_songs(token)
     max_adds = get_max_add_requests(token)
@@ -85,7 +88,14 @@ async def add_song(
             status_code=403, detail=f"Add request limit exceeded: {current_add_count}/{max_adds} total requests used"
         )
 
+    # Get MPD clients for duplicate checking
+    user_mpd = playback_service.get_mpd_client("user")
+    fallback_mpd = playback_service.get_mpd_client("fallback")
+
     try:
+        await user_mpd.connect()
+        await fallback_mpd.connect()
+
         song_id = await queue_service.add_song(
             playlist="user",
             mpd_client=mpd_client,
@@ -95,6 +105,9 @@ async def add_song(
             artist_name=artist,
             redis_client=redis_client,
             user_id=user_id,
+            skip_validation=False,
+            user_mpd_client=user_mpd,
+            fallback_mpd_client=fallback_mpd,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -102,6 +115,9 @@ async def add_song(
         raise HTTPException(status_code=400, detail=e.error_type.value)
     except FileNotFoundInMPDError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        await user_mpd.disconnect()
+        await fallback_mpd.disconnect()
 
     return SongAddedResponse(song_id=song_id)
 
