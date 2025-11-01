@@ -124,7 +124,7 @@ def register_user(
     session.commit()
 
     token = generate_token(
-        duration_seconds=86400,
+        duration_seconds=604800,
         user_id=user.id,
         max_queue_songs=pending.max_queue_songs,
         max_add_requests=pending.max_add_requests,
@@ -153,7 +153,7 @@ def login_user(
     if not user.is_active:
         raise HTTPException(status_code=401, detail="User account is inactive")
 
-    token = generate_token(duration_seconds=86400, user_id=user.id)
+    token = generate_token(duration_seconds=604800, user_id=user.id)
 
     return TokenCreateResponse(token=token)
 

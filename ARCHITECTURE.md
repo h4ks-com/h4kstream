@@ -424,7 +424,98 @@ See [docs/livestream.md](docs/livestream.md) for complete streaming guide includ
 
 # Development
 
+## Production vs Development Modes
+
+### Production Mode (Default)
+Uses multi-stage Docker builds with optimized images for production deployment.
+
+**Start production stack:**
+```bash
+# Full rebuild (recommended for clean start)
+make run
+
+# Or manually
+docker compose up
+# or explicitly
+docker compose --profile production up
+```
+
+**Features:**
+- 3 backend instances (load balanced)
+- Optimized frontend build (multi-stage Dockerfile)
+- Production-ready configuration
+- Automatic HTTPS support via Caddy
+
+### Development Mode
+Uses hot-reload for backend and locally built frontend for faster iteration.
+
+**Setup development environment:**
+```bash
+# Option 1: Full rebuild and start (recommended)
+make run-dev
+
+# Option 2: Manual steps
+# 1. Build frontend locally (generates API client + production build)
+make frontend-build
+
+# 2. Start development stack with hot reload
+docker compose --profile dev up
+```
+
+**Features:**
+- All 3 backend instances with hot reload (`--reload` flag)
+- Backend source code mounted from `./backend/app` (shared across all 3 instances)
+- Frontend serves locally built files from `./frontend/build`
+- Faster iteration (no Docker rebuild needed for backend changes)
+- Same load balancing as production (Caddy least_conn policy)
+
+**Development Workflow:**
+
+1. **Backend changes:**
+   - Edit files in `backend/app/`
+   - Changes automatically reload (Uvicorn `--reload` mode)
+   - No Docker rebuild required
+
+2. **Frontend changes:**
+   - Edit files in `frontend/src/`
+   - Run `make frontend-build` to regenerate client and rebuild
+   - Restart `frontend-dev` container: `docker compose --profile dev restart frontend-dev`
+
+3. **API changes (backend routes/models):**
+   - Edit backend code
+   - Run `make frontend-build` to regenerate API client
+   - Restart frontend-dev container
+
+**Quick Commands:**
+```bash
+# Full rebuild and start (recommended for clean start)
+make run-dev              # Dev mode with hot reload
+make run                  # Production mode
+
+# Build frontend (API client + production build)
+make frontend-build
+
+# Start dev stack (without rebuild)
+docker compose --profile dev up
+
+# Restart frontend after rebuild
+docker compose --profile dev restart frontend-dev
+
+# View backend logs with hot reload output
+docker logs -f main-1
+
+# Stop dev stack
+docker compose --profile dev down
+```
+
+**Switching Between Modes:**
+- `make run` and `make run-dev` automatically clean up both profiles before starting
+- Safe to alternate between production and dev modes without manual cleanup
+- Both profiles use the same container names, so only one can run at a time
+
+## Quality Assurance
+
 1. Implement features
 2. Check `make fix`
-2. Write test and e2e tests under e2e/
-3. `make test-e2e`
+3. Write test and e2e tests under e2e/
+4. `make test-e2e`

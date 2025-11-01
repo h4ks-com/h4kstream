@@ -1,103 +1,90 @@
+# YAML anchors for DRY configuration
+x-backend-common: &backend-common
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  volumes:
+  - ./data:/app/data
+  - ${VOLUME_PATH}/music:/music
+  - ${VOLUME_PATH}/songs:/songs
+  environment:
+  - REDIS_HOST=redis
+  - REDIS_PORT=6379
+  - ICECAST_HOST=icecast
+  - MPD_USER_HOST=mpd-user
+  - MPD_USER_PORT=6600
+  - MPD_FALLBACK_HOST=mpd-fallback
+  - MPD_FALLBACK_PORT=6601
+  - DATA_PATH=/app/data
+  - RECORDINGS_PATH=/app/data/recordings
+  - ROOT_PATH=/api
+  - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
+  - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
+  - JWT_SECRET=${JWT_SECRET}
+  - LOG_LEVEL=${LOG_LEVEL:-INFO}
+  - DEBUG=${DEBUG}
+  - RELOAD=${RELOAD}
+  depends_on:
+  - redis
+  - icecast
+  - mpd-user
+  - mpd-fallback
+  restart: unless-stopped
+
+# Dev-specific configuration (extends backend-common)
+x-backend-dev: &backend-dev
+  <<: *backend-common
+  command: ["uv", "run", "python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+  volumes:
+  - ./backend/app:/app/app
+  - ./data:/app/data
+  - ${VOLUME_PATH}/music:/music
+  - ${VOLUME_PATH}/songs:/songs
+
+# Frontend common configuration
+x-frontend-common: &frontend-common
+  container_name: frontend
+  volumes:
+  - ./data/caddy/logs:/var/log/caddy
+  ports:
+  - '80:80'
+  depends_on:
+  - icecast
+  - liquidsoap
+  restart: unless-stopped
+
 services:
-  # Backend instances (3x for load balancing)
+  # Backend instances - Production profile (static build)
   main-1:
+    <<: *backend-common
     container_name: main-1
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    volumes:
-    - ./data:/app/data
-    - ${VOLUME_PATH}/music:/music
-    - ${VOLUME_PATH}/songs:/songs
-    environment:
-    - REDIS_HOST=redis
-    - REDIS_PORT=6379
-    - ICECAST_HOST=icecast
-    - MPD_USER_HOST=mpd-user
-    - MPD_USER_PORT=6600
-    - MPD_FALLBACK_HOST=mpd-fallback
-    - MPD_FALLBACK_PORT=6601
-    - DATA_PATH=/app/data
-    - RECORDINGS_PATH=/app/data/recordings
-    - ROOT_PATH=/api
-    - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
-    - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
-    - JWT_SECRET=${JWT_SECRET}
-    - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    - DEBUG=${DEBUG}
-    - RELOAD=${RELOAD}
-    depends_on:
-    - redis
-    - icecast
-    - mpd-user
-    - mpd-fallback
-    restart: unless-stopped
+    profiles: ["production", ""]
 
   main-2:
+    <<: *backend-common
     container_name: main-2
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    volumes:
-    - ./data:/app/data
-    - ${VOLUME_PATH}/music:/music
-    - ${VOLUME_PATH}/songs:/songs
-    environment:
-    - REDIS_HOST=redis
-    - REDIS_PORT=6379
-    - ICECAST_HOST=icecast
-    - MPD_USER_HOST=mpd-user
-    - MPD_USER_PORT=6600
-    - MPD_FALLBACK_HOST=mpd-fallback
-    - MPD_FALLBACK_PORT=6601
-    - DATA_PATH=/app/data
-    - RECORDINGS_PATH=/app/data/recordings
-    - ROOT_PATH=/api
-    - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
-    - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
-    - JWT_SECRET=${JWT_SECRET}
-    - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    - DEBUG=${DEBUG}
-    - RELOAD=${RELOAD}
-    depends_on:
-    - redis
-    - icecast
-    - mpd-user
-    - mpd-fallback
-    restart: unless-stopped
+    profiles: ["production", ""]
 
   main-3:
+    <<: *backend-common
     container_name: main-3
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    volumes:
-    - ./data:/app/data
-    - ${VOLUME_PATH}/music:/music
-    - ${VOLUME_PATH}/songs:/songs
-    environment:
-    - REDIS_HOST=redis
-    - REDIS_PORT=6379
-    - ICECAST_HOST=icecast
-    - MPD_USER_HOST=mpd-user
-    - MPD_USER_PORT=6600
-    - MPD_FALLBACK_HOST=mpd-fallback
-    - MPD_FALLBACK_PORT=6601
-    - DATA_PATH=/app/data
-    - RECORDINGS_PATH=/app/data/recordings
-    - ROOT_PATH=/api
-    - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
-    - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
-    - JWT_SECRET=${JWT_SECRET}
-    - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    - DEBUG=${DEBUG}
-    - RELOAD=${RELOAD}
-    depends_on:
-    - redis
-    - icecast
-    - mpd-user
-    - mpd-fallback
-    restart: unless-stopped
+    profiles: ["production", ""]
+
+  # Backend instances - Development profile (all 3 with hot reload)
+  main-1-dev:
+    <<: *backend-dev
+    container_name: main-1
+    profiles: ["dev"]
+
+  main-2-dev:
+    <<: *backend-dev
+    container_name: main-2
+    profiles: ["dev"]
+
+  main-3-dev:
+    <<: *backend-dev
+    container_name: main-3
+    profiles: ["dev"]
 
   webhook_worker:
     container_name: webhook_worker
@@ -232,22 +219,35 @@ services:
     - ICECAST_HOSTNAME=localhost
     restart: unless-stopped
 
+  # Frontend - Production: multi-stage build
   frontend:
-    container_name: frontend
+    <<: *frontend-common
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    volumes:
-    - ./data/caddy/logs:/var/log/caddy
-    ports:
-    - '80:80'
     depends_on:
     - main-1
     - main-2
     - main-3
     - icecast
     - liquidsoap
-    restart: unless-stopped
+    profiles: ["production", ""]
+
+  # Frontend - Development: serve locally built files
+  frontend-dev:
+    <<: *frontend-common
+    image: caddy:2-alpine
+    volumes:
+    - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    - ./frontend/build:/srv:ro
+    - ./data/caddy/logs:/var/log/caddy
+    depends_on:
+    - main-1-dev
+    - main-2-dev
+    - main-3-dev
+    - icecast
+    - liquidsoap
+    profiles: ["dev"]
 
 networks:
   default:

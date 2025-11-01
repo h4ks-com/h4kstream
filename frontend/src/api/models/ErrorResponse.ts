@@ -6,8 +6,9 @@
  * Error response model.
  */
 export type ErrorResponse = {
-  /**
-   * Error message
-   */
-  detail: string
-}
+    /**
+     * Error message
+     */
+    detail: string;
+};
+

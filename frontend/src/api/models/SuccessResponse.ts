@@ -6,8 +6,9 @@
  * Generic success response.
  */
 export type SuccessResponse = {
-  /**
-   * Operation status
-   */
-  status?: string
-}
+    /**
+     * Operation status
+     */
+    status?: string;
+};
+

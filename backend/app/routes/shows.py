@@ -15,12 +15,14 @@ from app.db.models import Show
 from app.db.models import ShowCreate
 from app.db.models import ShowPublic
 from app.db.models import ShowUpdate
-from app.db.models import User
 from app.dependencies import admin_auth
 from app.dependencies import get_jwt_token
 from app.models import ErrorResponse
+from app.models import LivestreamTokenCreateRequest
+from app.models import LivestreamTokenResponse
 from app.services.crud_service import CRUDService
 from app.services.jwt_service import decode_token
+from app.services.jwt_service import generate_livestream_token
 
 logger = logging.getLogger(__name__)
 
@@ -47,31 +49,6 @@ def get_current_user_id(token: str = Depends(get_jwt_token)) -> UUID:
         return UUID(user_id_str)
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid user ID in token")
-
-
-@router.post(
-    "/",
-    response_model=ShowPublic,
-    summary="Create Show",
-    description="Create a new show for the authenticated user.",
-    responses={400: {"model": ErrorResponse, "description": "Show name already exists"}},
-)
-def create_show(
-    show_data: ShowCreate,
-    user_id: UUID = Depends(get_current_user_id),
-    session: Session = Depends(get_session),
-) -> ShowPublic:
-    """Create a new show for the current user."""
-    existing = session.exec(select(Show).where(Show.show_name == show_data.show_name)).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Show name already exists")
-
-    user = session.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    show = show_crud.create(session, obj_in=show_data, owner_id=user_id)
-    return show
 
 
 @router.get(
@@ -159,6 +136,35 @@ def delete_show(
 
     show_crud.delete(session, id=show_id)
     return {"ok": True}
+
+
+@router.post(
+    "/{show_id}/livestream/token",
+    response_model=LivestreamTokenResponse,
+    summary="Create Livestream Token for Show",
+    description="Create a livestream token for a show owned by the authenticated user.",
+    responses={403: {"model": ErrorResponse, "description": "Not authorized"}, 404: {"model": ErrorResponse, "description": "Show not found"}},
+)
+def create_show_livestream_token(
+    show_id: int,
+    request: LivestreamTokenCreateRequest,
+    user_id: UUID = Depends(get_current_user_id),
+    session: Session = Depends(get_session),
+) -> LivestreamTokenResponse:
+    """Create a livestream token for a show owned by the current user."""
+    show = show_crud.get(session, show_id)
+    if not show:
+        raise HTTPException(status_code=404, detail="Show not found")
+
+    if show.owner_id is None or show.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to create tokens for this show")
+
+    token, expires_at = generate_livestream_token(
+        request.max_streaming_seconds, show.show_name, user_id, request.min_recording_duration
+    )
+    return LivestreamTokenResponse(
+        token=token, expires_at=expires_at.isoformat(), max_streaming_seconds=request.max_streaming_seconds
+    )
 
 
 @admin_router.get(

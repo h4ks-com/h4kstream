@@ -90,7 +90,7 @@ class Show(ShowBase, table=True):  # type: ignore[call-arg]
 class ShowCreate(ShowBase):
     """Model for creating a new show."""
 
-    pass
+    owner_id: UUID | None = None
 
 
 class ShowPublic(ShowBase):

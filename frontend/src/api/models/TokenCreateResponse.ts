@@ -6,8 +6,9 @@
  * Response model for JWT token creation.
  */
 export type TokenCreateResponse = {
-  /**
-   * JWT bearer token
-   */
-  token: string
-}
+    /**
+     * JWT bearer token
+     */
+    token: string;
+};
+

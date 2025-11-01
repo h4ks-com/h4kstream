@@ -6,32 +6,33 @@
  * MPD song queue item.
  */
 export type SongItem = {
-  /**
-   * MPD queue ID
-   */
-  id: string
-  /**
-   * File path in MPD
-   */
-  file: string
-  /**
-   * Song title
-   */
-  title?: string | null
-  /**
-   * Song artist
-   */
-  artist?: string | null
-  /**
-   * Song album
-   */
-  album?: string | null
-  /**
-   * Song duration
-   */
-  time?: string | null
-  /**
-   * Position in queue
-   */
-  pos?: string | null
-}
+    /**
+     * MPD queue ID
+     */
+    id: string;
+    /**
+     * File path in MPD
+     */
+    file: string;
+    /**
+     * Song title
+     */
+    title?: (string | null);
+    /**
+     * Song artist
+     */
+    artist?: (string | null);
+    /**
+     * Song album
+     */
+    album?: (string | null);
+    /**
+     * Song duration
+     */
+    time?: (string | null);
+    /**
+     * Position in queue
+     */
+    pos?: (string | null);
+};
+

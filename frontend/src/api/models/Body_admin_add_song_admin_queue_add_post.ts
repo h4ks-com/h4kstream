@@ -3,8 +3,9 @@
 /* tslint:disable */
 /* eslint-disable */
 export type Body_admin_add_song_admin_queue_add_post = {
-  url?: string | null
-  song_name?: string | null
-  artist?: string | null
-  file?: Blob | null
-}
+    url?: (string | null);
+    song_name?: (string | null);
+    artist?: (string | null);
+    file?: (Blob | null);
+};
+
