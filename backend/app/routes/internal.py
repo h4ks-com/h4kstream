@@ -17,6 +17,7 @@ from app.models import ErrorResponse
 from app.models import LivestreamAuthRequest
 from app.models import LivestreamAuthResponse
 from app.models import LivestreamConnectRequest
+from app.models import LivestreamConnectResponse
 from app.models import LivestreamDisconnectRequest
 from app.models import SuccessResponse
 from app.services.event_publisher import EventPublisher
@@ -53,7 +54,7 @@ async def livestream_auth(
 
 @router.post(
     "/livestream/connect",
-    response_model=SuccessResponse,
+    response_model=LivestreamConnectResponse,
     summary="Track Livestream Connection Start",
     description="Internal endpoint called by Liquidsoap when a livestream connection is established.",
     include_in_schema=False,
@@ -63,7 +64,7 @@ async def livestream_connect(
     service: LivestreamService = Depends(dep_livestream_service),
     redis_client=Depends(dep_redis_client),
     event_publisher: EventPublisher = Depends(dep_event_publisher),
-) -> SuccessResponse:
+) -> LivestreamConnectResponse:
     """Track livestream connection start time."""
     logger.info(f"Livestream connect endpoint called with token: {request.token[:20]}...")
     result = await service.track_connection_start(request.token)
@@ -74,6 +75,7 @@ async def livestream_connect(
     user_id = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
     show_name = result.get("show_name", "unknown") if isinstance(result, dict) else "unknown"
     min_recording_duration = result.get("min_recording_duration", 60) if isinstance(result, dict) else 60
+    intro_filename = result.get("intro_filename") if isinstance(result, dict) else None
 
     description = "A livestream was started"
     await event_publisher.publish(
@@ -87,7 +89,7 @@ async def livestream_connect(
     )
     logger.info(f"Published livestream_started event for user {user_id}")
 
-    return SuccessResponse()
+    return LivestreamConnectResponse(intro_filename=intro_filename)
 
 
 @router.post(

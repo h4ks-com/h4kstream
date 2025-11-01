@@ -14,6 +14,7 @@ from app.routes.recordings import admin_router as recordings_admin_router
 from app.routes.recordings import router as recordings_router
 from app.routes.shows import admin_router as shows_admin_router
 from app.routes.shows import router as shows_router
+from app.routes.transitions import router as transitions_router
 from app.routes.users import admin_router as users_admin_router
 from app.routes.users import router as users_router
 from app.settings import settings
@@ -68,3 +69,4 @@ app.include_router(users_router)
 app.include_router(users_admin_router)
 app.include_router(shows_router)
 app.include_router(shows_admin_router)
+app.include_router(transitions_router)

@@ -95,6 +95,7 @@ def generate_livestream_token(
     show_name: str | None = None,
     user_id: str | UUID | None = None,
     min_recording_duration: int = 60,
+    intro_filename: str | None = None,
 ) -> tuple[str, datetime]:
     """Generate a JWT token for livestreaming with time limit and recording settings.
 
@@ -102,6 +103,7 @@ def generate_livestream_token(
     :param show_name: Optional show identifier (for show ownership tracking)
     :param user_id: Optional user UUID who owns the show
     :param min_recording_duration: Minimum duration in seconds to keep recording (default 60)
+    :param intro_filename: Optional custom intro jingle filename
     :return: Tuple of (encoded JWT token, expiration datetime)
     """
     max_duration = 86400
@@ -124,7 +126,9 @@ def generate_livestream_token(
         "max_streaming_seconds": max_streaming_seconds,
         "show_name": show_name,
         "min_recording_duration": min_recording_duration,
+        "intro_filename": intro_filename,
     }
+
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
     return token, expiration
 

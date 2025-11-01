@@ -21,6 +21,7 @@ Complete HTTP API reference for the self-hosted radio system.
   - [Playback Control](#playback-control)
   - [Recording Management](#recording-management)
   - [Webhook Management](#webhook-management)
+  - [Transitions Management](#transitions-management)
 
 ---
 
@@ -939,6 +940,163 @@ All error responses follow this format:
   "detail": "Song not found in playlist"
 }
 ```
+
+---
+
+### Transitions Management
+
+Manage audio transition files that play between different stream sources (livestream, user queue, fallback playlist).
+
+#### Upload Transition
+
+Upload an audio file to be used as a transition.
+
+```http
+POST /admin/transitions/upload
+Authorization: Bearer <admin-token>
+Content-Type: multipart/form-data
+```
+
+**Form Parameters**:
+- `file` (file, required): Audio file (mp3, wav, ogg, flac, max 10MB)
+- `transition_type` (string, required): Transition type (`livestream`, `user`, `fallback`)
+
+**Example**:
+```bash
+curl -X POST "http://localhost:8383/admin/transitions/upload" \
+  -H "Authorization: Bearer ${ADMIN_API_TOKEN}" \
+  -F "file=@transition.mp3" \
+  -F "transition_type=livestream"
+```
+
+**Response** (200):
+```json
+{
+  "status": "success"
+}
+```
+
+**Errors**:
+- `400`: Invalid file type, file too large, or invalid transition type
+- `401`/`403`: Missing or invalid admin token
+- `422`: Validation error
+
+---
+
+#### List Transitions
+
+Get all transition files for a specific type.
+
+```http
+GET /admin/transitions/list?transition_type=livestream
+Authorization: Bearer <admin-token>
+```
+
+**Query Parameters**:
+- `transition_type` (string, required): Transition type (`livestream`, `user`, `fallback`)
+
+**Example**:
+```bash
+curl "http://localhost:8383/admin/transitions/list?transition_type=user" \
+  -H "Authorization: Bearer ${ADMIN_API_TOKEN}"
+```
+
+**Response** (200):
+```json
+{
+  "user": [
+    {
+      "filename": "transition_1.mp3",
+      "file_size": 91200,
+      "upload_date": "2025-11-01T10:30:00.123456"
+    },
+    {
+      "filename": "transition_2.mp3",
+      "file_size": 102400,
+      "upload_date": "2025-11-01T11:15:00.654321"
+    }
+  ]
+}
+```
+
+---
+
+#### Stream Transition
+
+Stream/download a specific transition file.
+
+```http
+GET /admin/transitions/stream/{transition_type}/{filename}
+Authorization: Bearer <admin-token>
+```
+
+**Path Parameters**:
+- `transition_type` (string): Transition type (`livestream`, `user`, `fallback`)
+- `filename` (string): Name of the transition file
+
+**Example**:
+```bash
+curl "http://localhost:8383/admin/transitions/stream/livestream/transition_1.mp3" \
+  -H "Authorization: Bearer ${ADMIN_API_TOKEN}" \
+  -o downloaded_transition.mp3
+```
+
+**Response** (200):
+- Content-Type: `audio/mpeg`, `audio/wav`, `audio/ogg`, or `audio/flac`
+- Body: Audio file stream
+
+**Errors**:
+- `404`: File not found
+- `401`/`403`: Missing or invalid admin token
+
+---
+
+#### Delete Transition
+
+Delete a specific transition file.
+
+```http
+DELETE /admin/transitions/{transition_type}/{filename}
+Authorization: Bearer <admin-token>
+```
+
+**Path Parameters**:
+- `transition_type` (string): Transition type (`livestream`, `user`, `fallback`)
+- `filename` (string): Name of the transition file to delete
+
+**Example**:
+```bash
+curl -X DELETE "http://localhost:8383/admin/transitions/fallback/transition_old.mp3" \
+  -H "Authorization: Bearer ${ADMIN_API_TOKEN}"
+```
+
+**Response** (200):
+```json
+{
+  "status": "success"
+}
+```
+
+**Errors**:
+- `404`: File not found
+- `401`/`403`: Missing or invalid admin token
+
+---
+
+#### Transition Types
+
+- **`livestream`**: Plays when switching to a live stream source
+- **`user`**: Plays when switching to user queue playback
+- **`fallback`**: Plays when switching to fallback playlist
+
+**File Requirements**:
+- Formats: MP3, WAV, OGG, FLAC
+- Max size: 10MB
+- Filename restrictions: No path traversal characters (`/`, `\`, `..`)
+
+**Storage Location**:
+- Files are stored in: `data/transitions/{type}/`
+- Each transition type has its own folder
 
 ---
 

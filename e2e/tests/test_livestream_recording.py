@@ -1,19 +1,18 @@
 """E2E tests for livestream recording functionality."""
 
-import os
 import subprocess
 import time
 
 import httpx
 import pytest
 
-BASE_URL = os.getenv("API_URL", "http://localhost:8383")
-ADMIN_TOKEN = os.getenv("ADMIN_API_TOKEN", "changeme")
+from .conftest import ADMIN_TOKEN
+from .conftest import API_URL
 
 
 def cleanup_test_recordings(show_name_prefix: str) -> None:
     """Cleanup test recordings by show name prefix."""
-    response = httpx.get(f"{BASE_URL}/recordings/list", params={"page_size": 100})
+    response = httpx.get(f"{API_URL}/recordings/list", params={"page_size": 100})
     if response.status_code != 200:
         return
 
@@ -22,7 +21,7 @@ def cleanup_test_recordings(show_name_prefix: str) -> None:
         if show["show_name"].startswith(show_name_prefix):
             for recording in show["recordings"]:
                 httpx.delete(
-                    f"{BASE_URL}/admin/recordings/{recording['id']}",
+                    f"{API_URL}/admin/recordings/{recording['id']}",
                     headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
                 )
 
@@ -32,7 +31,7 @@ def test_livestream_recording_with_5_second_minimum() -> None:
     show_name = f"test_show_{int(time.time())}"
 
     response = httpx.post(
-        f"{BASE_URL}/admin/livestream/token",
+        f"{API_URL}/admin/livestream/token",
         headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
         json={"max_streaming_seconds": 3600, "show_name": show_name, "min_recording_duration": 5},
     )
@@ -87,7 +86,7 @@ def test_livestream_recording_with_5_second_minimum() -> None:
     # Wait for recording worker to: stop recording, trim silence, save to DB
     time.sleep(6)
 
-    response = httpx.get(f"{BASE_URL}/recordings/list?show_name={show_name}")
+    response = httpx.get(f"{API_URL}/recordings/list?show_name={show_name}")
     assert response.status_code == 200
     recordings_data = response.json()
 
@@ -107,16 +106,16 @@ def test_livestream_recording_with_5_second_minimum() -> None:
     assert recording["duration_seconds"] >= 5.0, f"Duration should be >= 5 seconds, got {recording['duration_seconds']}"
     recording_id = recording["id"]
 
-    response = httpx.get(f"{BASE_URL}/recordings/stream/{recording_id}")
+    response = httpx.get(f"{API_URL}/recordings/stream/{recording_id}")
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/ogg"
 
     response = httpx.delete(
-        f"{BASE_URL}/admin/recordings/{recording_id}", headers={"Authorization": f"Bearer {ADMIN_TOKEN}"}
+        f"{API_URL}/admin/recordings/{recording_id}", headers={"Authorization": f"Bearer {ADMIN_TOKEN}"}
     )
     assert response.status_code == 200
 
-    response = httpx.get(f"{BASE_URL}/recordings/list?show_name={show_name}")
+    response = httpx.get(f"{API_URL}/recordings/list?show_name={show_name}")
     assert response.status_code == 200
     recordings_data = response.json()
     assert recordings_data["total_recordings"] == 0, "Recording should be deleted"
@@ -127,7 +126,7 @@ def test_livestream_recording_too_short_is_deleted() -> None:
     show_name = f"test_show_short_{int(time.time())}"
 
     response = httpx.post(
-        f"{BASE_URL}/admin/livestream/token",
+        f"{API_URL}/admin/livestream/token",
         headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
         json={"max_streaming_seconds": 3600, "show_name": show_name, "min_recording_duration": 10},
     )
@@ -178,7 +177,7 @@ def test_livestream_recording_too_short_is_deleted() -> None:
 
     time.sleep(3)
 
-    response = httpx.get(f"{BASE_URL}/recordings/list?show_name={show_name}")
+    response = httpx.get(f"{API_URL}/recordings/list?show_name={show_name}")
     assert response.status_code == 200
     recordings_data = response.json()
 
@@ -196,7 +195,7 @@ def test_recording_list_search_and_cleanup() -> None:
     try:
         for show_name in [show_name_1, show_name_2]:
             response = httpx.post(
-                f"{BASE_URL}/admin/livestream/token",
+                f"{API_URL}/admin/livestream/token",
                 headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
                 json={"max_streaming_seconds": 3600, "show_name": show_name, "min_recording_duration": 3},
             )
@@ -241,12 +240,12 @@ def test_recording_list_search_and_cleanup() -> None:
 
         time.sleep(1)
 
-        response = httpx.get(f"{BASE_URL}/recordings/list", params={"page": 1, "page_size": 50})
+        response = httpx.get(f"{API_URL}/recordings/list", params={"page": 1, "page_size": 50})
         assert response.status_code == 200
         all_recordings = response.json()
         assert all_recordings["total_recordings"] >= 2
 
-        response = httpx.get(f"{BASE_URL}/recordings/list", params={"show_name": show_name_1})
+        response = httpx.get(f"{API_URL}/recordings/list", params={"show_name": show_name_1})
         assert response.status_code == 200
         filtered = response.json()
         assert filtered["total_recordings"] == 1
@@ -254,7 +253,7 @@ def test_recording_list_search_and_cleanup() -> None:
         recording_1 = filtered["shows"][0]["recordings"][0]
         created_ids.append(recording_1["id"])
 
-        response = httpx.get(f"{BASE_URL}/recordings/list", params={"show_name": show_name_2})
+        response = httpx.get(f"{API_URL}/recordings/list", params={"show_name": show_name_2})
         assert response.status_code == 200
         filtered = response.json()
         assert filtered["total_recordings"] == 1
@@ -262,7 +261,7 @@ def test_recording_list_search_and_cleanup() -> None:
         created_ids.append(recording_2["id"])
 
         for recording_id in created_ids:
-            response = httpx.get(f"{BASE_URL}/recordings/stream/{recording_id}")
+            response = httpx.get(f"{API_URL}/recordings/stream/{recording_id}")
             assert response.status_code == 200
             assert response.headers["content-type"] == "audio/ogg"
             assert len(response.content) > 0, "Audio file should not be empty"
@@ -270,16 +269,16 @@ def test_recording_list_search_and_cleanup() -> None:
     finally:
         for recording_id in created_ids:
             response = httpx.delete(
-                f"{BASE_URL}/admin/recordings/{recording_id}",
+                f"{API_URL}/admin/recordings/{recording_id}",
                 headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
             )
             assert response.status_code == 200
 
-        response = httpx.get(f"{BASE_URL}/recordings/list", params={"show_name": show_name_1})
+        response = httpx.get(f"{API_URL}/recordings/list", params={"show_name": show_name_1})
         assert response.status_code == 200
         assert response.json()["total_recordings"] == 0
 
-        response = httpx.get(f"{BASE_URL}/recordings/list", params={"show_name": show_name_2})
+        response = httpx.get(f"{API_URL}/recordings/list", params={"show_name": show_name_2})
         assert response.status_code == 200
         assert response.json()["total_recordings"] == 0
 
@@ -295,7 +294,7 @@ def test_recording_metadata_preservation() -> None:
     }
 
     response = httpx.post(
-        f"{BASE_URL}/admin/livestream/token",
+        f"{API_URL}/admin/livestream/token",
         headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
         json={"max_streaming_seconds": 3600, "show_name": show_name, "min_recording_duration": 3},
     )
@@ -358,7 +357,7 @@ def test_recording_metadata_preservation() -> None:
 
     time.sleep(3)
 
-    response = httpx.get(f"{BASE_URL}/recordings/list", params={"show_name": show_name})
+    response = httpx.get(f"{API_URL}/recordings/list", params={"show_name": show_name})
     assert response.status_code == 200
     recordings_data = response.json()
 
@@ -373,13 +372,13 @@ def test_recording_metadata_preservation() -> None:
 
     # Cleanup - delete the test recording
     response = httpx.delete(
-        f"{BASE_URL}/admin/recordings/{recording_id}",
+        f"{API_URL}/admin/recordings/{recording_id}",
         headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
     )
     assert response.status_code == 200, f"Failed to delete recording: {response.status_code} - {response.text}"
 
     # Verify deletion worked
-    response = httpx.get(f"{BASE_URL}/recordings/list", params={"show_name": show_name})
+    response = httpx.get(f"{API_URL}/recordings/list", params={"show_name": show_name})
     assert response.status_code == 200
     recordings_data = response.json()
     assert recordings_data["total_recordings"] == 0, "Recording should be deleted"

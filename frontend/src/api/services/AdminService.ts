@@ -3,6 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { Body_admin_add_song_admin_queue_add_post } from '../models/Body_admin_add_song_admin_queue_add_post';
+import type { Body_admin_upload_show_intro_admin_shows__show_id__intro_post } from '../models/Body_admin_upload_show_intro_admin_shows__show_id__intro_post';
+import type { Body_upload_transition_admin_transitions_upload_post } from '../models/Body_upload_transition_admin_transitions_upload_post';
 import type { LivestreamTokenCreateRequest } from '../models/LivestreamTokenCreateRequest';
 import type { LivestreamTokenResponse } from '../models/LivestreamTokenResponse';
 import type { PendingUserCreate } from '../models/PendingUserCreate';
@@ -410,6 +412,139 @@ export class AdminService {
             errors: {
                 401: `Unauthorized`,
                 404: `Show not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Upload Show Intro Jingle (Admin)
+     * Admin endpoint to upload a custom intro jingle for a show.
+     * @param showId
+     * @param formData
+     * @returns ShowPublic Successful Response
+     * @throws ApiError
+     */
+    public adminUploadShowIntroAdminShowsShowIdIntroPost(
+        showId: number,
+        formData: Body_admin_upload_show_intro_admin_shows__show_id__intro_post,
+    ): CancelablePromise<ShowPublic> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/admin/shows/{show_id}/intro',
+            path: {
+                'show_id': showId,
+            },
+            formData: formData,
+            mediaType: 'multipart/form-data',
+            errors: {
+                400: `Invalid file`,
+                401: `Unauthorized`,
+                404: `Show not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Remove Show Intro Jingle (Admin)
+     * Admin endpoint to remove a show's custom intro jingle.
+     * @param showId
+     * @returns SuccessResponse Successful Response
+     * @throws ApiError
+     */
+    public adminRemoveShowIntroAdminShowsShowIdIntroDelete(
+        showId: number,
+    ): CancelablePromise<SuccessResponse> {
+        return this.httpRequest.request({
+            method: 'DELETE',
+            url: '/admin/shows/{show_id}/intro',
+            path: {
+                'show_id': showId,
+            },
+            errors: {
+                401: `Unauthorized`,
+                404: `Show not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Upload Jingle File
+     * Upload an audio file for use as a jingle between MPD tracks (admin only)
+     * @param formData
+     * @returns SuccessResponse Successful Response
+     * @throws ApiError
+     */
+    public uploadTransitionAdminTransitionsUploadPost(
+        formData: Body_upload_transition_admin_transitions_upload_post,
+    ): CancelablePromise<SuccessResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/admin/transitions/upload',
+            formData: formData,
+            mediaType: 'multipart/form-data',
+            errors: {
+                401: `Unauthorized`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * List Jingle Files
+     * List all jingle files
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public listTransitionsAdminTransitionsListGet(): CancelablePromise<any> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/admin/transitions/list',
+            errors: {
+                401: `Unauthorized`,
+            },
+        });
+    }
+    /**
+     * Stream Jingle File
+     * Stream a jingle audio file
+     * @param filename
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public streamTransitionAdminTransitionsStreamFilenameGet(
+        filename: string,
+    ): CancelablePromise<any> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/admin/transitions/stream/{filename}',
+            path: {
+                'filename': filename,
+            },
+            errors: {
+                401: `Unauthorized`,
+                404: `File not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Jingle File
+     * Delete a jingle audio file
+     * @param filename
+     * @returns SuccessResponse Successful Response
+     * @throws ApiError
+     */
+    public deleteTransitionAdminTransitionsFilenameDelete(
+        filename: string,
+    ): CancelablePromise<SuccessResponse> {
+        return this.httpRequest.request({
+            method: 'DELETE',
+            url: '/admin/transitions/{filename}',
+            path: {
+                'filename': filename,
+            },
+            errors: {
+                401: `Unauthorized`,
+                404: `File not found`,
                 422: `Validation Error`,
             },
         });

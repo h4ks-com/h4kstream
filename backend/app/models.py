@@ -41,6 +41,13 @@ class SuccessResponse(BaseModel):
     status: str = Field(default="success", description="Operation status")
 
 
+class LivestreamConnectResponse(BaseModel):
+    """Response for livestream connection with intro jingle filename."""
+
+    status: str = Field(default="success", description="Operation status")
+    intro_filename: str | None = Field(default=None, description="Custom intro jingle filename if available")
+
+
 class SongAddedResponse(BaseModel):
     """Response for song addition with song ID."""
 

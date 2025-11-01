@@ -183,11 +183,13 @@ services:
     - '8002:8002'
 
   liquidsoap:
-    image: savonet/liquidsoap:v2.3.0
+    image: savonet/liquidsoap:v2.4.0
     container_name: liquidsoap
     user: root
     volumes:
     - ./liquidsoap/radio.liq:/etc/liquidsoap/radio.liq:ro
+    - ./liquidsoap/default_transition.mp3:/etc/liquidsoap/default_transition.mp3:ro
+    - ./data/transitions:/transitions:ro
     environment:
     - ICECAST_HOST=icecast
     - ICECAST_PORT=8000

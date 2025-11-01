@@ -1,12 +1,15 @@
 """Show management endpoints."""
 
 import logging
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import File
 from fastapi import HTTPException
 from fastapi import Query
+from fastapi import UploadFile
 from sqlmodel import Session
 from sqlmodel import select
 
@@ -20,6 +23,7 @@ from app.dependencies import get_jwt_token
 from app.models import ErrorResponse
 from app.models import LivestreamTokenCreateRequest
 from app.models import LivestreamTokenResponse
+from app.models import SuccessResponse
 from app.services.crud_service import CRUDService
 from app.services.jwt_service import decode_token
 from app.services.jwt_service import generate_livestream_token
@@ -160,7 +164,7 @@ def create_show_livestream_token(
         raise HTTPException(status_code=403, detail="Not authorized to create tokens for this show")
 
     token, expires_at = generate_livestream_token(
-        request.max_streaming_seconds, show.show_name, user_id, request.min_recording_duration
+        request.max_streaming_seconds, show.show_name, user_id, request.min_recording_duration, show.intro_filename
     )
     return LivestreamTokenResponse(
         token=token, expires_at=expires_at.isoformat(), max_streaming_seconds=request.max_streaming_seconds
@@ -218,3 +222,88 @@ def admin_create_show(
 
     show = show_crud.create(session, obj_in=show_data)
     return show
+
+
+@admin_router.post(
+    "/{show_id}/intro",
+    response_model=ShowPublic,
+    summary="Upload Show Intro Jingle (Admin)",
+    description="Admin endpoint to upload a custom intro jingle for a show.",
+    responses={404: {"model": ErrorResponse, "description": "Show not found"}, 400: {"model": ErrorResponse, "description": "Invalid file"}},
+)
+async def admin_upload_show_intro(
+    show_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> ShowPublic:
+    """Upload intro jingle for a show (admin only)."""
+    # Validate show exists
+    show = show_crud.get(session, show_id)
+    if not show:
+        raise HTTPException(status_code=404, detail="Show not found")
+
+    # Validate file type
+    allowed_extensions = {".mp3", ".wav", ".ogg", ".flac"}
+    file_ext = Path(file.filename or "").suffix.lower()
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}")
+
+    # Generate unique filename: show_{show_id}_{original_name}
+    safe_filename = f"show_{show_id}_{file.filename}"
+    intro_dir = Path("/livestream_intros")
+    intro_path = intro_dir / safe_filename
+
+    # Ensure directory exists
+    intro_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save file
+    try:
+        with open(intro_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        logger.info(f"Saved intro jingle for show {show_id}: {intro_path}")
+    except Exception as e:
+        logger.error(f"Failed to save intro jingle: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+
+    # Update show with intro filename
+    show.intro_filename = safe_filename
+    session.add(show)
+    session.commit()
+    session.refresh(show)
+
+    return show
+
+
+@admin_router.delete(
+    "/{show_id}/intro",
+    response_model=SuccessResponse,
+    summary="Remove Show Intro Jingle (Admin)",
+    description="Admin endpoint to remove a show's custom intro jingle.",
+    responses={404: {"model": ErrorResponse, "description": "Show not found"}},
+)
+def admin_remove_show_intro(
+    show_id: int,
+    session: Session = Depends(get_session),
+) -> SuccessResponse:
+    """Remove intro jingle from a show (admin only)."""
+    show = show_crud.get(session, show_id)
+    if not show:
+        raise HTTPException(status_code=404, detail="Show not found")
+
+    # Delete file if it exists
+    if show.intro_filename:
+        intro_path = Path("/livestream_intros") / show.intro_filename
+        if intro_path.exists():
+            try:
+                intro_path.unlink()
+                logger.info(f"Deleted intro jingle for show {show_id}: {intro_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete intro file: {e}")
+
+    # Clear intro_filename from database
+    show.intro_filename = None
+    session.add(show)
+    session.commit()
+
+    return SuccessResponse()

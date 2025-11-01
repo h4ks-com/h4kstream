@@ -15,5 +15,6 @@ export type ShowPublic = {
     owner_id: (string | null);
     created_at: string;
     is_active: boolean;
+    intro_filename: (string | null);
 };
 

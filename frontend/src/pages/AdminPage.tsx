@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
-import { AdminService, WebhooksService } from '../utils/apiClient';
+import { AdminService, WebhooksService, ShowsService } from '../utils/apiClient';
 import type { UserPublic, ShowPublic, WebhookSubscription, SongItem } from '../api';
 
-type Section = 'users' | 'shows' | 'queue' | 'livestream' | 'webhooks';
+type Section = 'users' | 'shows' | 'queue' | 'livestream' | 'webhooks' | 'transitions';
 
 export const AdminPage: React.FC = () => {
   const { section } = useParams<{ section: Section }>();
@@ -110,6 +110,16 @@ export const AdminPage: React.FC = () => {
           >
             [WEBHOOKS]
           </div>
+          <div
+            onClick={() => navigate('/admin/transitions')}
+            className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+              activeSection === 'transitions'
+                ? 'text-h4ks-green-400 border-h4ks-green-500'
+                : 'text-gray-400 border-transparent hover:text-gray-300'
+            }`}
+          >
+            [TRANSITIONS]
+          </div>
         </nav>
       </div>
 
@@ -120,6 +130,7 @@ export const AdminPage: React.FC = () => {
         {activeSection === 'queue' && <QueueSection />}
         {activeSection === 'livestream' && <LivestreamSection />}
         {activeSection === 'webhooks' && <WebhooksSection />}
+        {activeSection === 'transitions' && <TransitionsSection />}
       </div>
     </div>
   );
@@ -330,6 +341,8 @@ const ShowsSection: React.FC = () => {
   const [showName, setShowName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [uploadingIntro, setUploadingIntro] = useState<{ [key: number]: boolean }>({});
+  const [introFiles, setIntroFiles] = useState<{ [key: number]: File | null }>({});
 
   const fetchShows = async () => {
     try {
@@ -366,6 +379,37 @@ const ShowsSection: React.FC = () => {
       fetchShows();
     } catch (err: any) {
       setError(err.body?.detail || 'Failed to create show');
+    }
+  };
+
+  const uploadIntro = async (showId: number) => {
+    const file = introFiles[showId];
+    if (!file) return;
+
+    try {
+      setError('');
+      setUploadingIntro((prev) => ({ ...prev, [showId]: true }));
+
+      await ShowsService().adminUploadShowIntroAdminShowsShowIdIntroPost(showId, { file });
+
+      setIntroFiles((prev) => ({ ...prev, [showId]: null }));
+      await fetchShows();
+    } catch (err: any) {
+      setError(err.body?.detail || 'Failed to upload intro');
+    } finally {
+      setUploadingIntro((prev) => ({ ...prev, [showId]: false }));
+    }
+  };
+
+  const removeIntro = async (showId: number) => {
+    try {
+      setError('');
+
+      await ShowsService().adminRemoveShowIntroAdminShowsShowIdIntroDelete(showId);
+
+      await fetchShows();
+    } catch (err: any) {
+      setError(err.body?.detail || 'Failed to remove intro');
     }
   };
 
@@ -446,19 +490,20 @@ const ShowsSection: React.FC = () => {
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Show Name</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Description</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Owner</th>
+                <th className="text-left p-3 text-h4ks-green-400 font-mono">Intro Jingle</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Created</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="p-3 text-gray-400 text-center">
+                  <td colSpan={5} className="p-3 text-gray-400 text-center">
                     Loading...
                   </td>
                 </tr>
               ) : shows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-3 text-gray-400 text-center">
+                  <td colSpan={5} className="p-3 text-gray-400 text-center">
                     No shows found
                   </td>
                 </tr>
@@ -469,6 +514,43 @@ const ShowsSection: React.FC = () => {
                     <td className="p-3 text-gray-400 text-sm">{show.description || '-'}</td>
                     <td className="p-3 text-gray-400 text-sm">
                       {show.owner_id ? users.find((u) => u.id === show.owner_id)?.email || 'Unknown' : '-'}
+                    </td>
+                    <td className="p-3">
+                      {show.intro_filename ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-h4ks-green-400 text-xs font-mono">✓ {show.intro_filename}</span>
+                          <button
+                            onClick={() => removeIntro(show.id)}
+                            className="text-red-400 hover:text-red-300 text-xs"
+                            title="Remove intro"
+                          >
+                            [REMOVE]
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            accept="audio/*"
+                            onChange={(e) =>
+                              setIntroFiles((prev) => ({
+                                ...prev,
+                                [show.id]: e.target.files?.[0] || null,
+                              }))
+                            }
+                            className="text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:border-0 file:bg-h4ks-green-700 file:text-white file:text-xs file:font-mono hover:file:bg-h4ks-green-600"
+                          />
+                          {introFiles[show.id] && (
+                            <button
+                              onClick={() => uploadIntro(show.id)}
+                              disabled={uploadingIntro[show.id]}
+                              className="bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white text-xs px-2 py-1 font-mono disabled:opacity-50"
+                            >
+                              {uploadingIntro[show.id] ? '[...]' : '[UPLOAD]'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="p-3 text-gray-400 text-sm">
                       {new Date(show.created_at).toLocaleDateString()}
@@ -552,7 +634,14 @@ const QueueSection: React.FC = () => {
   };
 
   useEffect(() => {
+    // Initial fetch
     fetchQueue();
+
+    // Poll every 5 seconds for real-time updates
+    const interval = setInterval(fetchQueue, 5000);
+
+    // Cleanup on unmount
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -955,6 +1044,215 @@ const WebhooksSection: React.FC = () => {
                     <td className="p-3">
                       <button
                         onClick={() => deleteWebhook(webhook.webhook_id)}
+                        className="text-red-400 hover:text-red-300 font-mono text-sm"
+                      >
+                        [DELETE]
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Transitions Section Component
+const TransitionsSection: React.FC = () => {
+  type TransitionType = 'livestream' | 'user' | 'fallback';
+  const [activeTab, setActiveTab] = useState<TransitionType>('livestream');
+  const [transitions, setTransitions] = useState<Record<TransitionType, any[]>>({
+    livestream: [],
+    user: [],
+    fallback: [],
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const fetchTransitions = async (type?: TransitionType) => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await fetch(
+        `/api/admin/transitions/list${type ? `?transition_type=${type}` : ''}`,
+        {
+          headers: { Authorization: `Bearer ${authUtils.getAdminToken()}` },
+        }
+      );
+      if (!response.ok) throw new Error('Failed to fetch transitions');
+      const data = await response.json();
+      setTransitions(data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch transitions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const uploadTransition = async () => {
+    if (!uploadFile) {
+      setError('Please select a file');
+      return;
+    }
+    try {
+      setUploading(true);
+      setError('');
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('transition_type', activeTab);
+
+      const response = await fetch('/api/admin/transitions/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authUtils.getAdminToken()}` },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Upload failed');
+      }
+
+      setUploadFile(null);
+      fetchTransitions(activeTab);
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload transition');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const deleteTransition = async (filename: string) => {
+    if (!window.confirm(`Delete ${filename}?`)) return;
+    try {
+      const response = await fetch(`/api/admin/transitions/${activeTab}/${filename}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${authUtils.getAdminToken()}` },
+      });
+      if (!response.ok) throw new Error('Failed to delete transition');
+      fetchTransitions(activeTab);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete transition');
+    }
+  };
+
+  const getStreamUrl = (filename: string) => {
+    return `/api/admin/transitions/stream/${activeTab}/${filename}`;
+  };
+
+  useEffect(() => {
+    fetchTransitions();
+  }, []);
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold text-h4ks-green-400 mb-6 font-mono">
+        [TRANSITIONS MANAGEMENT]
+      </h2>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-900 border border-red-700 text-red-200 font-mono">
+          {error}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex space-x-2 mb-6">
+        {(['livestream', 'user', 'fallback'] as TransitionType[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 font-mono transition-colors ${
+              activeTab === tab
+                ? 'bg-h4ks-green-700 text-white'
+                : 'bg-h4ks-dark-900 text-gray-400 hover:bg-h4ks-dark-800'
+            }`}
+          >
+            [{tab.toUpperCase()}]
+          </button>
+        ))}
+      </div>
+
+      {/* Upload Form */}
+      <div className="mb-6 border-2 border-h4ks-green-800 bg-h4ks-dark-900 p-4">
+        <h3 className="text-lg font-bold text-h4ks-green-400 mb-4 font-mono">
+          [UPLOAD {activeTab.toUpperCase()} TRANSITION]
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-gray-400 text-sm mb-2">Audio File (mp3, wav, ogg, flac)</label>
+            <input
+              type="file"
+              accept=".mp3,.wav,.ogg,.flac"
+              onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2 focus:outline-none focus:border-h4ks-green-500"
+            />
+            {uploadFile && (
+              <p className="text-gray-400 text-sm mt-2">
+                Selected: {uploadFile.name} ({(uploadFile.size / 1024 / 1024).toFixed(2)} MB)
+              </p>
+            )}
+          </div>
+          <button
+            onClick={uploadTransition}
+            disabled={!uploadFile || uploading}
+            className="bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white font-mono py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {uploading ? '[UPLOADING...]' : '[UPLOAD]'}
+          </button>
+        </div>
+      </div>
+
+      {/* Transitions List */}
+      <div className="border-2 border-h4ks-green-800 bg-h4ks-dark-900">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-h4ks-green-800">
+                <th className="text-left p-3 text-h4ks-green-400 font-mono">Filename</th>
+                <th className="text-left p-3 text-h4ks-green-400 font-mono">Size</th>
+                <th className="text-left p-3 text-h4ks-green-400 font-mono">Uploaded</th>
+                <th className="text-left p-3 text-h4ks-green-400 font-mono">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={4} className="p-3 text-gray-400 text-center">
+                    Loading...
+                  </td>
+                </tr>
+              ) : transitions[activeTab]?.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-3 text-gray-400 text-center">
+                    No transitions uploaded for {activeTab}
+                  </td>
+                </tr>
+              ) : (
+                transitions[activeTab]?.map((transition: any) => (
+                  <tr key={transition.filename} className="border-b border-h4ks-green-900 hover:bg-h4ks-dark-800">
+                    <td className="p-3 text-gray-300 font-mono text-sm">{transition.filename}</td>
+                    <td className="p-3 text-gray-400 text-sm">
+                      {(transition.file_size / 1024 / 1024).toFixed(2)} MB
+                    </td>
+                    <td className="p-3 text-gray-400 text-sm">
+                      {new Date(transition.upload_date).toLocaleDateString()}
+                    </td>
+                    <td className="p-3 space-x-2">
+                      <a
+                        href={getStreamUrl(transition.filename)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-h4ks-green-400 hover:text-h4ks-green-300 font-mono text-sm"
+                      >
+                        [PLAY]
+                      </a>
+                      <button
+                        onClick={() => deleteTransition(transition.filename)}
                         className="text-red-400 hover:text-red-300 font-mono text-sm"
                       >
                         [DELETE]

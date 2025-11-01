@@ -12,5 +12,6 @@ export type ShowCreate = {
     genre?: (string | null);
     description?: (string | null);
     owner_id?: (string | null);
+    intro_filename?: (string | null);
 };
 

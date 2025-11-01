@@ -244,8 +244,14 @@ async def main() -> None:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
+    # Create recordings directory
     Path(settings.RECORDINGS_PATH).mkdir(parents=True, exist_ok=True)
     logger.info(f"Recordings directory ensured at {settings.RECORDINGS_PATH}")
+
+    # Create transitions directory (for jingles between MPD sources)
+    transitions_dir = Path(settings.DATA_PATH) / "transitions"
+    transitions_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Transitions directory ensured at {transitions_dir}")
 
     worker = RecordingWorker()
     await worker.start()

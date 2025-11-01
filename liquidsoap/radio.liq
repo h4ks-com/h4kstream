@@ -16,8 +16,12 @@ backend_port = environment.get("BACKEND_PORT")
 backend_base_path = environment.get("BACKEND_BASE_PATH")
 liquidsoap_token = environment.get("LIQUIDSOAP_TOKEN")
 
-# Suppress connection error logs
+# Log level: 0=critical, 1=severe, 2=important, 3=info, 4=debug
+# Set to 3 for debugging transitions and latency
 settings.log.level.set(3)
+
+# Keep FFmpeg quiet (errors from fake test files)
+settings.ffmpeg.log.verbosity := "quiet"
 
 # Enable telnet server for remote control
 settings.server.telnet.set(true)
@@ -33,6 +37,63 @@ log("Telnet control: port 1234")
 
 # Track current livestream token for callbacks
 current_livestream_token = ref("")
+
+# Create request queue for livestream intro jingles
+livestream_intro_queue = request.queue()
+
+# =============================================================================
+# Jingle System
+# =============================================================================
+
+# Default jingle file (baked into container)
+default_jingle = "/etc/liquidsoap/default_transition.mp3"
+
+# Get random jingle from directory, return default if none found
+def get_random_jingle(dir) =
+  try
+    # Scan directory for audio files
+    files = file.ls(absolute=true, dir)
+
+    # Filter for audio files
+    audio_files = list.filter(fun (f) ->
+      string.contains(suffix=".mp3", f) or
+      string.contains(suffix=".wav", f) or
+      string.contains(suffix=".ogg", f) or
+      string.contains(suffix=".flac", f),
+      files
+    )
+
+    if list.length(audio_files) > 0 then
+      # Pick random file
+      idx = random.int(min=0, max=list.length(audio_files))
+      list.nth(default=default_jingle, audio_files, idx)
+    else
+      # Return default if no files found
+      default_jingle
+    end
+  catch _ do
+    # Return default on any error
+    default_jingle
+  end
+end
+
+# Get livestream intro jingle (custom or default)
+def get_livestream_intro(intro_filename) =
+  if intro_filename != "" then
+    intro_path = "/livestream_intros/#{intro_filename}"
+    # Check if custom intro exists
+    if file.exists(intro_path) then
+      log("Using custom livestream intro: #{intro_path}")
+      intro_path
+    else
+      log("Custom intro not found, using default: #{intro_filename}")
+      default_jingle
+    end
+  else
+    log("No custom intro specified, using default")
+    default_jingle
+  end
+end
 
 # Authentication function for live streaming
 def livestream_auth(auth_data) =
@@ -117,6 +178,23 @@ def on_livestream_connect(headers) =
   response = http.post(headers=auth_headers, data=body, connect_url)
   log("Connect callback response: #{response}")
 
+  # Parse response to get intro_filename
+  # Response format: {"status":"success","intro_filename":"file.mp3"} or {"status":"success","intro_filename":null}
+  try
+    let json.parse ({status, intro_filename} : {status: string, intro_filename: string?}) = response
+    intro_file_name = intro_filename ?? ""
+    log("Intro filename from response: #{intro_file_name}")
+
+    # Push intro jingle to queue
+    intro_file = get_livestream_intro(intro_file_name)
+    livestream_intro_queue.push(request.create(intro_file))
+    log("Pushed livestream intro jingle: #{intro_file}")
+  catch err : [error.json] do
+    log("Failed to parse connect response: #{err}")
+    # Push default intro as fallback
+    livestream_intro_queue.push(request.create(default_jingle))
+  end
+
   # Pause user queue when livestream starts
   pause_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/admin/playback/pause?playlist=user"
   pause_response = http.post(headers=auth_headers, pause_url)
@@ -171,36 +249,99 @@ def report_metadata(source_name, metadata) =
   end
 end
 
-# Live stream harbor input (highest priority)
+# Live stream harbor input (highest priority) with intro jingles
+# Low-latency settings: buffer=0.5s, max=2.0s for minimal delay
 live = input.harbor(
   id="live",
   port=8003,
+  buffer=0.5,
+  max=2.0,
   "live",
   auth=livestream_auth,
   on_connect=on_livestream_connect,
   on_disconnect=on_livestream_disconnect
 )
-live = source.on_metadata(live, fun (m) -> report_metadata("livestream", m))
+live.on_metadata(synchronous=true, fun (m) -> report_metadata("livestream", m))
+
+# Mix intro jingles with livestream
+livestream_intros = cue_cut(livestream_intro_queue)
+live = add(normalize=false, weights=[1.0, 0.8], [live, livestream_intros])
+
+log("Livestream configured with low-latency settings and intro jingles")
+
+# Record livestream to MP3 files
+output.file(
+  %mp3(bitrate=320, stereo=true),
+  fallible=true,
+  "/recordings/%Y%m%d-%H%M%S.mp3",
+  live
+)
+log("Livestream recording configured -> /recordings/")
 
 # User queue MPD (consume mode auto-removes songs after playback)
 mpd_user = input.http(
-  timeout=5.0,
   "http://#{mpd_user_host}:#{mpd_user_port}/"
 )
-mpd_user = source.on_metadata(mpd_user, fun (m) -> report_metadata("user", m))
+mpd_user.on_metadata(synchronous=true, fun (m) -> report_metadata("user", m))
+log("User queue configured")
 
 # Fallback MPD (always looping with repeat/random)
 mpd_fallback = input.http(
-  timeout=5.0,
   "http://#{mpd_fallback_host}:#{mpd_fallback_port}/"
 )
-mpd_fallback = source.on_metadata(mpd_fallback, fun (m) -> report_metadata("fallback", m))
+mpd_fallback.on_metadata(synchronous=true, fun (m) -> report_metadata("fallback", m))
+log("Fallback queue configured")
+
+# Add jingles mixed over MPD sources at track boundaries
+# Jingles play simultaneously with the beginning of each track
+def add_jingles_to_source(s) =
+  # Create a request queue for jingles
+  jingle_queue = request.queue()
+
+  # Track last jingle time to prevent duplicates (debounce within 2 seconds)
+  last_jingle_time = ref(0.0)
+
+  # Helper function to push a jingle on track change
+  def push_jingle(metadata) =
+    current_time = time()
+    time_since_last = current_time - last_jingle_time()
+
+    # Only push jingle if more than 2 seconds have passed since last jingle
+    if time_since_last > 2.0 then
+      jingle_file = get_random_jingle("/transitions")
+      log("Jingle: Playing (#{time_since_last}s since last)")
+      jingle_queue.push(request.create(jingle_file))
+      last_jingle_time := current_time
+    else
+      log("Jingle: Skipping (only #{time_since_last}s since last)")
+    end
+  end
+
+  # On each track change, push a random jingle
+  s.on_track(synchronous=true, push_jingle)
+
+  # Create jingle source with duration limiting
+  # request.queue already plays each request once, no need for once()
+  jingles = cue_cut(jingle_queue)
+
+  # Mix jingles over the source at equal volume for audibility
+  add(normalize=false, weights=[1.0, 0.8], [s, jingles])
+end
+
+# Combine MPD sources (user fallback to main fallback)
+mpd_combined = fallback(track_sensitive=false, [mpd_user, mpd_fallback])
+
+# Add jingles ONCE to the combined MPD source
+mpd_with_jingle = add_jingles_to_source(mpd_combined)
+
+log("Jingles configured for MPD transitions (mixed at track boundaries)")
 
 emergency = amplify(0.1, noise())
 
+# Main fallback: live (no jingle) → MPD with jingles → emergency
 radio = fallback(
   track_sensitive=false,
-  [live, mpd_user, mpd_fallback, emergency]
+  [live, mpd_with_jingle, emergency]
 )
 
 # Safety wrapper to ensure stream never fails

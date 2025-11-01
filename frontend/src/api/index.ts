@@ -12,6 +12,8 @@ export type { OpenAPIConfig } from './core/OpenAPI';
 
 export type { Body_add_song_queue_add_post } from './models/Body_add_song_queue_add_post';
 export type { Body_admin_add_song_admin_queue_add_post } from './models/Body_admin_add_song_admin_queue_add_post';
+export type { Body_admin_upload_show_intro_admin_shows__show_id__intro_post } from './models/Body_admin_upload_show_intro_admin_shows__show_id__intro_post';
+export type { Body_upload_transition_admin_transitions_upload_post } from './models/Body_upload_transition_admin_transitions_upload_post';
 export type { ErrorResponse } from './models/ErrorResponse';
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export type { LivestreamTokenCreateRequest } from './models/LivestreamTokenCreateRequest';

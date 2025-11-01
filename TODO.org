@@ -18,12 +18,14 @@ https://chatgpt.com/c/67436428-aff0-8003-a47a-d006df6bdc40
   - [x] Show current playlist
   - [x] Show current stream info (live/user)
   - [x] Show past shows under /archive search open each show
+
   - [ ] Basic login and user hashed pws in db simple backend. (generate signin url)
   - [ ] File upload
   - [ ] Youtube url
+  - [ ] Get key for streaming manually
+
   - [ ] Youtube search
   - [ ] Start custom stream (microphone)
-  - [ ] Get key for streaming manually
   - [ ] https://strudel.cc/workshop/getting-started/
 
 - [x] Route everything over caddy. Load balancer based on request processing blocked. Multiple backends.

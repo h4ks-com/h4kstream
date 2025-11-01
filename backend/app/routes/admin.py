@@ -83,6 +83,7 @@ async def create_livestream_token(
     validation.
     """
     show_name = request.show_name
+    intro_filename = None
 
     if show_name:
         show = session.exec(select(Show).where(Show.show_name == show_name)).first()
@@ -91,9 +92,10 @@ async def create_livestream_token(
             session.add(show)
             session.commit()
             session.refresh(show)
+        intro_filename = show.intro_filename
 
     token, expires_at = generate_livestream_token(
-        request.max_streaming_seconds, show_name, None, request.min_recording_duration
+        request.max_streaming_seconds, show_name, None, request.min_recording_duration, intro_filename
     )
     return LivestreamTokenResponse(
         token=token, expires_at=expires_at.isoformat(), max_streaming_seconds=request.max_streaming_seconds

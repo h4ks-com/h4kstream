@@ -82,6 +82,7 @@ class Show(ShowBase, table=True):  # type: ignore[call-arg]
     owner_id: UUID | None = Field(default=None, foreign_key="users.id", index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     is_active: bool = Field(default=True)
+    intro_filename: str | None = Field(default=None)
 
     owner: User | None = Relationship(back_populates="shows")
     recordings: list["LivestreamRecording"] = Relationship(back_populates="show")
@@ -91,6 +92,7 @@ class ShowCreate(ShowBase):
     """Model for creating a new show."""
 
     owner_id: UUID | None = None
+    intro_filename: str | None = None
 
 
 class ShowPublic(ShowBase):
@@ -100,6 +102,7 @@ class ShowPublic(ShowBase):
     owner_id: UUID | None
     created_at: datetime
     is_active: bool
+    intro_filename: str | None
 
 
 class ShowUpdate(SQLModel):
@@ -109,6 +112,7 @@ class ShowUpdate(SQLModel):
     artist: str | None = None
     genre: str | None = None
     description: str | None = None
+    intro_filename: str | None = None
 
 
 class PendingUser(SQLModel, table=True):  # type: ignore[call-arg]

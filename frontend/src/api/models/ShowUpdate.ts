@@ -10,5 +10,6 @@ export type ShowUpdate = {
     artist?: (string | null);
     genre?: (string | null);
     description?: (string | null);
+    intro_filename?: (string | null);
 };
 

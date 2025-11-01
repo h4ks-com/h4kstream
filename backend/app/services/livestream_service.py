@@ -79,7 +79,7 @@ class LivestreamService:
         """Track livestream connection start time.
 
         :param token: JWT livestream token
-        :return: Dict with user_id, show_name, and min_recording_duration
+        :return: Dict with user_id, show_name, min_recording_duration, and intro_filename
         """
         logger.info(f"track_connection_start called with token: {token[:20]}...")
         try:
@@ -91,6 +91,7 @@ class LivestreamService:
         user_id = payload["user_id"]
         show_name = payload.get("show_name", "unknown")
         min_recording_duration = payload.get("min_recording_duration", 60)
+        intro_filename = payload.get("intro_filename")
 
         session_start_key = f"livestream:session:{user_id}:start"
         active_key = "livestream:active"
@@ -105,7 +106,12 @@ class LivestreamService:
         logger.info(f"Verified session start stored: {verify}")
 
         logger.info(f"Livestream session started for user {user_id} at {now}")
-        return {"user_id": user_id, "show_name": show_name, "min_recording_duration": min_recording_duration}
+        return {
+            "user_id": user_id,
+            "show_name": show_name,
+            "min_recording_duration": min_recording_duration,
+            "intro_filename": intro_filename,
+        }
 
     async def handle_disconnect(self, token: str) -> dict[str, str | int]:
         """Handle livestream disconnection and update total time used.

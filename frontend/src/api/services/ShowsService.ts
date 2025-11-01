@@ -2,11 +2,13 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { Body_admin_upload_show_intro_admin_shows__show_id__intro_post } from '../models/Body_admin_upload_show_intro_admin_shows__show_id__intro_post';
 import type { LivestreamTokenCreateRequest } from '../models/LivestreamTokenCreateRequest';
 import type { LivestreamTokenResponse } from '../models/LivestreamTokenResponse';
 import type { ShowCreate } from '../models/ShowCreate';
 import type { ShowPublic } from '../models/ShowPublic';
 import type { ShowUpdate } from '../models/ShowUpdate';
+import type { SuccessResponse } from '../models/SuccessResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import type { BaseHttpRequest } from '../core/BaseHttpRequest';
 export class ShowsService {
@@ -192,6 +194,57 @@ export class ShowsService {
         return this.httpRequest.request({
             method: 'GET',
             url: '/admin/shows/{show_id}',
+            path: {
+                'show_id': showId,
+            },
+            errors: {
+                401: `Unauthorized`,
+                404: `Show not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Upload Show Intro Jingle (Admin)
+     * Admin endpoint to upload a custom intro jingle for a show.
+     * @param showId
+     * @param formData
+     * @returns ShowPublic Successful Response
+     * @throws ApiError
+     */
+    public adminUploadShowIntroAdminShowsShowIdIntroPost(
+        showId: number,
+        formData: Body_admin_upload_show_intro_admin_shows__show_id__intro_post,
+    ): CancelablePromise<ShowPublic> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/admin/shows/{show_id}/intro',
+            path: {
+                'show_id': showId,
+            },
+            formData: formData,
+            mediaType: 'multipart/form-data',
+            errors: {
+                400: `Invalid file`,
+                401: `Unauthorized`,
+                404: `Show not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Remove Show Intro Jingle (Admin)
+     * Admin endpoint to remove a show's custom intro jingle.
+     * @param showId
+     * @returns SuccessResponse Successful Response
+     * @throws ApiError
+     */
+    public adminRemoveShowIntroAdminShowsShowIdIntroDelete(
+        showId: number,
+    ): CancelablePromise<SuccessResponse> {
+        return this.httpRequest.request({
+            method: 'DELETE',
+            url: '/admin/shows/{show_id}/intro',
             path: {
                 'show_id': showId,
             },
