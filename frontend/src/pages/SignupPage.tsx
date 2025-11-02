@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UsersService } from '../utils/apiClient';
 import { authUtils } from '../utils/auth';
@@ -8,12 +8,37 @@ export const SignupPage: React.FC = () => {
   const token = searchParams.get('token') || '';
 
   const [email, setEmail] = useState('');
+  const [emailPrefilled, setEmailPrefilled] = useState(false);
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [validatingToken, setValidatingToken] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const validateToken = async () => {
+      if (!token) {
+        setError('No signup token provided');
+        setValidatingToken(false);
+        return;
+      }
+
+      try {
+        const data = await UsersService().validateSignupTokenUsersValidateSignupTokenGet(token);
+        setEmail(data.email);
+        setEmailPrefilled(true);
+        setError('');
+      } catch (err: any) {
+        setError(err.body?.detail || 'Invalid signup token');
+      } finally {
+        setValidatingToken(false);
+      }
+    };
+
+    validateToken();
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +70,23 @@ export const SignupPage: React.FC = () => {
     }
   };
 
+  if (validatingToken) {
+    return (
+      <div className="min-h-screen bg-h4ks-dark-800 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="border-2 border-h4ks-green-700 bg-h4ks-dark-900 p-8">
+            <h1 className="text-2xl font-bold text-h4ks-green-400 mb-6 font-mono">
+              [h4kstream / signup]
+            </h1>
+            <div className="text-gray-400 text-center py-8">
+              Validating signup token...
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-h4ks-dark-800 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -55,13 +97,16 @@ export const SignupPage: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-gray-400 text-sm mb-2">Email *</label>
+              <label className="block text-gray-400 text-sm mb-2">
+                Email * {emailPrefilled && <span className="text-xs text-gray-500">(pre-filled)</span>}
+              </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={emailPrefilled}
                 required
-                className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2 focus:outline-none focus:border-h4ks-green-500"
+                className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2 focus:outline-none focus:border-h4ks-green-500 disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
 

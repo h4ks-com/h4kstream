@@ -14,6 +14,28 @@ import type { BaseHttpRequest } from '../core/BaseHttpRequest';
 export class UsersService {
     constructor(public readonly httpRequest: BaseHttpRequest) {}
     /**
+     * Validate Signup Token
+     * Validate a pending user signup token and return email information.
+     * @param signupToken Pending user signup token
+     * @returns PendingUserPublic Successful Response
+     * @throws ApiError
+     */
+    public validateSignupTokenUsersValidateSignupTokenGet(
+        signupToken: string,
+    ): CancelablePromise<PendingUserPublic> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/users/validate-signup-token',
+            query: {
+                'signup_token': signupToken,
+            },
+            errors: {
+                400: `Invalid or expired token`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Register New User
      * Register a new user with a valid pending user token.
      * @param signupToken Pending user signup token

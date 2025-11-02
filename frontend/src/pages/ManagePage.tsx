@@ -111,7 +111,7 @@ const QueueSection: React.FC = () => {
       {/* My Songs */}
       <div>
         <h3 className="text-lg font-bold text-h4ks-green-400 mb-3 font-mono">
-          [MY SONGS] ({songs.length})
+          [USER QUEUE] ({songs.length})
         </h3>
         <div className="border-2 border-h4ks-green-800 bg-h4ks-dark-900">
           {loading ? (

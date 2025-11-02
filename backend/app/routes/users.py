@@ -85,6 +85,37 @@ def create_pending_user(
     return db_pending
 
 
+@router.get(
+    "/validate-signup-token",
+    response_model=PendingUserPublic,
+    summary="Validate Signup Token",
+    description="Validate a pending user signup token and return email information.",
+    responses={400: {"model": ErrorResponse, "description": "Invalid or expired token"}},
+)
+def validate_signup_token(
+    signup_token: str = Query(..., description="Pending user signup token"),
+    session: Session = Depends(get_session),
+) -> PendingUserPublic:
+    """Validate signup token and return pending user information."""
+    pending = session.exec(select(PendingUser).where(PendingUser.token == signup_token)).first()
+
+    if not pending:
+        raise HTTPException(status_code=400, detail="Invalid signup token")
+
+    if pending.used:
+        raise HTTPException(status_code=400, detail="Signup token already used")
+
+    # Ensure timezone-aware comparison
+    expires_at = pending.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+
+    if expires_at < datetime.now(UTC):
+        raise HTTPException(status_code=400, detail="Signup token expired")
+
+    return pending
+
+
 @router.post(
     "/register",
     response_model=TokenCreateResponse,
@@ -106,7 +137,12 @@ def register_user(
     if pending.used:
         raise HTTPException(status_code=400, detail="Signup token already used")
 
-    if pending.expires_at < datetime.now(UTC):
+    # Ensure timezone-aware comparison
+    expires_at = pending.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+
+    if expires_at < datetime.now(UTC):
         raise HTTPException(status_code=400, detail="Signup token expired")
 
     if pending.email != user_data.email:

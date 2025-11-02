@@ -147,6 +147,7 @@ const UsersSection: React.FC = () => {
   const [durationHours, setDurationHours] = useState(24);
   const [maxQueueSongs, setMaxQueueSongs] = useState(10);
   const [maxAddRequests, setMaxAddRequests] = useState(5);
+  const [copied, setCopied] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -157,6 +158,16 @@ const UsersSection: React.FC = () => {
       setError(err.body?.detail || 'Failed to fetch users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(signupUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
     }
   };
 
@@ -262,13 +273,21 @@ const UsersSection: React.FC = () => {
         {signupUrl && (
           <div className="mt-4 bg-h4ks-dark-800 border border-h4ks-green-700 p-3">
             <p className="text-gray-400 text-sm mb-2">Signup URL (expires in {durationHours} hours):</p>
-            <input
-              type="text"
-              value={signupUrl}
-              readOnly
-              onClick={(e) => e.currentTarget.select()}
-              className="w-full bg-h4ks-dark-900 border border-h4ks-green-800 text-h4ks-green-400 px-3 py-2 font-mono text-sm cursor-pointer"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={signupUrl}
+                readOnly
+                onClick={(e) => e.currentTarget.select()}
+                className="flex-1 bg-h4ks-dark-900 border border-h4ks-green-800 text-h4ks-green-400 px-3 py-2 font-mono text-sm cursor-pointer"
+              />
+              <button
+                onClick={copyToClipboard}
+                className="bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white font-mono py-2 px-4 whitespace-nowrap"
+              >
+                {copied ? '[COPIED!]' : '[COPY]'}
+              </button>
+            </div>
           </div>
         )}
       </div>
