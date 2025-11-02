@@ -1,0 +1,31 @@
+name: 'Backend Check'
+description: 'Run backend linting and tests'
+
+runs:
+  using: 'composite'
+  steps:
+  - name: Install uv
+    uses: astral-sh/setup-uv@v7
+    with:
+      enable-cache: true
+      cache-dependency-glob: 'backend/uv.lock'
+
+  - name: Set up Python
+    uses: actions/setup-python@v5
+    with:
+      python-version-file: 'backend/.python-version'
+
+  - name: Install backend dependencies
+    shell: bash
+    working-directory: backend
+    run: uv sync
+
+  - name: Run backend linting
+    shell: bash
+    working-directory: backend
+    run: make check
+
+  - name: Run backend tests
+    shell: bash
+    working-directory: backend
+    run: make test
