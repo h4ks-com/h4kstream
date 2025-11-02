@@ -20,9 +20,9 @@ from app.services.redis_service import RedisService
 from app.services.redis_service import format_song_id
 from app.services.youtube_dl import download_song
 from app.services.youtube_dl import get_video_info
-from app.settings import MUSIC_FALLBACK_DIR
-from app.settings import MUSIC_USER_DIR
-from app.settings import SONGS_DIR
+from app.settings import get_music_fallback_dir
+from app.settings import get_music_user_dir
+from app.settings import get_songs_dir
 from app.settings import settings
 from app.types import PlaylistType
 
@@ -143,7 +143,7 @@ async def add_song(
     if not url and not file:
         raise ValueError("No valid URL or file provided")
 
-    music_path = Path(MUSIC_USER_DIR if playlist == "user" else MUSIC_FALLBACK_DIR)
+    music_path = Path(get_music_user_dir() if playlist == "user" else get_music_fallback_dir())
     filename = uuid4().hex + ".mp3"
     target_path = music_path / filename
 
@@ -178,7 +178,7 @@ async def add_song(
             if not skip_validation:
                 await validate_file_size(file, settings.MAX_FILE_SIZE_MB)
 
-            file_temp_path = Path(SONGS_DIR) / sanitize_filename(song_name or file.filename or filename)
+            file_temp_path = Path(get_songs_dir()) / sanitize_filename(song_name or file.filename or filename)
             content = await file.read()
             with open(file_temp_path, "wb") as f:
                 f.write(content)

@@ -15,11 +15,13 @@ from mutagen.id3 import TPE2
 from mutagen.mp3 import MP3
 
 from app.services import ffmpeg
+from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
-USER_DIRECTORY = "/songs/user"
-MAINLOOP_DIRECTORY = "/songs/mainloop"
+# Derive directories from configurable root path
+USER_DIRECTORY = f"{settings.SONGS_ROOT_PATH}/user"
+MAINLOOP_DIRECTORY = f"{settings.SONGS_ROOT_PATH}/mainloop"
 
 
 class YoutubeErrorType(StrEnum):

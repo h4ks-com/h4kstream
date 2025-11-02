@@ -373,4 +373,14 @@ output.harbor(
 
 log("HTTP output for recording worker configured on port 8004 (livestream only)")
 
+# Output 3: HTTP stream for public radio playback (full mix: live > user > fallback > emergency)
+output.harbor(
+  %mp3(bitrate=320, stereo=true),
+  port=8001,
+  mount="/radio",
+  radio
+)
+
+log("HTTP radio output configured on port 8001/radio (full radio mix)")
+
 log("Liquidsoap started - continuous streaming with 4-tier failsafe (live > user > fallback > emergency)")

@@ -103,26 +103,74 @@ class RecordingWorker:
         filename = f"{show_name}_{timestamp}.mp3"
         filepath = Path(settings.RECORDINGS_PATH) / filename
 
-        # Wait briefly for harbor output to become available (fallible source takes time to start)
-        await asyncio.sleep(0.3)
+        # Retry logic for ffmpeg connection (harbor output may not be ready immediately)
+        max_retries = 3
+        retry_delay = 0.5  # Start with 0.5 seconds
+        process = None
 
-        logger.info("Connecting to http://liquidsoap:8004/stream for recording")
-        process = await asyncio.create_subprocess_exec(
-            "ffmpeg",
-            "-loglevel",
-            "warning",
-            "-i",
-            "http://liquidsoap:8004/stream",
-            "-c:a",
-            "libmp3lame",
-            "-b:a",
-            "128k",
-            "-f",
-            "mp3",
-            str(filepath),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        for attempt in range(max_retries):
+            # Wait for harbor output to become available (fallible source takes time to start)
+            await asyncio.sleep(retry_delay)
+
+            logger.info(
+                f"Connecting to http://liquidsoap:8004/stream for recording "
+                f"(attempt {attempt + 1}/{max_retries})"
+            )
+
+            process = await asyncio.create_subprocess_exec(
+                "ffmpeg",
+                "-loglevel",
+                "warning",
+                "-i",
+                "http://liquidsoap:8004/stream",
+                "-c:a",
+                "libmp3lame",
+                "-b:a",
+                "128k",
+                "-f",
+                "mp3",
+                str(filepath),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            # Check if ffmpeg failed immediately (stream not available)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=1.0)
+                # Process exited within 1 second - likely connection error
+                stderr = await process.stderr.read()
+                stderr_text = stderr.decode() if stderr else ""
+
+                if "End of file" in stderr_text or "Connection refused" in stderr_text:
+                    logger.warning(
+                        f"FFmpeg failed to connect (attempt {attempt + 1}/{max_retries}): "
+                        f"{stderr_text[:200]}"
+                    )
+
+                    if attempt < max_retries - 1:
+                        # Retry with exponential backoff
+                        retry_delay *= 2
+                        logger.info(f"Retrying in {retry_delay}s...")
+                        continue
+                    else:
+                        logger.error(
+                            f"Failed to start recording after {max_retries} attempts: "
+                            f"stream not available"
+                        )
+                        return
+                else:
+                    # Different error - log and fail
+                    logger.error(f"FFmpeg failed with unexpected error: {stderr_text}")
+                    return
+
+            except TimeoutError:
+                # Process is still running after 1 second - connection successful
+                logger.info(f"FFmpeg connected successfully on attempt {attempt + 1}")
+                break
+
+        if process is None or process.returncode is not None:
+            logger.error(f"Failed to start recording for {user_id}: ffmpeg process failed")
+            return
 
         self.active_recordings[user_id] = RecordingSession(
             user_id=user_id,
@@ -159,6 +207,33 @@ class RecordingWorker:
                 stdout_output = await session.process.stdout.read()
                 if stdout_output:
                     logger.info(f"FFmpeg stdout: {stdout_output.decode()}")
+
+        # Wait for file to exist and stabilize (ffmpeg buffer flush to disk may take a moment)
+        max_wait = 10  # seconds
+        wait_interval = 0.1  # seconds
+        stability_checks = 3  # Number of consecutive size checks that must match
+        elapsed = 0.0
+        last_size = -1
+        stable_count = 0
+
+        while elapsed < max_wait:
+            if session.filepath.exists():
+                current_size = session.filepath.stat().st_size
+                if current_size > 0:
+                    if current_size == last_size:
+                        stable_count += 1
+                        if stable_count >= stability_checks:
+                            logger.info(f"Recording file stable at {current_size} bytes after {elapsed:.1f}s")
+                            break
+                    else:
+                        stable_count = 0
+                        last_size = current_size
+            await asyncio.sleep(wait_interval)
+            elapsed += wait_interval
+
+        if not session.filepath.exists():
+            logger.error(f"Recording file never appeared after {max_wait}s: {session.filepath}")
+            return
 
         await self._process_recording(session)
 

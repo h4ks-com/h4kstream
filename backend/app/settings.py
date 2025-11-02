@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     DATA_PATH: str = "/app/data"
     RECORDINGS_PATH: str = "/app/data/recordings"
 
+    # Music and songs directories (configurable for tests)
+    MUSIC_ROOT_PATH: str = "/music"
+    SONGS_ROOT_PATH: str = "/songs"
+
     ICECAST_HOST: str = "icecast"
     ICECAST_PORT: int = 8000
 
@@ -79,8 +83,22 @@ class Settings(BaseSettings):
 
 settings = Settings()
 TEMPLATES_PATH = "static"
-MUSIC_USER_DIR = "/music/user"
-MUSIC_FALLBACK_DIR = "/music/fallback"
-SONGS_DIR = "/songs"
 
-__all__ = ["settings", "MUSIC_USER_DIR", "MUSIC_FALLBACK_DIR", "SONGS_DIR"]
+
+# Lazy-evaluated path getters (allow env vars to be set before evaluation in tests)
+def get_music_user_dir() -> str:
+    """Get music user directory path (lazy-evaluated for test compatibility)."""
+    return f"{settings.MUSIC_ROOT_PATH}/user"
+
+
+def get_music_fallback_dir() -> str:
+    """Get music fallback directory path (lazy-evaluated for test compatibility)."""
+    return f"{settings.MUSIC_ROOT_PATH}/fallback"
+
+
+def get_songs_dir() -> str:
+    """Get songs directory path (lazy-evaluated for test compatibility)."""
+    return settings.SONGS_ROOT_PATH
+
+
+__all__ = ["settings", "get_music_user_dir", "get_music_fallback_dir", "get_songs_dir"]
