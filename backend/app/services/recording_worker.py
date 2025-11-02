@@ -138,8 +138,10 @@ class RecordingWorker:
             try:
                 await asyncio.wait_for(process.wait(), timeout=1.0)
                 # Process exited within 1 second - likely connection error
-                stderr = await process.stderr.read()
-                stderr_text = stderr.decode() if stderr else ""
+                stderr_text = ""
+                if process.stderr is not None:
+                    stderr = await process.stderr.read()
+                    stderr_text = stderr.decode() if stderr else ""
 
                 if "End of file" in stderr_text or "Connection refused" in stderr_text:
                     logger.warning(

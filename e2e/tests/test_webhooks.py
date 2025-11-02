@@ -6,6 +6,7 @@ import json
 import subprocess
 import threading
 import time
+from collections.abc import Generator
 from http.server import BaseHTTPRequestHandler
 from http.server import HTTPServer
 from typing import Any
@@ -21,7 +22,7 @@ class WebhookTestServer(BaseHTTPRequestHandler):
     # Class-level storage for received webhooks
     received_webhooks: list[dict[str, Any]] = []
 
-    def do_POST(self):
+    def do_POST(self) -> None:
         """Handle POST requests (webhook deliveries)."""
         content_length = int(self.headers["Content-Length"])
         body = self.rfile.read(content_length)
@@ -42,13 +43,13 @@ class WebhookTestServer(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({"status": "received"}).encode())
 
-    def log_message(self, format, *args):
+    def log_message(self, format: str, *args: Any) -> None:
         """Suppress server logs."""
         pass
 
 
 @pytest.fixture
-def webhook_server():
+def webhook_server() -> Generator[str, None, None]:
     """Start a test webhook server on port 9999."""
     WebhookTestServer.received_webhooks = []  # Clear previous data
 
@@ -62,7 +63,7 @@ def webhook_server():
 
 
 @pytest.fixture
-def redis_client():
+def redis_client() -> Generator[redis.Redis, None, None]:
     """Create Redis client for checking state."""
     client = redis.Redis(host="localhost", port=6379, decode_responses=True)
     yield client
@@ -70,7 +71,7 @@ def redis_client():
 
 
 @pytest.fixture(autouse=True)
-def cleanup_webhooks(redis_client: redis.Redis):
+def cleanup_webhooks(redis_client: redis.Redis) -> Generator[None, None, None]:
     """Clean up all webhook subscriptions before each test."""
     # Clear all webhook subscriptions
     redis_client.delete("webhooks:subscriptions")
