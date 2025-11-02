@@ -15,10 +15,11 @@ export const QueueList: React.FC = () => {
   useEffect(() => {
     const fetchQueue = async () => {
       try {
-        const response = await fetch('/api/queue/list?limit=10');
+        const response = await fetch('/api/queue/list?limit=11');
         if (response.ok) {
           const json = await response.json();
-          setSongs(json);
+          // Skip the first song (currently playing) and show only upcoming songs
+          setSongs(json.slice(1));
           setError(null);
         } else {
           setError('Failed to fetch queue');
@@ -34,8 +35,8 @@ export const QueueList: React.FC = () => {
     // Initial fetch
     fetchQueue();
 
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchQueue, 30000);
+    // Refresh every 10 seconds for better responsiveness
+    const interval = setInterval(fetchQueue, 10000);
 
     return () => clearInterval(interval);
   }, []);

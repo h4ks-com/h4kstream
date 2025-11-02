@@ -4,6 +4,7 @@ interface SongUploadFormProps {
   queueType?: 'user' | 'fallback';
   showQueueTypeSelector?: boolean;
   onUploadComplete?: () => void;
+  onQueueTypeChange?: (queueType: 'user' | 'fallback') => void;
   uploadFunction: (params: {
     url?: string;
     file?: File;
@@ -16,9 +17,15 @@ export const SongUploadForm: React.FC<SongUploadFormProps> = ({
   queueType: initialQueueType = 'user',
   showQueueTypeSelector = false,
   onUploadComplete,
+  onQueueTypeChange,
   uploadFunction,
 }) => {
   const [queueType, setQueueType] = useState<'user' | 'fallback'>(initialQueueType);
+
+  const handleQueueTypeChange = (newQueueType: 'user' | 'fallback') => {
+    setQueueType(newQueueType);
+    onQueueTypeChange?.(newQueueType);
+  };
   const [url, setUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [songName, setSongName] = useState('');
@@ -80,7 +87,7 @@ export const SongUploadForm: React.FC<SongUploadFormProps> = ({
             <label className="block text-gray-400 text-sm mb-2">Queue Type</label>
             <select
               value={queueType}
-              onChange={(e) => setQueueType(e.target.value as 'user' | 'fallback')}
+              onChange={(e) => handleQueueTypeChange(e.target.value as 'user' | 'fallback')}
               className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
               disabled={uploading}
             >

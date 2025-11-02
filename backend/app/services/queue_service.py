@@ -68,7 +68,12 @@ async def validate_song_duration(file_path: Path, max_duration_seconds: int) -> 
 
 
 async def check_duplicate_in_queue(
-    song_name: str | None, artist_name: str | None, user_mpd: MPDClient, fallback_mpd: MPDClient, check_limit: int
+    song_name: str | None,
+    artist_name: str | None,
+    user_mpd: MPDClient,
+    fallback_mpd: MPDClient,
+    check_limit: int,
+    redis_client: RedisService | None = None,
 ) -> bool:
     """Check if song already exists in the next N songs of combined queue.
 
@@ -77,6 +82,7 @@ async def check_duplicate_in_queue(
     :param user_mpd: User queue MPD client (must be connected)
     :param fallback_mpd: Fallback queue MPD client (must be connected)
     :param check_limit: Number of songs to check in combined queue
+    :param redis_client: Optional Redis client for fetching metadata overrides
     :return: True if duplicate found, False otherwise
     """
     if not song_name:
@@ -84,7 +90,7 @@ async def check_duplicate_in_queue(
         return False
 
     # Get next songs from combined queue (reuse existing logic)
-    next_songs = await get_next_songs(user_mpd, fallback_mpd, check_limit)
+    next_songs = await get_next_songs(user_mpd, fallback_mpd, check_limit, redis_client)
 
     # Normalize for comparison
     normalized_song = song_name.lower().strip()
@@ -197,7 +203,12 @@ async def add_song(
 
             # Check for duplicates in combined queue
             is_duplicate = await check_duplicate_in_queue(
-                final_title, final_artist, user_mpd_client, fallback_mpd_client, settings.DUPLICATE_CHECK_LIMIT
+                final_title,
+                final_artist,
+                user_mpd_client,
+                fallback_mpd_client,
+                settings.DUPLICATE_CHECK_LIMIT,
+                redis_client,
             )
             if is_duplicate:
                 raise ValueError(
@@ -231,6 +242,10 @@ async def add_song(
         await redis_client.increment_user_add_count(user_id)
 
     if redis_client:
+        # Store per-song metadata overrides if provided
+        if song_name or artist_name:
+            await redis_client.set_song_metadata(playlist, str(mpd_song_id), final_title, final_artist)
+
         metadata = {
             "title": final_title,
             "artist": final_artist,
@@ -295,18 +310,33 @@ async def delete_song(
     logger.info(f"Deleted song {song_id} from {playlist} playlist")
 
 
-async def list_songs(mpd_client: MPDClient, playlist: PlaylistType | None = None) -> list[SongItem]:
+async def list_songs(
+    mpd_client: MPDClient, playlist: PlaylistType | None = None, redis_client: RedisService | None = None
+) -> list[SongItem]:
     """List all songs in the queue.
 
     :param mpd_client: MPD client for the target playlist
     :param playlist: Playlist type for ID prefixing (optional, defaults to no prefix)
+    :param redis_client: Optional Redis client for fetching metadata overrides
     :return: List of songs in the queue
     """
     queue = await mpd_client.get_queue()
     songs = []
     for song in queue:
+        mpd_song_id = int(song["id"])
+
+        # Check for Redis metadata overrides if available
+        if redis_client and playlist:
+            overrides = await redis_client.get_song_metadata(playlist, str(mpd_song_id))
+            if overrides:
+                # Apply overrides - Redis data takes precedence over MPD data
+                if "title" in overrides:
+                    song["title"] = overrides["title"]
+                if "artist" in overrides:
+                    song["artist"] = overrides["artist"]
+
         if playlist:
-            song["id"] = format_song_id(int(song["id"]), playlist)
+            song["id"] = format_song_id(mpd_song_id, playlist)
         songs.append(SongItem(**song))
     return songs
 
@@ -321,21 +351,24 @@ async def clear_queue(mpd_client: MPDClient, playlist: PlaylistType) -> None:
     logger.info(f"Cleared {playlist} playlist queue")
 
 
-async def get_next_songs(user_mpd_client: MPDClient, radio_mpd_client: MPDClient, limit: int) -> list[SongItem]:
+async def get_next_songs(
+    user_mpd_client: MPDClient, radio_mpd_client: MPDClient, limit: int, redis_client: RedisService | None = None
+) -> list[SongItem]:
     """Get the next N songs from queues, prioritizing user queue and falling back to radio.
 
     :param user_mpd_client: MPD client for user queue
     :param radio_mpd_client: MPD client for radio playlist
     :param limit: Maximum number of songs to return (1-20)
+    :param redis_client: Optional Redis client for fetching metadata overrides
     :return: List of upcoming songs (user queue first, then radio if needed)
     """
-    user_songs = await list_songs(user_mpd_client, "user")
+    user_songs = await list_songs(user_mpd_client, "user", redis_client)
 
     if len(user_songs) >= limit:
         return user_songs[:limit]
 
     remaining = limit - len(user_songs)
-    radio_songs = await list_songs(radio_mpd_client, "fallback")
+    radio_songs = await list_songs(radio_mpd_client, "fallback", redis_client)
 
     combined = user_songs + radio_songs[:remaining]
 

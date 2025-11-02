@@ -619,6 +619,7 @@ const QueueSection: React.FC = () => {
           queueType={queueType}
           showQueueTypeSelector={true}
           onUploadComplete={fetchQueue}
+          onQueueTypeChange={setQueueType}
           uploadFunction={(params) => AdminService().adminAddSongAdminQueueAddPost(queueType, params)}
         />
       </div>

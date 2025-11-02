@@ -140,6 +140,40 @@ class RedisService:
         key = f"metadata:{source}"
         await self.redis.delete(key)
 
+    async def set_song_metadata(self, playlist: PlaylistType, song_id: str, title: str | None, artist: str | None) -> None:
+        """Store metadata overrides for a specific song.
+
+        :param playlist: Playlist type (user or fallback)
+        :param song_id: MPD song ID
+        :param title: Custom song title (override)
+        :param artist: Custom artist name (override)
+        """
+        if not title and not artist:
+            return
+
+        key = f"song:{playlist}:{song_id}:metadata"
+        metadata = {}
+        if title:
+            metadata["title"] = title
+        if artist:
+            metadata["artist"] = artist
+
+        await self.redis.set(key, json.dumps(metadata))
+        await self.redis.expire(key, 86400)  # 24 hour TTL
+
+    async def get_song_metadata(self, playlist: PlaylistType, song_id: str) -> dict | None:
+        """Get metadata overrides for a specific song.
+
+        :param playlist: Playlist type (user or fallback)
+        :param song_id: MPD song ID
+        :return: Dictionary with title/artist overrides or None
+        """
+        key = f"song:{playlist}:{song_id}:metadata"
+        value = await self.redis.get(key)
+        if value:
+            return json.loads(value)
+        return None
+
     async def set_active_source(self, source: str) -> None:
         """Set the currently active audio source."""
         await self.redis.set("metadata:active_source", source)

@@ -161,13 +161,14 @@ async def admin_add_song(
 )
 async def admin_list_songs(
     playlist: PlaylistType = Query("user", description="Target playlist (user or fallback)"),
+    redis_client: RedisService = Depends(dep_redis_client),
 ) -> list[SongItem]:
     """List all songs in the specified playlist."""
     mpd_client = get_mpd_client(playlist)
 
     try:
         await mpd_client.connect()
-        return await queue_service.list_songs(mpd_client, playlist)
+        return await queue_service.list_songs(mpd_client, playlist, redis_client)
     finally:
         await mpd_client.disconnect()
 

@@ -135,6 +135,7 @@ async def add_song(
 )
 async def list_songs(
     limit: int = Query(20, ge=1, le=20, description="Maximum number of songs to return (1-20)"),
+    redis_client: RedisService = Depends(dep_redis_client),
 ) -> list[SongItem]:
     """Get songs from user queue and fallback playlist."""
     user_mpd = playback_service.get_mpd_client("user")
@@ -143,7 +144,7 @@ async def list_songs(
     try:
         await user_mpd.connect()
         await fallback_mpd.connect()
-        return await queue_service.get_next_songs(user_mpd, fallback_mpd, limit)
+        return await queue_service.get_next_songs(user_mpd, fallback_mpd, limit, redis_client)
     finally:
         await user_mpd.disconnect()
         await fallback_mpd.disconnect()

@@ -58,12 +58,24 @@ async def get_now_playing(
         await user_mpd.disconnect()
 
         if user_song and user_song.get("file"):
+            # Start with MPD metadata
             metadata = {
                 "title": user_song.get("title") or user_song.get("file", "User Queue"),
                 "artist": user_song.get("artist"),
                 "genre": user_song.get("genre"),
                 "description": None,
             }
+
+            # Check for per-song metadata overrides
+            if user_song.get("id"):
+                overrides = await redis_client.get_song_metadata("user", str(user_song["id"]))
+                if overrides:
+                    # Apply overrides - Redis takes precedence
+                    if "title" in overrides:
+                        metadata["title"] = overrides["title"]
+                    if "artist" in overrides:
+                        metadata["artist"] = overrides["artist"]
+
             await redis_client.set_metadata("user", metadata)
             await redis_client.set_active_source("user")
             return NowPlayingResponse(source="user", metadata=NowPlayingMetadata(**metadata))
@@ -76,12 +88,24 @@ async def get_now_playing(
         await fallback_mpd.disconnect()
 
         if fallback_song and fallback_song.get("file"):
+            # Start with MPD metadata
             metadata = {
                 "title": fallback_song.get("title") or fallback_song.get("file", "Fallback Playlist"),
                 "artist": fallback_song.get("artist"),
                 "genre": fallback_song.get("genre"),
                 "description": None,
             }
+
+            # Check for per-song metadata overrides
+            if fallback_song.get("id"):
+                overrides = await redis_client.get_song_metadata("fallback", str(fallback_song["id"]))
+                if overrides:
+                    # Apply overrides - Redis takes precedence
+                    if "title" in overrides:
+                        metadata["title"] = overrides["title"]
+                    if "artist" in overrides:
+                        metadata["artist"] = overrides["artist"]
+
             await redis_client.set_metadata("fallback", metadata)
             await redis_client.set_active_source("fallback")
             return NowPlayingResponse(source="fallback", metadata=NowPlayingMetadata(**metadata))
