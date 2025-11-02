@@ -3,6 +3,7 @@ import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
 import { QueueService, ShowsService } from '../utils/apiClient';
 import type { SongItem, ShowPublic } from '../api';
+import { SongUploadForm } from '../components/SongUploadForm';
 
 type Section = 'queue' | 'livestream';
 
@@ -60,11 +61,6 @@ const QueueSection: React.FC = () => {
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [url, setUrl] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [songName, setSongName] = useState('');
-  const [artist, setArtist] = useState('');
 
   const fetchQueue = async () => {
     try {
@@ -75,35 +71,6 @@ const QueueSection: React.FC = () => {
       setError(err.body?.detail || 'Failed to fetch queue');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const addSong = async () => {
-    try {
-      setError('');
-      setUploading(true);
-      if (url) {
-        await QueueService().addSongQueueAddPost({
-          url,
-          song_name: songName || undefined,
-          artist: artist || undefined,
-        });
-      } else if (file) {
-        await QueueService().addSongQueueAddPost({
-          file,
-          song_name: songName || undefined,
-          artist: artist || undefined,
-        });
-      }
-      setUrl('');
-      setFile(null);
-      setSongName('');
-      setArtist('');
-      fetchQueue();
-    } catch (err: any) {
-      setError(err.body?.detail || 'Failed to add song');
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -128,59 +95,11 @@ const QueueSection: React.FC = () => {
       </h2>
 
       {/* Add Song Form */}
-      <div className="mb-6 border-2 border-h4ks-green-800 bg-h4ks-dark-900 p-4">
-        <h3 className="text-lg font-bold text-h4ks-green-400 mb-4 font-mono">
-          [ADD SONG]
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-gray-400 text-sm mb-2">YouTube URL or Audio File</label>
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://youtube.com/watch?v=..."
-              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2 mb-2"
-              disabled={uploading}
-            />
-            <input
-              type="file"
-              accept="audio/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
-              disabled={uploading}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-400 text-sm mb-2">Song Name (optional)</label>
-            <input
-              type="text"
-              value={songName}
-              onChange={(e) => setSongName(e.target.value)}
-              placeholder="Custom song name..."
-              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
-              disabled={uploading}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-400 text-sm mb-2">Artist (optional)</label>
-            <input
-              type="text"
-              value={artist}
-              onChange={(e) => setArtist(e.target.value)}
-              placeholder="Artist name..."
-              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
-              disabled={uploading}
-            />
-          </div>
-          <button
-            onClick={addSong}
-            disabled={(!url && !file) || uploading}
-            className="bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white font-mono py-2 px-4 disabled:opacity-50"
-          >
-            {uploading ? '[UPLOADING...]' : '[ADD TO QUEUE]'}
-          </button>
-        </div>
+      <div className="mb-6">
+        <SongUploadForm
+          onUploadComplete={fetchQueue}
+          uploadFunction={(params) => QueueService().addSongQueueAddPost(params)}
+        />
       </div>
 
       {error && (

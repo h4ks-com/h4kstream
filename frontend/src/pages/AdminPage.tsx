@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
 import { AdminService, WebhooksService, ShowsService } from '../utils/apiClient';
 import type { UserPublic, ShowPublic, WebhookSubscription, SongItem } from '../api';
+import { SongUploadForm } from '../components/SongUploadForm';
 
 type Section = 'users' | 'shows' | 'queue' | 'livestream' | 'webhooks' | 'transitions';
 
@@ -571,12 +572,7 @@ const QueueSection: React.FC = () => {
   const [queueType, setQueueType] = useState<'user' | 'fallback'>('user');
   const [userSongs, setUserSongs] = useState<SongItem[]>([]);
   const [fallbackSongs, setFallbackSongs] = useState<SongItem[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
-  const [url, setUrl] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [songName, setSongName] = useState('');
-  const [artist, setArtist] = useState('');
 
   const fetchQueue = async () => {
     try {
@@ -588,35 +584,6 @@ const QueueSection: React.FC = () => {
       setFallbackSongs(fallbackQueue);
     } catch (err: any) {
       setError(err.body?.detail || 'Failed to fetch queue');
-    }
-  };
-
-  const addSong = async () => {
-    try {
-      setError('');
-      setUploading(true);
-      if (url) {
-        await AdminService().adminAddSongAdminQueueAddPost(queueType, {
-          url,
-          song_name: songName || undefined,
-          artist: artist || undefined,
-        });
-      } else if (file) {
-        await AdminService().adminAddSongAdminQueueAddPost(queueType, {
-          file,
-          song_name: songName || undefined,
-          artist: artist || undefined,
-        });
-      }
-      setUrl('');
-      setFile(null);
-      setSongName('');
-      setArtist('');
-      fetchQueue();
-    } catch (err: any) {
-      setError(err.body?.detail || 'Failed to add song');
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -647,71 +614,13 @@ const QueueSection: React.FC = () => {
       </h2>
 
       {/* Add Song Form */}
-      <div className="mb-6 border-2 border-h4ks-green-800 bg-h4ks-dark-900 p-4">
-        <h3 className="text-lg font-bold text-h4ks-green-400 mb-4 font-mono">
-          [ADD SONG]
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-gray-400 text-sm mb-2">Queue Type</label>
-            <select
-              value={queueType}
-              onChange={(e) => setQueueType(e.target.value as 'user' | 'fallback')}
-              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
-              disabled={uploading}
-            >
-              <option value="user">User Queue</option>
-              <option value="fallback">Fallback Queue</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-gray-400 text-sm mb-2">YouTube URL or File</label>
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://youtube.com/watch?v=..."
-              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2 mb-2"
-              disabled={uploading}
-            />
-            <input
-              type="file"
-              accept="audio/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
-              disabled={uploading}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-400 text-sm mb-2">Song Name (optional)</label>
-            <input
-              type="text"
-              value={songName}
-              onChange={(e) => setSongName(e.target.value)}
-              placeholder="Custom song name..."
-              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
-              disabled={uploading}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-400 text-sm mb-2">Artist (optional)</label>
-            <input
-              type="text"
-              value={artist}
-              onChange={(e) => setArtist(e.target.value)}
-              placeholder="Artist name..."
-              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
-              disabled={uploading}
-            />
-          </div>
-          <button
-            onClick={addSong}
-            disabled={(!url && !file) || uploading}
-            className="bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white font-mono py-2 px-4 disabled:opacity-50"
-          >
-            {uploading ? '[UPLOADING...]' : '[ADD TO QUEUE]'}
-          </button>
-        </div>
+      <div className="mb-6">
+        <SongUploadForm
+          queueType={queueType}
+          showQueueTypeSelector={true}
+          onUploadComplete={fetchQueue}
+          uploadFunction={(params) => AdminService().adminAddSongAdminQueueAddPost(queueType, params)}
+        />
       </div>
 
       {error && (
