@@ -15,7 +15,6 @@ from mutagen.id3 import TPE2
 from mutagen.mp3 import MP3
 
 from app.services import ffmpeg
-from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +127,7 @@ async def download_song(url: str, mainloop: bool = False) -> YoutubeDownloadResu
     if urllib.parse.urlparse(url).scheme not in ("http", "https"):
         raise YoutubeDownloadException(YoutubeErrorType.INVALID_URL)
 
-    target_suffix = MAINLOOP_DIRECTORY if mainloop else USER_DIRECTORY
-    target_dir = settings.VOLUME_PATH + target_suffix
+    target_dir = MAINLOOP_DIRECTORY if mainloop else USER_DIRECTORY
 
     try:
         # Extract info in thread pool (non-blocking)

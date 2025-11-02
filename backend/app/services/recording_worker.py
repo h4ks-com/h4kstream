@@ -103,10 +103,16 @@ class RecordingWorker:
         filename = f"{show_name}_{timestamp}.mp3"
         filepath = Path(settings.RECORDINGS_PATH) / filename
 
+        # Wait briefly for harbor output to become available (fallible source takes time to start)
+        await asyncio.sleep(0.3)
+
+        logger.info("Connecting to http://liquidsoap:8004/stream for recording")
         process = await asyncio.create_subprocess_exec(
             "ffmpeg",
+            "-loglevel",
+            "warning",
             "-i",
-            f"http://{settings.ICECAST_HOST}:{settings.ICECAST_PORT}/radio",
+            "http://liquidsoap:8004/stream",
             "-c:a",
             "libmp3lame",
             "-b:a",
@@ -114,7 +120,7 @@ class RecordingWorker:
             "-f",
             "mp3",
             str(filepath),
-            stdout=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
 
@@ -143,7 +149,16 @@ class RecordingWorker:
             session.process.terminate()
             await session.process.wait()
         else:
-            logger.info(f"Recording process already exited for user {user_id}")
+            logger.info(f"Recording process already exited for user {user_id} with code {session.process.returncode}")
+            # Log ffmpeg output to diagnose why it exited
+            if session.process.stderr:
+                stderr_output = await session.process.stderr.read()
+                if stderr_output:
+                    logger.error(f"FFmpeg stderr: {stderr_output.decode()}")
+            if session.process.stdout:
+                stdout_output = await session.process.stdout.read()
+                if stdout_output:
+                    logger.info(f"FFmpeg stdout: {stdout_output.decode()}")
 
         await self._process_recording(session)
 

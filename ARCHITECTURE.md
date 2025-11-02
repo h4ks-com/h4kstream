@@ -67,7 +67,9 @@ Music streaming platform with web-based control interface. Features live user st
   - Transcodes all sources → Opus (128kbps, 48kHz)
   - Automatic failover with smooth 2s fade transitions
   - Telnet control interface (port 1234) for remote management
-- **Stream Output**: http://localhost:8005/radio
+- **Stream Outputs**:
+  - **RTP to Janus**: Ultra-low latency stream (~500ms) via RTP to Janus Gateway
+  - **HTTP Harbor**: Port 8004 for recording worker to capture livestreams
 - **Live Stream Input**: http://localhost/stream/live (HTTP PUT with token auth)
 
 ## Infrastructure Services
@@ -78,7 +80,8 @@ Music streaming platform with web-based control interface. Features live user st
 - **Routes**:
   - `/` → Frontend (static files or SPA)
   - `/api` → Backend instances (load balanced, least_conn)
-  - `/radio` → Icecast output stream
+  - `/janus` → Janus WebRTC Gateway HTTP API (port 8088)
+  - `/janusws` → Janus WebRTC Gateway WebSocket API (port 8188)
   - `/stream` → Liquidsoap harbor (livestream input)
 - **Security**: Blocks external access to `/api/internal/*` endpoints
 - **Load Balancing**: Multiple backend instances with least-connections policy
@@ -88,10 +91,17 @@ Music streaming platform with web-based control interface. Features live user st
 - **Port**: 6379 (internal only)
 - **Features**: Persistence with AOF + RDB snapshots
 
-### Icecast
-- **Purpose**: Final audio stream output
-- **Port**: 8000 (internal), exposed via Caddy at `/radio`
-- **Mount**: `/radio` (Opus 128kbps)
+### Janus WebRTC Gateway
+- **Purpose**: Ultra-low latency WebRTC audio streaming
+- **Ports**:
+  - 8088 (HTTP API, exposed via Caddy at `/janus`)
+  - 8188 (WebSocket API, exposed via Caddy at `/janusws`)
+  - 7088 (Admin API, internal only)
+  - 5002/UDP (RTP audio input from Liquidsoap)
+- **Plugin**: Streaming plugin configured for radio broadcast
+- **Stream ID**: 1 (configured in janus.plugin.streaming.jcfg)
+- **Latency**: ~500ms end-to-end (vs ~3-5s with Icecast)
+- **Codec**: Opus 128kbps, 48kHz, 2 channels
 
 ### Worker Services
 
@@ -107,7 +117,7 @@ Music streaming platform with web-based control interface. Features live user st
 **Recording Worker**:
 - **Purpose**: Livestream capture and archival
 - **Features**:
-  - Captures livestreams from Icecast output via ffmpeg
+  - Captures livestreams from Liquidsoap HTTP harbor (port 8004) via ffmpeg
   - Processes recordings (silence trimming, format conversion)
   - Saves to database with metadata
   - Enforces minimum duration requirements
@@ -123,30 +133,32 @@ External Access (Port 80)
     │        │  - Load balancing (least_conn)
     └────┬───┘  - Blocks /api/internal/*
          │
-    ┌────┴──────────────────────────────┐
-    │                                   │
-    ↓                                   ↓
-/api (Load Balanced)              /radio & /stream
-    │                                   │
-    ↓                                   ↓
-┌───────────────┐                 ┌──────────┐
-│ Backend x3    │←────────────────│Liquidsoap│
-│ (FastAPI)     │  Internal:      │          │
-│               │  - Auth         │  Harbor  │
-│ - JWT Auth    │  - Connect      │  :8003   │
-│ - yt-dlp      │  - Disconnect   │          │
-│ - MPD Control │  - Metadata     └─────┬────┘
-└───┬───────────┘                       │
-    │                                   │
-    ↓                                   ↓
-┌─────────────────────────────┐    ┌──────────┐
-│         REDIS               │    │ Icecast  │
-│  - Pub/Sub (events)        │    │  :8000   │
-│  - State (livestream)       │    │ /radio   │
-│  - Queue (webhooks)         │    └────┬─────┘
-└──┬──────────────────────┬───┘         │
-   │                      │             │
-   ↓                      ↓             ↓
+    ┌────┴──────────────────────────────────────────┐
+    │                                               │
+    ↓                                               ↓
+/api (Load Balanced)              /janus, /janusws & /stream
+    │                                               │
+    ↓                                               ↓
+┌───────────────┐                 ┌─────────────────────────┐
+│ Backend x3    │←────────────────│    Liquidsoap           │
+│ (FastAPI)     │  Internal:      │                         │
+│               │  - Auth         │  Harbor :8003 (input)   │
+│ - JWT Auth    │  - Connect      │  HTTP :8004 (recording) │
+│ - yt-dlp      │  - Disconnect   │                         │
+│ - MPD Control │  - Metadata     └────┬───────────┬────────┘
+└───┬───────────┘                      │           │
+    │                                  │ RTP       │ HTTP
+    ↓                                  │ :5002/UDP │ :8004
+┌─────────────────────────────┐        │           │
+│         REDIS               │        ↓           ↓
+│  - Pub/Sub (events)         │   ┌────────┐  ┌─────────────┐
+│  - State (livestream)       │   │ Janus  │  │  Recording  │
+│  - Queue (webhooks)         │   │ WebRTC │  │   Worker    │
+└──┬──────────────────────┬───┘   │ :8088  │  └─────────────┘
+   │                      │        │ :8188  │
+   ↓                      ↓        └───┬────┘
+                                      │ WebRTC
+                                      ↓
 ┌──────────────┐   ┌─────────────┐  ┌────────────┐
 │ Webhook      │   │ Recording   │  │ MPD User & │
 │ Worker       │   │ Worker      │  │ Fallback   │

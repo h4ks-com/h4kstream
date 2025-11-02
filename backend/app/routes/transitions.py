@@ -1,7 +1,7 @@
 """Admin endpoints for jingle audio file management.
 
-Jingles are short audio files that play between MPD playlist tracks (user queue and fallback).
-They do not play during livestreams to maintain low latency.
+Jingles are short audio files that play between MPD playlist tracks (user queue and fallback). They do not play during
+livestreams to maintain low latency.
 """
 
 import logging

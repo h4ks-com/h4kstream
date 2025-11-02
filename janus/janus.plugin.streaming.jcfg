@@ -1,0 +1,29 @@
+# Janus Streaming Plugin Configuration
+# Receives RTP stream from Liquidsoap and broadcasts via WebRTC
+
+general: {
+	admin_key = ""
+}
+
+# Define the radio stream mountpoint
+# Liquidsoap will send RTP to port 5002
+radio-stream: {
+	type = "rtp"
+	id = 1
+	description = "h4kstream Radio - WebRTC Stream"
+	metadata = "Live Radio Stream"
+	audio = true
+	video = false
+
+	# Audio configuration - High-fidelity Opus from Liquidsoap
+	audioport = 5002
+	audiopt = 111        # Opus payload type
+	audiortpmap = "opus/48000/2"
+	audiofmtp = "maxaveragebitrate=192000;stereo=1;sprop-stereo=1;useinbandfec=1;cbr=0;minptime=20"
+
+	# Enable this stream permanently
+	enabled = true
+
+	# Secret for admin operations (optional)
+	secret = ""
+}

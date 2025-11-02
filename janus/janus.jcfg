@@ -1,0 +1,74 @@
+# Janus Gateway main configuration
+# Minimal configuration for streaming use case
+
+general: {
+	# Logging configuration
+	debug_level = 4
+	debug_timestamps = true
+	debug_colors = false
+
+	# API configuration
+	# api_secret = ""  # Disabled for public streaming access
+	admin_secret = ""
+
+	# Session configuration
+	session_timeout = 60
+}
+
+# NAT configuration for Docker/localhost
+nat: {
+	# Disable ice_lite mode - use full ICE for localhost
+	ice_lite = false
+
+	# Allow ICE to work within Docker network
+	ice_ignore_list = "vmnet"
+
+	# Enable TCP as fallback
+	ice_tcp = true
+
+	# Map internal Docker IP to localhost for browser access
+	# This tells Janus to advertise 127.0.0.1 instead of 172.18.0.x
+	nat_1_1_mapping = "127.0.0.1"
+
+	# Keep connections alive
+	keep_private_host = true
+}
+
+# HTTP transport
+transports: {
+	http: {
+		enabled = true
+		port = 8088
+		base_path = "/janus"
+		threads = "unlimited"
+		http = true
+		https = false
+	}
+
+	# WebSocket transport for low latency
+	websockets: {
+		enabled = true
+		port = 8188
+		ws = true
+		wss = false
+	}
+}
+
+# Plugins configuration
+plugins: {
+	# Disable plugins we don't need
+	disable = "libjanus_echotest.so,libjanus_videocall.so,libjanus_videoroom.so,libjanus_textroom.so,libjanus_sip.so,libjanus_nosip.so,libjanus_recordplay.so"
+}
+
+# Events configuration (disabled for simplicity)
+events: {
+	broadcast = false
+}
+
+# Logging configuration
+loggers: {
+	# Console logging
+	stdout: {
+		enabled = true
+	}
+}

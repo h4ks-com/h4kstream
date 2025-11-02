@@ -8,6 +8,78 @@ import pytest
 
 from .conftest import ADMIN_TOKEN
 from .conftest import API_URL
+from .conftest import STREAM_BASE_URL
+
+
+def stream_to_liquidsoap(
+    token: str,
+    duration: int,
+    metadata: dict[str, str] | None = None,
+    timeout: int | None = None,
+) -> subprocess.Popen:
+    """Stream OGG/Vorbis audio to liquidsoap via Caddy using HTTP PUT + Basic Auth.
+
+    Args:
+        token: JWT authentication token
+        duration: Stream duration in seconds
+        metadata: Optional Icecast metadata (artist, title, genre, description)
+        timeout: Optional timeout for the stream
+
+    Returns:
+        subprocess.Popen object for the ffmpeg process
+    """
+    # Use HTTP Basic Auth URL format: http://source:token@host/path
+    stream_url = f"{STREAM_BASE_URL}/stream/live"
+    url = f"http://source:{token}@{stream_url.split('://', 1)[1]}"
+
+    # Build Icecast metadata headers
+    title = metadata.get("title", "") if metadata else ""
+    artist = metadata.get("artist", "") if metadata else ""
+    genre = metadata.get("genre", "") if metadata else ""
+    description = metadata.get("description", "") if metadata else ""
+
+    ice_name = f"{artist} - {title}" if artist and title else ""
+    headers = ""
+    if ice_name:
+        headers += f"ice-name: {ice_name}\r\n"
+    if genre:
+        headers += f"ice-genre: {genre}\r\n"
+    if description:
+        headers += f"ice-description: {description}\r\n"
+
+    cmd = [
+        "ffmpeg",
+        "-re",
+        "-f",
+        "lavfi",
+        "-i",
+        f"sine=frequency=1000:sample_rate=48000:duration={duration}",
+        "-t",
+        str(duration),
+        "-c:a",
+        "libvorbis",
+        "-b:a",
+        "128k",
+        "-f",
+        "ogg",
+        "-method",
+        "PUT",
+        "-auth_type",
+        "basic",
+        "-chunked_post",
+        "1",
+        "-send_expect_100",
+        "0",
+        "-content_type",
+        "application/ogg",
+    ]
+
+    if headers:
+        cmd.extend(["-headers", headers])
+
+    cmd.extend([url, "-loglevel", "error", "-stats"])
+
+    return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
 def cleanup_test_recordings(show_name_prefix: str) -> None:
@@ -41,40 +113,7 @@ def test_livestream_recording_with_5_second_minimum() -> None:
 
     assert token, "Token should be returned"
 
-    ffmpeg_process = subprocess.Popen(
-        [
-            "ffmpeg",
-            "-re",
-            "-f",
-            "lavfi",
-            "-i",
-            "sine=frequency=1000:sample_rate=48000:duration=10",
-            "-t",
-            "10",
-            "-c:a",
-            "libmp3lame",
-            "-b:a",
-            "128k",
-            "-f",
-            "mp3",
-            "-method",
-            "PUT",
-            "-auth_type",
-            "basic",
-            "-chunked_post",
-            "1",
-            "-send_expect_100",
-            "0",
-            "-content_type",
-            "audio/mpeg",
-            f"http://source:{token}@localhost/stream/live",
-            "-loglevel",
-            "error",
-            "-stats",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    ffmpeg_process = stream_to_liquidsoap(token, duration=10)
 
     try:
         stdout, stderr = ffmpeg_process.communicate(timeout=20)
@@ -134,40 +173,7 @@ def test_livestream_recording_too_short_is_deleted() -> None:
     token_data = response.json()
     token = token_data["token"]
 
-    ffmpeg_process = subprocess.Popen(
-        [
-            "ffmpeg",
-            "-re",
-            "-f",
-            "lavfi",
-            "-i",
-            "sine=frequency=1000:sample_rate=48000:duration=3",
-            "-t",
-            "3",
-            "-c:a",
-            "libmp3lame",
-            "-b:a",
-            "128k",
-            "-f",
-            "mp3",
-            "-method",
-            "PUT",
-            "-auth_type",
-            "basic",
-            "-chunked_post",
-            "1",
-            "-send_expect_100",
-            "0",
-            "-content_type",
-            "audio/mpeg",
-            f"http://source:{token}@localhost/stream/live",
-            "-loglevel",
-            "error",
-            "-stats",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    ffmpeg_process = stream_to_liquidsoap(token, duration=3)
 
     try:
         stdout, stderr = ffmpeg_process.communicate(timeout=10)
@@ -202,43 +208,11 @@ def test_recording_list_search_and_cleanup() -> None:
             assert response.status_code == 200
             token = response.json()["token"]
 
-            ffmpeg_process = subprocess.Popen(
-                [
-                    "ffmpeg",
-                    "-re",
-                    "-f",
-                    "lavfi",
-                    "-i",
-                    "sine=frequency=1000:sample_rate=48000:duration=5",
-                    "-t",
-                    "5",
-                    "-c:a",
-                    "libmp3lame",
-                    "-b:a",
-                    "128k",
-                    "-f",
-                    "mp3",
-                    "-method",
-            "PUT",
-            "-auth_type",
-            "basic",
-            "-chunked_post",
-            "1",
-            "-send_expect_100",
-            "0",
-            "-content_type",
-            "audio/mpeg",
-            f"http://source:{token}@localhost/stream/live",
-                    "-loglevel",
-                    "error",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            ffmpeg_process.communicate(timeout=10)
-            time.sleep(2)
+            ffmpeg_process = stream_to_liquidsoap(token, duration=10)
+            ffmpeg_process.communicate(timeout=15)
+            time.sleep(6)
 
-        time.sleep(1)
+        time.sleep(2)
 
         response = httpx.get(f"{API_URL}/recordings/list", params={"page": 1, "page_size": 50})
         assert response.status_code == 200
@@ -303,59 +277,15 @@ def test_recording_metadata_preservation() -> None:
 
     # Stream with embedded Icecast metadata (simulating OBS/Mixxx)
     # Liquidsoap will extract this and send to backend before triggering recording
-    # ice-name should be in "Artist - Title" format for proper parsing
-    ice_name = f"{test_metadata['artist']} - {test_metadata['title']}"
-
-    # For HTTP PUT, we need to send Icecast headers via -headers option
-    headers = (
-        f"ice-name: {ice_name}\r\n"
-        f"ice-genre: {test_metadata['genre']}\r\n"
-        f"ice-description: {test_metadata['description']}\r\n"
-    )
-
-    ffmpeg_process = subprocess.Popen(
-        [
-            "ffmpeg",
-            "-re",
-            "-f",
-            "lavfi",
-            "-i",
-            "sine=frequency=1000:sample_rate=48000:duration=5",
-            "-t",
-            "5",
-            "-c:a",
-            "libmp3lame",
-            "-b:a",
-            "128k",
-            "-f",
-            "mp3",
-            "-method",
-            "PUT",
-            "-auth_type",
-            "basic",
-            "-chunked_post",
-            "1",
-            "-send_expect_100",
-            "0",
-            "-content_type",
-            "audio/mpeg",
-            "-headers",
-            headers,
-            f"http://source:{token}@localhost/stream/live",
-            "-loglevel",
-            "error",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    ffmpeg_process = stream_to_liquidsoap(token, duration=10, metadata=test_metadata)
 
     try:
-        ffmpeg_process.communicate(timeout=15)
+        ffmpeg_process.communicate(timeout=20)
     except subprocess.TimeoutExpired:
         ffmpeg_process.kill()
         pytest.fail("FFmpeg timed out")
 
-    time.sleep(3)
+    time.sleep(6)
 
     response = httpx.get(f"{API_URL}/recordings/list", params={"show_name": show_name})
     assert response.status_code == 200

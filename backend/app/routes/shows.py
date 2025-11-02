@@ -27,6 +27,7 @@ from app.models import SuccessResponse
 from app.services.crud_service import CRUDService
 from app.services.jwt_service import decode_token
 from app.services.jwt_service import generate_livestream_token
+from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +251,7 @@ async def admin_upload_show_intro(
 
     # Generate unique filename: show_{show_id}_{original_name}
     safe_filename = f"show_{show_id}_{file.filename}"
-    intro_dir = Path("/livestream_intros")
+    intro_dir = Path(settings.DATA_PATH) / "transitions"
     intro_path = intro_dir / safe_filename
 
     # Ensure directory exists
@@ -293,7 +294,7 @@ def admin_remove_show_intro(
 
     # Delete file if it exists
     if show.intro_filename:
-        intro_path = Path("/livestream_intros") / show.intro_filename
+        intro_path = Path(settings.DATA_PATH) / "transitions" / show.intro_filename
         if intro_path.exists():
             try:
                 intro_path.unlink()

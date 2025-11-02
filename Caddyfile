@@ -64,11 +64,49 @@
 		}
 	}
 
-	# Radio stream - proxy to Icecast
-	handle /radio {
-		reverse_proxy icecast:8000 {
-			# Streaming-specific settings
+	# Janus WebRTC API endpoints
+	handle /janus {
+		reverse_proxy host.docker.internal:8088 {
+			# WebRTC signaling headers
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+
+			# Long-polling support - disable response buffering and timeouts
 			flush_interval -1
+
+			# Allow long-lived connections for Janus long polling
+			transport http {
+				read_timeout 0
+				write_timeout 0
+			}
+		}
+	}
+
+	handle /janus/* {
+		reverse_proxy host.docker.internal:8088 {
+			# WebRTC signaling headers
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+
+			# Long-polling support - disable response buffering and timeouts
+			flush_interval -1
+
+			# Allow long-lived connections for Janus long polling
+			transport http {
+				read_timeout 0
+				write_timeout 0
+			}
+		}
+	}
+
+	# Janus WebSocket endpoint (for WebRTC signaling)
+	handle /janusws {
+		reverse_proxy host.docker.internal:8188 {
+			# WebSocket upgrade headers
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
 			header_up X-Real-IP {remote_host}
 		}
 	}

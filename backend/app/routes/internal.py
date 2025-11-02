@@ -75,7 +75,8 @@ async def livestream_connect(
     user_id = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
     show_name = result.get("show_name", "unknown") if isinstance(result, dict) else "unknown"
     min_recording_duration = result.get("min_recording_duration", 60) if isinstance(result, dict) else 60
-    intro_filename = result.get("intro_filename") if isinstance(result, dict) else None
+    intro_filename_raw = result.get("intro_filename") if isinstance(result, dict) else None
+    intro_filename: str | None = intro_filename_raw if isinstance(intro_filename_raw, str) else None
 
     description = "A livestream was started"
     await event_publisher.publish(

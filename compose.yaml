@@ -4,13 +4,15 @@ x-backend-common: &backend-common
     context: ./backend
     dockerfile: Dockerfile
   volumes:
-  - ./data:/app/data
+  - ${VOLUME_PATH}:/app/data
   - ${VOLUME_PATH}/music:/music
   - ${VOLUME_PATH}/songs:/songs
   environment:
   - REDIS_HOST=redis
   - REDIS_PORT=6379
-  - ICECAST_HOST=icecast
+  - JANUS_HOST=host.docker.internal
+  - JANUS_HTTP_PORT=8088
+  - JANUS_WS_PORT=8188
   - MPD_USER_HOST=mpd-user
   - MPD_USER_PORT=6600
   - MPD_FALLBACK_HOST=mpd-fallback
@@ -26,7 +28,7 @@ x-backend-common: &backend-common
   - RELOAD=${RELOAD}
   depends_on:
   - redis
-  - icecast
+  - janus
   - mpd-user
   - mpd-fallback
   restart: unless-stopped
@@ -37,7 +39,7 @@ x-backend-dev: &backend-dev
   command: ["uv", "run", "python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
   volumes:
   - ./backend/app:/app/app
-  - ./data:/app/data
+  - ${VOLUME_PATH}:/app/data
   - ${VOLUME_PATH}/music:/music
   - ${VOLUME_PATH}/songs:/songs
 
@@ -45,11 +47,11 @@ x-backend-dev: &backend-dev
 x-frontend-common: &frontend-common
   container_name: frontend
   volumes:
-  - ./data/caddy/logs:/var/log/caddy
+  - ${VOLUME_PATH}/caddy/logs:/var/log/caddy
   ports:
   - '80:80'
   depends_on:
-  - icecast
+  - janus
   - liquidsoap
   restart: unless-stopped
 
@@ -118,12 +120,12 @@ services:
       dockerfile: Dockerfile
     command: ["uv", "run", "python", "-m", "app.services.recording_worker"]
     volumes:
-    - ./data:/app/data
+    - ${VOLUME_PATH}:/app/data
     environment:
     - REDIS_HOST=redis
     - REDIS_PORT=6379
-    - ICECAST_HOST=icecast
-    - ICECAST_PORT=8000
+    - LIQUIDSOAP_HOST=liquidsoap
+    - LIQUIDSOAP_RECORDING_PORT=8004
     - DATA_PATH=/app/data
     - RECORDINGS_PATH=/app/data/recordings
     - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
@@ -131,7 +133,7 @@ services:
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
     depends_on:
     - redis
-    - icecast
+    - liquidsoap
     restart: unless-stopped
 
   redis:
@@ -153,7 +155,7 @@ services:
     - --appendfsync
     - everysec
     volumes:
-    - ./data/redis:/data
+    - ${VOLUME_PATH}/redis:/data
     ports:
     - '6379:6379'
     restart: unless-stopped
@@ -164,7 +166,7 @@ services:
     user: root
     volumes:
     - ${VOLUME_PATH}/music:/music
-    - ${VOLUME_PATH}/playlist:/var/lib/mpd/playlists:rw
+    - ${VOLUME_PATH}/mpd-user:/var/lib/mpd:rw
     - ./mpd/mpd.conf:/etc/mpd.conf:ro
     ports:
     - '6600:6600'
@@ -176,7 +178,7 @@ services:
     user: root
     volumes:
     - ${VOLUME_PATH}/music:/music
-    - ${VOLUME_PATH}/playlist-fallback:/var/lib/mpd/playlists:rw
+    - ${VOLUME_PATH}/mpd-fallback:/var/lib/mpd:rw
     - ./mpd/mpd-fallback.conf:/etc/mpd.conf:ro
     ports:
     - '6601:6601'
@@ -189,11 +191,11 @@ services:
     volumes:
     - ./liquidsoap/radio.liq:/etc/liquidsoap/radio.liq:ro
     - ./liquidsoap/default_transition.mp3:/etc/liquidsoap/default_transition.mp3:ro
-    - ./data/transitions:/transitions:ro
+    - ${VOLUME_PATH}/transitions:/transitions:ro
+    - ${VOLUME_PATH}/recordings:/recordings:rw
     environment:
-    - ICECAST_HOST=icecast
-    - ICECAST_PORT=8000
-    - ICECAST_PASSWORD=${ICECAST_SOURCE_PASSWORD}
+    - JANUS_HOST=host.docker.internal
+    - JANUS_RTP_PORT=5002
     - MPD_USER_HOST=mpd-user
     - MPD_USER_PORT=8001
     - MPD_FALLBACK_HOST=mpd-fallback
@@ -202,24 +204,25 @@ services:
     - BACKEND_PORT=80
     - BACKEND_BASE_PATH=/api
     - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
+    ports:
+    - '8004:8004'  # HTTP stream for recording worker
     depends_on:
     - mpd-user
     - mpd-fallback
-    - icecast
+    - janus
     restart: unless-stopped
     command: /etc/liquidsoap/radio.liq
 
-  icecast:
-    image: infiniteproject/icecast:latest
-    container_name: icecast
+  janus:
+    image: canyan/janus-gateway:latest
+    container_name: janus
+    network_mode: host
+    # Note: Uses host networking to resolve mDNS candidates from browser
     volumes:
-    - ./icecast/icecast.xml:/etc/icecast.xml:ro
-    environment:
-    - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD}
-    - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD}
-    - ICECAST_PASSWORD=${ICECAST_PASSWORD}
-    - ICECAST_HOSTNAME=localhost
+    - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
+    - ./janus/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro
     restart: unless-stopped
+    command: ["/usr/local/bin/janus", "--configs-folder=/usr/local/etc/janus"]
 
   # Frontend - Production: multi-stage build
   frontend:
@@ -231,7 +234,7 @@ services:
     - main-1
     - main-2
     - main-3
-    - icecast
+    - janus
     - liquidsoap
     profiles: ["production", ""]
 
@@ -242,12 +245,12 @@ services:
     volumes:
     - ./Caddyfile:/etc/caddy/Caddyfile:ro
     - ./frontend/build:/srv:ro
-    - ./data/caddy/logs:/var/log/caddy
+    - ${VOLUME_PATH}/caddy/logs:/var/log/caddy
     depends_on:
     - main-1-dev
     - main-2-dev
     - main-3-dev
-    - icecast
+    - janus
     - liquidsoap
     profiles: ["dev"]
 

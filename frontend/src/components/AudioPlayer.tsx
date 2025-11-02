@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, createContext, useContext } from 'react';
+import { useJanusStream } from '../hooks/useJanusStream';
 
 interface AudioPlayerContextType {
   muteRadio: () => void;
@@ -39,58 +40,88 @@ export const AudioPlayer: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.7);
+  const [isAudioMuted, setIsAudioMuted] = useState(true); // Always start muted
   const [error, setError] = useState<string | null>(null);
   const [amplitude, setAmplitude] = useState(0);
 
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  // WebRTC connection via Janus using WebSocket
+  // Construct WebSocket URL based on current page protocol
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProtocol}//${window.location.host}/janusws`;
 
-    audio.volume = volume;
-    audio.muted = isMuted;
-
-    // Auto-play on mount with a small delay
-    const timer = setTimeout(() => {
-      const playAudio = async () => {
+  const { isConnected, error: janusError, mediaStream } = useJanusStream({
+    janusUrl: wsUrl,
+    streamId: 1, // Stream ID from janus.plugin.streaming.jcfg
+    onTrack: async (stream) => {
+      console.log('WebRTC track received, attaching to audio element');
+      if (audioRef.current) {
+        audioRef.current.srcObject = stream;
+        // Immediately try to play
         try {
-          await audio.play();
+          await audioRef.current.play();
           setIsPlaying(true);
           setError(null);
+          console.log('Audio playback started successfully');
         } catch (err) {
-          // NotAllowedError is expected - browser blocks autoplay without user interaction
-          // Don't show error, just wait for user to click play
           if (err instanceof Error && err.name === 'NotAllowedError') {
-            console.log('Autoplay blocked by browser - waiting for user interaction');
+            console.log('Autoplay blocked - user needs to click play');
+            setError('Click play to start streaming');
           } else {
-            console.error('Autoplay failed:', err);
+            console.error('Failed to start audio:', err);
             setError('Click play to start streaming');
           }
         }
-      };
-      playAudio();
-    }, 100);
+      }
+    }
+  });
 
-    return () => clearTimeout(timer);
-  }, []);
+  // Show Janus errors
+  useEffect(() => {
+    if (janusError) {
+      setError(janusError);
+    } else if (isConnected) {
+      setError(null);
+    }
+  }, [janusError, isConnected]);
+
+  // Control volume through Web Audio API GainNode
+  useEffect(() => {
+    const gainNode = gainNodeRef.current;
+    if (!gainNode) return;
+
+    // Apply volume and mute through gain
+    gainNode.gain.value = isAudioMuted ? 0 : volume;
+  }, [volume, isAudioMuted]);
+
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !isPlaying) return;
+    if (!audio || !isPlaying || !mediaStream) return;
 
     if (!audioContextRef.current) {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       audioContextRef.current = new AudioContext();
+
+      // Create analyser for amplitude visualization
       const analyser = audioContextRef.current.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 512; // Increased for better frequency resolution
+      analyser.smoothingTimeConstant = 0.6; // Smoother animation (0-1, higher = smoother)
       analyserRef.current = analyser;
 
-      const source = audioContextRef.current.createMediaElementSource(audio);
+      // Create gain node for volume control
+      const gainNode = audioContextRef.current.createGain();
+      gainNode.gain.value = isAudioMuted ? 0 : volume;
+      gainNodeRef.current = gainNode;
+
+      // Connect audio graph: source → analyser → gain → destination
+      const source = audioContextRef.current.createMediaStreamSource(mediaStream);
       source.connect(analyser);
-      analyser.connect(audioContextRef.current.destination);
+      analyser.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
     }
 
     const analyser = analyserRef.current;
@@ -101,7 +132,8 @@ export const AudioPlayer: React.FC = () => {
     const updateAmplitude = () => {
       analyser.getByteFrequencyData(dataArray);
       const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-      const normalizedAmplitude = Math.min((average / 255) * 0.5, 1.0);
+      // Normalize to 0-1 range with boost for better visualization
+      const normalizedAmplitude = Math.min((average / 255) * 1.5, 1.0);
       setAmplitude(normalizedAmplitude);
       animationFrameRef.current = requestAnimationFrame(updateAmplitude);
     };
@@ -113,32 +145,20 @@ export const AudioPlayer: React.FC = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isPlaying]);
+  }, [isPlaying, mediaStream]);
 
   const togglePlayPause = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    const newMuted = !isAudioMuted;
+    setIsAudioMuted(newMuted);
 
-    try {
-      if (isPlaying) {
-        audio.pause();
-        setIsPlaying(false);
-      } else {
-        await audio.play();
-        setIsPlaying(true);
-        setError(null);
+    // Ensure audio element is playing (needed for Web Audio API)
+    if (!newMuted && audioRef.current && audioRef.current.paused) {
+      try {
+        await audioRef.current.play();
+      } catch (err) {
+        console.error('Failed to start audio:', err);
+        setError('Click play to start streaming');
       }
-    } catch (err) {
-      console.error('Playback error:', err);
-      setError('Failed to play stream');
-    }
-  };
-
-  const toggleMute = () => {
-    const newMuted = !isMuted;
-    setIsMuted(newMuted);
-    if (audioRef.current) {
-      audioRef.current.muted = newMuted;
     }
   };
 
@@ -150,18 +170,6 @@ export const AudioPlayer: React.FC = () => {
     }
   };
 
-  const jumpToLive = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const wasPlaying = !audio.paused;
-    audio.load();
-
-    if (wasPlaying) {
-      audio.play().catch(console.error);
-    }
-  };
-
   return (
     <div className="h4ks-card sticky top-0 z-10">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -169,9 +177,10 @@ export const AudioPlayer: React.FC = () => {
           <button
             onClick={togglePlayPause}
             className="h4ks-btn text-2xl w-14 h-14 flex items-center justify-center"
-            aria-label={isPlaying ? 'Pause' : 'Play'}
+            aria-label={isAudioMuted ? 'Unmute' : 'Mute'}
+            disabled={!isConnected}
           >
-            {isPlaying ? '⏸' : '▶'}
+            {isAudioMuted ? '▶' : '⏸'}
           </button>
 
           <div className="flex flex-col">
@@ -184,37 +193,14 @@ export const AudioPlayer: React.FC = () => {
               </div>
             )}
             {!error && (
-              <div className="flex items-center space-x-2">
-                <div className="text-gray-400 text-sm">
-                  {isPlaying ? 'LIVE' : 'PAUSED'}
-                </div>
-                {isPlaying && (
-                  <button
-                    onClick={jumpToLive}
-                    className="text-xs px-2 py-1 bg-orange-900 border border-orange-700 text-orange-300
-                             hover:bg-orange-800 hover:border-orange-600 transition-colors rounded"
-                    title="Sync playback to the live stream"
-                  >
-                    ⏭ SYNC
-                  </button>
-                )}
+              <div className="text-gray-400 text-sm">
+                {!isConnected ? 'CONNECTING...' : isAudioMuted ? 'MUTED' : 'LIVE'}
               </div>
             )}
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
-          <button
-            onClick={toggleMute}
-            className={`px-3 py-2 border transition-colors font-mono text-sm ${
-              isMuted
-                ? 'bg-orange-900 border-orange-700 text-orange-300 hover:bg-orange-800'
-                : 'bg-h4ks-dark-700 border-h4ks-green-800 text-h4ks-green-400 hover:bg-h4ks-dark-600'
-            }`}
-            aria-label={isMuted ? 'Unmute' : 'Mute'}
-          >
-            {isMuted ? 'MUTED' : 'VOL'}
-          </button>
           <input
             type="range"
             min="0"
@@ -222,10 +208,12 @@ export const AudioPlayer: React.FC = () => {
             step="0.01"
             value={volume}
             onChange={handleVolumeChange}
+            disabled={!isConnected}
             className="w-32 h-2 bg-h4ks-dark-600 rounded-lg appearance-none cursor-pointer
                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4
                      [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-h4ks-green-500
-                     [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
+                     [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer
+                     disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span className="text-h4ks-green-400 text-sm w-10 text-right font-mono">
             {Math.round(volume * 100)}%
@@ -249,11 +237,12 @@ export const AudioPlayer: React.FC = () => {
         </div>
       )}
 
+      {/* WebRTC audio element - muted because Web Audio API handles playback */}
       <audio
         ref={audioRef}
-        src="/radio"
         preload="none"
-        onError={() => setError('Stream connection failed')}
+        autoPlay
+        muted
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
       />

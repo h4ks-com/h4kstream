@@ -4,9 +4,8 @@
 settings.init.allow_root.set(true)
 
 # Get environment variables
-icecast_host = environment.get("ICECAST_HOST")
-icecast_port = int_of_string(environment.get("ICECAST_PORT"))
-icecast_password = environment.get("ICECAST_PASSWORD")
+janus_host = environment.get("JANUS_HOST")
+janus_rtp_port = int_of_string(environment.get("JANUS_RTP_PORT"))
 mpd_user_host = environment.get("MPD_USER_HOST")
 mpd_user_port = environment.get("MPD_USER_PORT")
 mpd_fallback_host = environment.get("MPD_FALLBACK_HOST")
@@ -32,7 +31,8 @@ log("Starting h4kstream Radio...")
 log("User queue: http://#{mpd_user_host}:#{mpd_user_port}/")
 log("Fallback: http://#{mpd_fallback_host}:#{mpd_fallback_port}/")
 log("Live stream: harbor on port 8003")
-log("Output: #{icecast_host}:#{icecast_port}/radio")
+log("Output: RTP to Janus at #{janus_host}:#{janus_rtp_port}")
+log("Recording output: HTTP on port 8004")
 log("Telnet control: port 1234")
 
 # Track current livestream token for callbacks
@@ -80,7 +80,7 @@ end
 # Get livestream intro jingle (custom or default)
 def get_livestream_intro(intro_filename) =
   if intro_filename != "" then
-    intro_path = "/livestream_intros/#{intro_filename}"
+    intro_path = "/transitions/#{intro_filename}"
     # Check if custom intro exists
     if file.exists(intro_path) then
       log("Using custom livestream intro: #{intro_path}")
@@ -250,12 +250,12 @@ def report_metadata(source_name, metadata) =
 end
 
 # Live stream harbor input (highest priority) with intro jingles
-# Low-latency settings: buffer=0.5s, max=2.0s for minimal delay
+# Balanced quality settings: buffer=2.0s, max=5.0s for better quality
 live = input.harbor(
   id="live",
   port=8003,
-  buffer=0.5,
-  max=2.0,
+  buffer=2.0,
+  max=5.0,
   "live",
   auth=livestream_auth,
   on_connect=on_livestream_connect,
@@ -268,15 +268,6 @@ livestream_intros = cue_cut(livestream_intro_queue)
 live = add(normalize=false, weights=[1.0, 0.8], [live, livestream_intros])
 
 log("Livestream configured with low-latency settings and intro jingles")
-
-# Record livestream to MP3 files
-output.file(
-  %mp3(bitrate=320, stereo=true),
-  fallible=true,
-  "/recordings/%Y%m%d-%H%M%S.mp3",
-  live
-)
-log("Livestream recording configured -> /recordings/")
 
 # User queue MPD (consume mode auto-removes songs after playback)
 mpd_user = input.http(
@@ -347,31 +338,39 @@ radio = fallback(
 # Safety wrapper to ensure stream never fails
 radio = mksafe(radio)
 
-# Output to Icecast with low-latency Opus encoding
-output.icecast(
-  %opus(
-    # Low-latency application mode (reduces algorithmic latency)
-    application="restricted_lowdelay",
-    # 10ms frame size for optimal quality/latency balance (~12.5ms total latency)
-    frame_size=10.,
-    # Audio quality settings
-    bitrate=128,
-    samplerate=48000,
-    channels=2,
-    # VBR for better quality
-    vbr="constrained",
-    # Encoding complexity (0-10, higher=better quality)
-    complexity=8
+# Output 1: RTP to Janus Gateway for WebRTC streaming
+# High-fidelity Opus: transparent quality music streaming
+output.url(
+  url="rtp://#{janus_host}:#{janus_rtp_port}",
+  %ffmpeg(
+    format="rtp",
+    %audio(
+      codec="libopus",
+      b="192k",
+      ar=48000,
+      ac=2,
+      application="audio",
+      vbr="on",
+      compression_level=10,
+      frame_duration=20,
+      packet_loss=0
+    )
   ),
-  host = icecast_host,
-  port = icecast_port,
-  password = icecast_password,
-  mount = "/radio",
-  name = "h4kstream Radio - Low Latency",
-  description = "h4kstream - Opus 128kbps, ~3-5s latency",
-  genre = "Various",
-  url = "http://radio.h4ks.com",
   radio
 )
+
+log("RTP output to Janus configured - Ultra low latency WebRTC streaming via FFmpeg")
+
+# Output 2: HTTP stream for recording worker (livestream only, not MPD queue)
+# This allows the recording worker to record ONLY the livestream source
+output.harbor(
+  %mp3(bitrate=320, stereo=true),
+  fallible=true,
+  port=8004,
+  mount="/stream",
+  live
+)
+
+log("HTTP output for recording worker configured on port 8004 (livestream only)")
 
 log("Liquidsoap started - continuous streaming with 4-tier failsafe (live > user > fallback > emergency)")

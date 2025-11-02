@@ -207,6 +207,10 @@ async def add_song(
         # Move to final location
         if not temp_path:
             raise ValueError("No file to process")
+
+        # Ensure target directory exists
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
         shutil.move(str(temp_path), str(target_path))
         temp_path = None
     except Exception:

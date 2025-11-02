@@ -75,7 +75,7 @@ class LivestreamService:
         logger.info(f"Livestream slot reserved for user {user_id} (show: {show_name}) from {address}")
         return True, None, show_name, min_recording_duration
 
-    async def track_connection_start(self, token: str) -> dict[str, str | int]:
+    async def track_connection_start(self, token: str) -> dict[str, str | int | None]:
         """Track livestream connection start time.
 
         :param token: JWT livestream token
