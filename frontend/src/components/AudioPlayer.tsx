@@ -145,7 +145,7 @@ export const AudioPlayer: React.FC = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isPlaying, mediaStream]);
+  }, [isPlaying, mediaStream, isAudioMuted, volume]);
 
   const togglePlayPause = async () => {
     const newMuted = !isAudioMuted;

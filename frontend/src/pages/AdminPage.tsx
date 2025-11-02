@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
 import { AdminService, WebhooksService, ShowsService } from '../utils/apiClient';
@@ -571,7 +571,6 @@ const QueueSection: React.FC = () => {
   const [queueType, setQueueType] = useState<'user' | 'fallback'>('user');
   const [userSongs, setUserSongs] = useState<SongItem[]>([]);
   const [fallbackSongs, setFallbackSongs] = useState<SongItem[]>([]);
-  const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [url, setUrl] = useState('');
@@ -581,7 +580,6 @@ const QueueSection: React.FC = () => {
 
   const fetchQueue = async () => {
     try {
-      setLoading(true);
       const [userQueue, fallbackQueue] = await Promise.all([
         AdminService().adminListSongsAdminQueueListGet('user'),
         AdminService().adminListSongsAdminQueueListGet('fallback'),
@@ -590,8 +588,6 @@ const QueueSection: React.FC = () => {
       setFallbackSongs(fallbackQueue);
     } catch (err: any) {
       setError(err.body?.detail || 'Failed to fetch queue');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1074,7 +1070,7 @@ const TransitionsSection: React.FC = () => {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const fetchTransitions = async (type?: TransitionType) => {
+  const fetchTransitions = useCallback(async (type?: TransitionType) => {
     try {
       setLoading(true);
       setError('');
@@ -1092,7 +1088,7 @@ const TransitionsSection: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const uploadTransition = async () => {
     if (!uploadFile) {
@@ -1146,7 +1142,7 @@ const TransitionsSection: React.FC = () => {
 
   useEffect(() => {
     fetchTransitions();
-  }, []);
+  }, [fetchTransitions]);
 
   return (
     <div>

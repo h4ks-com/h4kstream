@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     @field_validator("VOLUME_PATH")
     def validate_volumes_path(cls, value):
         if not os.path.exists(value):
-            os.makedirs(value)
+            os.makedirs(value, exist_ok=True)
         return value
 
 

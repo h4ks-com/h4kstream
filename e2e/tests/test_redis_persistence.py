@@ -2,6 +2,7 @@
 
 import subprocess
 import time
+from pathlib import Path
 
 import httpx
 import jwt
@@ -65,10 +66,12 @@ def test_redis_persistence_after_restart(client: httpx.Client, admin_headers: di
 
     # Step 4: Restart Redis container
     print("\n4. Restarting Redis container...")
+    # Get project root: e2e/tests/test_redis_persistence.py -> e2e/tests -> e2e -> project_root
+    project_root = Path(__file__).parent.parent.parent
     subprocess.run(
         ["docker", "compose", "restart", "redis"],
         check=True,
-        cwd="/Users/matheus/projects/h4ks/hackstream",
+        cwd=str(project_root),
         capture_output=True
     )
 

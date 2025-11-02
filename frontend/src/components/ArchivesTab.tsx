@@ -213,7 +213,7 @@ export const ArchivesTab: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  const fetchArchives = async () => {
+  const fetchArchives = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -236,11 +236,11 @@ export const ArchivesTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchText, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchArchives();
-  }, []);
+  }, [fetchArchives]);
 
   const handleSearch = () => {
     fetchArchives();

@@ -1,13 +1,13 @@
 .PHONY: fix check test
 
 fix:
+	@echo "Running pre-commit with auto-fix..."
 	pre-commit run --all-files
+	@echo "✅ All fixes applied!"
 
 check:
-	@echo "Running ruff check..."
-	uv run ruff check tests/
-	@echo "Running mypy..."
-	uv run mypy tests/
+	@echo "Running pre-commit checks..."
+	pre-commit run --all-files
 	@echo "✅ All checks passed!"
 
 test:

@@ -8,6 +8,10 @@ runs:
     shell: bash
     run: cp .env.example .env
 
+  - name: install ffmpeg
+    shell: bash
+    run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
   - name: Install uv
     uses: astral-sh/setup-uv@v7
     with:
@@ -17,17 +21,27 @@ runs:
   - name: Set up Python for e2e
     uses: actions/setup-python@v5
     with:
-      python-version-file: 'e2e/.python-version'
+      python-version: '3.12'
 
   - name: Install e2e dependencies
     shell: bash
     working-directory: e2e
     run: uv sync
 
+  - name: Install pre-commit
+    shell: bash
+    run: uv tool install pre-commit
+
   - name: Run e2e linting
     shell: bash
     working-directory: e2e
     run: make check
+
+  - name: Create data directories
+    shell: bash
+    run: |
+      mkdir -p data/music/user data/music/fallback data/recordings data/transitions data/db
+      chmod -R 777 data
 
   - name: Build and start Docker Compose
     shell: bash
@@ -37,7 +51,7 @@ runs:
     shell: bash
     run: |
       echo "Waiting for services to start..."
-      timeout 120 bash -c 'until curl -f http://localhost:8383/health > /dev/null 2>&1; do sleep 2; done'
+      timeout 120 bash -c 'until curl -f http://localhost/api/health > /dev/null 2>&1; do sleep 2; done'
       echo "API is up!"
 
   - name: Run E2E tests

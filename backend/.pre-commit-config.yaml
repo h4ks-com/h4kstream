@@ -1,25 +1,25 @@
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-  rev: v0.9.1
+  rev: v0.14.3
   hooks:
   - id: ruff
     args: ["--fix"]
 
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.14.0
+  rev: v2.15.0
   hooks:
   - id: pretty-format-yaml
     args: [--autofix, --indent, '2', --preserve-quotes, --line-width, "120"]
 
 - repo: https://github.com/myint/docformatter
-  rev: "eb1df347edd128b30cd3368dddc3aa65edcfac38"
+  rev: "v1.7.7"
   hooks:
   - id: docformatter
     args: ["--config", "./backend/pyproject.toml"]
 
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v1.14.1
+  rev: v1.18.2
   hooks:
   - id: mypy
     files: ^(backend)
@@ -34,8 +34,8 @@ repos:
   hooks:
   - id: no-scoped-imports
     name: No scoped imports (must be at top of file)
-    entry: bash -c 'if grep -rn "^[[:space:]].*\bimport\b" backend/app --include="*.py" | grep -v "^[^:]*:[[:space:]]*#";
-      then echo "❌ Found scoped imports - all imports must be at top of file"; exit 1; fi'
+    entry: bash -c 'if grep -rn "^[[:space:]].*\bimport\b" backend/app --include="*.py" | grep -v 
+      "^[^:]*:[[:space:]]*#"; then echo "❌ Found scoped imports - all imports must be at top of file"; exit 1; fi'
     language: system
     files: ^backend/.*\.py$
     pass_filenames: false

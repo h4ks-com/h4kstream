@@ -1,3 +1,5 @@
+import os
+
 import httpx
 import jwt
 import pytest
@@ -15,7 +17,9 @@ from tests.api_endpoints import queue_delete
 @pytest.fixture
 def jwt_token_with_limit(client: httpx.Client, admin_headers: dict[str, str]) -> str:
     """Create a JWT token with limit of 3 for testing."""
-    response = client.post(ADMIN_TOKEN_CREATE, json={"duration_seconds": 3600, "max_queue_songs": 3}, headers=admin_headers)
+    response = client.post(
+        ADMIN_TOKEN_CREATE, json={"duration_seconds": 3600, "max_queue_songs": 3}, headers=admin_headers
+    )
     assert response.status_code == 200
     token: str = response.json()["token"]
     return token
@@ -36,7 +40,9 @@ def clean_queues(client: httpx.Client, admin_headers: dict[str, str]) -> None:
 
 def test_token_with_max_queue_songs(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test creating token with custom max_queue_songs."""
-    response = client.post(ADMIN_TOKEN_CREATE, json={"duration_seconds": 3600, "max_queue_songs": 5}, headers=admin_headers)
+    response = client.post(
+        ADMIN_TOKEN_CREATE, json={"duration_seconds": 3600, "max_queue_songs": 5}, headers=admin_headers
+    )
     assert response.status_code == 200
     assert "token" in response.json()
 
@@ -110,7 +116,9 @@ def test_different_tokens_have_different_user_ids(client: httpx.Client, admin_he
 def test_jwt_token_has_expected_structure(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that JWT tokens can be created with custom max_queue_songs."""
 
-    response = client.post(ADMIN_TOKEN_CREATE, json={"duration_seconds": 3600, "max_queue_songs": 5}, headers=admin_headers)
+    response = client.post(
+        ADMIN_TOKEN_CREATE, json={"duration_seconds": 3600, "max_queue_songs": 5}, headers=admin_headers
+    )
     token = response.json()["token"]
 
     decoded = jwt.decode(token, options={"verify_signature": False})
@@ -154,6 +162,7 @@ def test_max_add_requests_validation(client: httpx.Client, admin_headers: dict[s
     assert response.status_code == 422
 
 
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Cant use youtube in github actions")
 def test_max_add_requests_enforced_with_deletes(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that max_add_requests limit persists even after deleting songs.
 

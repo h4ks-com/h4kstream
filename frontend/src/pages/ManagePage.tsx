@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
 import { QueueService, ShowsService } from '../utils/apiClient';
@@ -239,7 +239,7 @@ const LivestreamSection: React.FC = () => {
   const [token, setToken] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const fetchShows = async () => {
+  const fetchShows = useCallback(async () => {
     try {
       setLoading(true);
       const showsList = await ShowsService().listUserShowsShowsGet();
@@ -252,7 +252,7 @@ const LivestreamSection: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedShowId]);
 
   const createToken = async () => {
     if (!selectedShowId) {
@@ -294,7 +294,7 @@ const LivestreamSection: React.FC = () => {
 
   useEffect(() => {
     fetchShows();
-  }, []);
+  }, [fetchShows]);
 
   return (
     <div>

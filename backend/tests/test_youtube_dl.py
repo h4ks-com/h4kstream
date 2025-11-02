@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from app.services.youtube_dl import YoutubeDownloadException
@@ -5,6 +7,7 @@ from app.services.youtube_dl import YoutubeErrorType
 from app.services.youtube_dl import download_song
 
 
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip public endpoint tests in CI environment")
 async def test_youtube_dl():
     result = await download_song("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
     assert "Rick Astley" in result.title
