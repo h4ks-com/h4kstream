@@ -5,6 +5,8 @@ interface Metadata {
   artist: string | null;
   genre: string | null;
   description: string | null;
+  show_name?: string | null;
+  username?: string | null;
 }
 
 interface MetadataResponse {
@@ -85,6 +87,21 @@ export const MetadataDisplay: React.FC = () => {
       </div>
 
       <div className="space-y-2">
+        {/* Show livestream info if available */}
+        {source === 'livestream' && metadata.show_name && (
+          <div>
+            <span className="text-gray-500 text-sm">SHOW: </span>
+            <span className="text-gray-100">{metadata.show_name}</span>
+          </div>
+        )}
+
+        {source === 'livestream' && metadata.username && (
+          <div>
+            <span className="text-gray-500 text-sm">DJ: </span>
+            <span className="text-gray-100">{metadata.username}</span>
+          </div>
+        )}
+
         {metadata.title && (
           <div>
             <span className="text-gray-500 text-sm">TITLE: </span>
@@ -113,7 +130,7 @@ export const MetadataDisplay: React.FC = () => {
           </div>
         )}
 
-        {!metadata.title && !metadata.artist && (
+        {!metadata.title && !metadata.artist && source !== 'livestream' && (
           <div className="text-gray-500 italic">
             No metadata available
           </div>

@@ -47,9 +47,13 @@ class RecordingWorker:
         assert self.redis is not None, "Redis connection failed"
 
         pubsub = self.redis.pubsub()
-        await pubsub.subscribe("events:livestream_started", "events:livestream_ended")
+        await pubsub.subscribe(
+            "events:livestream_started",
+            "events:livestream_ended",
+            "events:metadata_updated"  # Subscribe to metadata updates
+        )
 
-        logger.info("Recording worker started, listening for livestream events")
+        logger.info("Recording worker started, listening for livestream events and metadata updates")
 
         async for message in pubsub.listen():
             if message["type"] == "message":
@@ -64,6 +68,8 @@ class RecordingWorker:
                 await self._start_recording(event["data"])
             elif event_type == "livestream_ended":
                 await self._stop_recording(event["data"])
+            elif event_type == "metadata_updated":
+                await self._update_metadata(event["data"])
 
         except json.JSONDecodeError:
             logger.error(f"Invalid JSON in event: {data}")
@@ -238,6 +244,32 @@ class RecordingWorker:
             return
 
         await self._process_recording(session)
+
+    async def _update_metadata(self, data: dict) -> None:
+        """Update metadata for active recording sessions when metadata changes."""
+        source = data.get("source")
+
+        # Only update livestream metadata (user queue metadata shouldn't affect recordings)
+        if source != "livestream":
+            return
+
+        new_metadata = data.get("metadata", {})
+
+        # Update all active recording sessions with new metadata
+        for user_id, session in self.active_recordings.items():
+            # Update session metadata with new values (preserve existing if not provided)
+            session.metadata.update({
+                k: v for k, v in new_metadata.items()
+                if v is not None  # Only update non-null values
+            })
+
+            logger.info(
+                f"Updated metadata for active recording {session.filename}: "
+                f"title={session.metadata.get('title')}, "
+                f"artist={session.metadata.get('artist')}, "
+                f"genre={session.metadata.get('genre')}, "
+                f"description={session.metadata.get('description')}"
+            )
 
     def _write_ogg_metadata(self, filepath: Path, metadata: dict[str, str | None]) -> None:
         """Write metadata to OGG Vorbis file using mutagen."""

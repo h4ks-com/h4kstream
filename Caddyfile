@@ -127,14 +127,19 @@
 			header_up ice-name {header.ice-name}
 			header_up ice-description {header.ice-description}
 			header_up ice-genre {header.ice-genre}
+			header_up ice-artist {header.ice-artist}
+			header_up ice-url {header.ice-url}
+			header_up ice-public {header.ice-public}
 
 			# Streaming-optimized settings for chunked PUT requests
 			flush_interval -1
 
-			# Handle long-lived streaming connections
+			# Force HTTP/1.1 to prevent HTTP/2 negotiation issues
+			# Browser streaming with ReadableStream requires HTTP/1.1
 			transport http {
 				read_buffer 4096
 				write_buffer 4096
+				versions 1.1
 			}
 		}
 	}

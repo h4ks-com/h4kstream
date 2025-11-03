@@ -46,10 +46,11 @@ async def get_now_playing(
 
     if livestream_active:
         metadata = await redis_client.get_metadata("livestream") or {}
+        # Provide fallback values if metadata fields are empty
         if not metadata.get("title"):
-            metadata["title"] = "Testing Stream"
+            metadata["title"] = "Live Stream"
         if not metadata.get("artist"):
-            metadata["artist"] = "Testing"
+            metadata["artist"] = "Unknown Artist"
         return NowPlayingResponse(source="livestream", metadata=NowPlayingMetadata(**metadata))
 
     try:
@@ -186,6 +187,14 @@ async def update_metadata(
     )
     logger.debug(f"Published song_changed event for {request.source}")
 
+    # Publish metadata_updated event for recording worker
+    await event_publisher.publish(
+        event_type="metadata_updated",
+        data={"source": request.source, "metadata": merged},
+        description=f"Metadata updated for {request.source}",
+    )
+    logger.debug(f"Published metadata_updated event for {request.source}")
+
     return SuccessResponse()
 
 
@@ -201,6 +210,7 @@ async def update_metadata(
 async def set_livestream_metadata(
     request: MetadataSetRequest,
     redis_client: RedisService = Depends(dep_redis_client),
+    event_publisher: EventPublisher = Depends(dep_event_publisher),
 ) -> SuccessResponse:
     """Admin sets livestream metadata."""
     metadata = {
@@ -212,4 +222,13 @@ async def set_livestream_metadata(
     await redis_client.set_metadata("livestream", metadata)
 
     logger.info(f"Set livestream metadata: {metadata}")
+
+    # Publish metadata_updated event for recording worker
+    await event_publisher.publish(
+        event_type="metadata_updated",
+        data={"source": "livestream", "metadata": metadata},
+        description=f"Livestream metadata set: {metadata.get('title', 'N/A')}",
+    )
+    logger.debug("Published metadata_updated event for livestream metadata set")
+
     return SuccessResponse()

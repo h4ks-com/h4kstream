@@ -238,6 +238,14 @@ def test_metadata_fallback_queue_with_real_song(client: httpx.Client, admin_head
     )
     assert pause_user_response.status_code == 200
 
+    # Clear fallback queue to ensure our test song is first
+    clear_fallback_response = client.post(
+        "/admin/queue/clear",
+        headers=admin_headers,
+        params={"playlist": "fallback"},
+    )
+    assert clear_fallback_response.status_code == 200
+
     # Add a real song to fallback playlist
     add_response = client.post(
         "/admin/queue/add",

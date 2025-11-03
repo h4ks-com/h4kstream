@@ -6,6 +6,7 @@ import { SignupPage } from './pages/SignupPage';
 import { AdminPage } from './pages/AdminPage';
 import { ManagePage } from './pages/ManagePage';
 import { ArchiveDetailPage } from './pages/ArchiveDetailPage';
+import { StreamPage } from './pages/StreamPage';
 
 const App: React.FC = () => {
   return (
@@ -19,6 +20,7 @@ const App: React.FC = () => {
       <Route path="/manage/:section" element={<ManagePage />} />
       <Route path="/archives" element={<ArchiveDetailPage />} />
       <Route path="/archives/:showName" element={<ArchiveDetailPage />} />
+      <Route path="/stream" element={<StreamPage />} />
     </Routes>
   );
 };

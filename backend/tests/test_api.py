@@ -11,9 +11,6 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.dependencies import dep_mpd_fallback
-from app.dependencies import dep_mpd_user
-from app.dependencies import dep_redis_client
 from app.main import app
 
 client = TestClient(app)
@@ -146,33 +143,12 @@ class TestAdminQueueEndpoints:
 class TestPublicEndpoints:
     """Test public queue endpoints (backward compatibility)."""
 
-    def test_public_list_songs(self):
+    def test_public_list_songs(self, mock_mpd):
         """Test /queue/list endpoint (public, no auth)."""
-        async def mock_mpd_user_dep():
-            mock_client = AsyncMock()
-            mock_client.get_queue = AsyncMock(return_value=[])
-            yield mock_client
-
-        async def mock_mpd_fallback_dep():
-            mock_client = AsyncMock()
-            mock_client.get_queue = AsyncMock(return_value=[])
-            yield mock_client
-
-        async def mock_redis_dep():
-            mock_redis = AsyncMock()
-            mock_redis.get_song_metadata = AsyncMock(return_value=None)
-            mock_redis.close = AsyncMock()
-            yield mock_redis
-
-        # Override dependencies
-        app.dependency_overrides[dep_mpd_user] = mock_mpd_user_dep
-        app.dependency_overrides[dep_mpd_fallback] = mock_mpd_fallback_dep
-        app.dependency_overrides[dep_redis_client] = mock_redis_dep
-
-        try:
+        # Mock get_next_songs to return empty list
+        with patch("app.services.queue_service.get_next_songs", return_value=[]), \
+             patch("app.services.playback_service.get_mpd_client", return_value=mock_mpd):
             response = client.get("/queue/list")
+
             assert response.status_code == 200
             assert isinstance(response.json(), list)
-        finally:
-            # Clean up overrides
-            app.dependency_overrides.clear()

@@ -107,7 +107,11 @@ export const ArchivesTab: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {shows.map((show) => (
-            <div key={show.show_name} className="h4ks-card hover:border-h4ks-green-600 transition-colors cursor-pointer">
+            <div
+              key={show.show_name}
+              onClick={() => navigate(`/archives/${encodeURIComponent(show.show_name)}`)}
+              className="h4ks-card hover:border-h4ks-green-600 transition-colors cursor-pointer"
+            >
               <h3 className="text-h4ks-green-400 font-bold mb-2">
                 {show.show_name}
               </h3>
@@ -115,7 +119,7 @@ export const ArchivesTab: React.FC = () => {
                 {show.recordings.length} recording{show.recordings.length !== 1 ? 's' : ''}
               </div>
 
-              <div className="space-y-2 mb-3">
+              <div className="space-y-2">
                 {show.recordings.slice(0, 3).map((recording) => (
                   <div key={recording.id} className="text-sm text-gray-400">
                     <div className="truncate">
@@ -132,13 +136,6 @@ export const ArchivesTab: React.FC = () => {
                   </div>
                 )}
               </div>
-
-              <button
-                onClick={() => navigate(`/archives/${encodeURIComponent(show.show_name)}`)}
-                className="h4ks-btn w-full"
-              >
-                VIEW ALL
-              </button>
             </div>
           ))}
         </div>
