@@ -65,6 +65,7 @@ class SongItem(BaseModel):
     album: str | None = Field(None, description="Song album")
     time: str | None = Field(None, description="Song duration")
     pos: str | None = Field(None, description="Position in queue")
+    playlist: PlaylistType = Field(..., description="Playlist source: user, fallback, or live")
 
 
 class SongListResponse(BaseModel):

@@ -34,5 +34,18 @@ export type SongItem = {
      * Position in queue
      */
     pos?: (string | null);
+    /**
+     * Playlist source: user, fallback, or live
+     */
+    playlist: SongItem.playlist;
 };
+export namespace SongItem {
+    /**
+     * Playlist source: user, fallback, or live
+     */
+    export enum playlist {
+        USER = 'user',
+        FALLBACK = 'fallback',
+    }
+}
 

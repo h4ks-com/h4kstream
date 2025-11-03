@@ -29,7 +29,7 @@ export type { ShowPublic } from './models/ShowPublic';
 export type { ShowRecordings } from './models/ShowRecordings';
 export type { ShowUpdate } from './models/ShowUpdate';
 export type { SongAddedResponse } from './models/SongAddedResponse';
-export type { SongItem } from './models/SongItem';
+export { SongItem } from './models/SongItem';
 export type { SuccessResponse } from './models/SuccessResponse';
 export type { TokenCreateRequest } from './models/TokenCreateRequest';
 export type { TokenCreateResponse } from './models/TokenCreateResponse';

@@ -337,6 +337,9 @@ async def list_songs(
 
         if playlist:
             song["id"] = format_song_id(mpd_song_id, playlist)
+            song["playlist"] = playlist
+        else:
+            song["playlist"] = "user"  # Default fallback
         songs.append(SongItem(**song))
     return songs
 

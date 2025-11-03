@@ -22,8 +22,6 @@ test-backend:
 test-e2e:
 	cd e2e && make test
 
-test-all: test-backend test-e2e
-
 frontend-build:
 	@echo "Generating OpenAPI spec from backend..."
 	cd backend && uv run python generate_openapi_spec.py
@@ -38,7 +36,9 @@ frontend-build:
 	@echo "Frontend build complete! Build output: frontend/build/"
 
 frontend-test:
-	cd frontend && npm run test
+	cd frontend && CI=true npm run test --watchAll=false
+
+test-all: test-backend frontend-test test-e2e
 
 run:
 	docker compose --profile dev down || true
