@@ -78,6 +78,13 @@ async def livestream_connect(
     intro_filename_raw = result.get("intro_filename") if isinstance(result, dict) else None
     intro_filename: str | None = intro_filename_raw if isinstance(intro_filename_raw, str) else None
 
+    # Store show information in livestream metadata for retrieval
+    metadata = await redis_client.get_metadata("livestream") or {}
+    metadata["show_name"] = show_name
+    metadata["show_user"] = user_id
+    await redis_client.set_metadata("livestream", metadata)
+    logger.info(f"Updated livestream metadata with show_name={show_name}, show_user={user_id}")
+
     description = "A livestream was started"
     await event_publisher.publish(
         event_type="livestream_started",

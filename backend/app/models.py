@@ -158,6 +158,8 @@ class NowPlayingMetadata(BaseModel):
     artist: str | None = Field(None, description="Track artist")
     genre: str | None = Field(None, description="Track genre")
     description: str | None = Field(None, description="Track description")
+    show_name: str | None = Field(None, description="Show name (livestream only)")
+    show_user: str | None = Field(None, description="Show user ID (livestream only)")
 
 
 class MetadataUpdateRequest(BaseModel):

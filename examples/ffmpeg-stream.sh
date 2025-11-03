@@ -34,17 +34,26 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Auto-detect admin token from .env
-if [ -f "../.env" ]; then
-    export $(grep ADMIN_API_TOKEN ../.env | xargs 2>/dev/null || true)
-fi
-ADMIN_TOKEN="${ADMIN_API_TOKEN:-}"
+# Check if streaming token is already provided via environment variable
+if [ -n "$TOKEN" ]; then
+    echo -e "${YELLOW}Using provided TOKEN environment variable${NC}"
+    SKIP_TOKEN_REQUEST=true
+else
+    # Auto-detect admin token from .env if TOKEN not provided
+    if [ -f "../.env" ]; then
+        export $(grep ADMIN_API_TOKEN ../.env | xargs 2>/dev/null || true)
+    fi
 
-# Check if admin token is available
-if [ -z "$ADMIN_TOKEN" ]; then
-    echo -e "${RED}Error: ADMIN_API_TOKEN not set${NC}"
-    echo "Set it in ../.env file"
-    exit 1
+    ADMIN_TOKEN="${ADMIN_API_TOKEN:-}"
+    # Check if admin token is available
+    if [ -z "$ADMIN_TOKEN" ]; then
+        echo -e "${RED}Error: Neither TOKEN nor ADMIN_API_TOKEN is set${NC}"
+        echo "Either:"
+        echo "  - Set TOKEN with your livestream token, or"
+        echo "  - Set ADMIN_API_TOKEN to generate a new token"
+        exit 1
+    fi
+    SKIP_TOKEN_REQUEST=false
 fi
 
 # Parse arguments
@@ -90,31 +99,36 @@ echo "  Artist: $STREAM_ARTIST"
 echo "  Genre:  $STREAM_GENRE"
 echo ""
 
-# Get streaming token (admin creates temporary user token)
-echo -e "${YELLOW}Getting streaming token...${NC}"
-TOKEN_RESPONSE=$(curl -s -X POST "${H4KSTREAM_URL}/admin/livestream/token" \
-    -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-    -H "Content-Type: application/json" \
-    -d "{\"max_streaming_seconds\": ${DURATION}}")
+# Get streaming token (admin creates temporary user token) or use provided TOKEN
+if [ "$SKIP_TOKEN_REQUEST" = false ]; then
+    echo -e "${YELLOW}Getting streaming token...${NC}"
+    TOKEN_RESPONSE=$(curl -s -X POST "${H4KSTREAM_URL}/admin/livestream/token" \
+        -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"max_streaming_seconds\": ${DURATION}}")
 
-# Check if request was successful
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Error: Failed to get token from API${NC}"
-    exit 1
+    # Check if request was successful
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Failed to get token from API${NC}"
+        exit 1
+    fi
+
+    # Extract token
+    TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token')
+    if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
+        echo -e "${RED}Error: Invalid token response${NC}"
+        echo "$TOKEN_RESPONSE" | jq .
+        exit 1
+    fi
+
+    EXPIRES_AT=$(echo "$TOKEN_RESPONSE" | jq -r '.expires_at')
+    echo -e "${GREEN}✓ Token obtained${NC}"
+    echo "Expires: $EXPIRES_AT"
+    echo ""
+else
+    echo -e "${GREEN}✓ Using provided streaming token${NC}"
+    echo ""
 fi
-
-# Extract token
-TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token')
-if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
-    echo -e "${RED}Error: Invalid token response${NC}"
-    echo "$TOKEN_RESPONSE" | jq .
-    exit 1
-fi
-
-EXPIRES_AT=$(echo "$TOKEN_RESPONSE" | jq -r '.expires_at')
-echo -e "${GREEN}✓ Token obtained${NC}"
-echo "Expires: $EXPIRES_AT"
-echo ""
 
 # Start streaming
 echo -e "${YELLOW}Starting stream with embedded metadata...${NC}"

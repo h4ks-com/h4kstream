@@ -22,5 +22,13 @@ export type NowPlayingMetadata = {
      * Track description
      */
     description?: (string | null);
+    /**
+     * Show name (livestream only)
+     */
+    show_name?: (string | null);
+    /**
+     * Show user ID (livestream only)
+     */
+    show_user?: (string | null);
 };
 

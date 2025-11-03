@@ -214,6 +214,17 @@ const LivestreamSection: React.FC = () => {
   const [minRecordingDuration, setMinRecordingDuration] = useState(5);
   const [token, setToken] = useState('');
   const [creating, setCreating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   const fetchShows = useCallback(async () => {
     try {
@@ -344,13 +355,21 @@ const LivestreamSection: React.FC = () => {
             {token && (
               <div className="bg-h4ks-dark-800 border border-h4ks-green-700 p-3">
                 <p className="text-gray-400 text-sm mb-2">Your Livestream Token:</p>
-                <textarea
-                  value={token}
-                  readOnly
-                  onClick={(e) => e.currentTarget.select()}
-                  className="w-full bg-h4ks-dark-900 border border-h4ks-green-800 text-h4ks-green-400 px-3 py-2 font-mono text-sm cursor-pointer"
-                  rows={3}
-                />
+                <div className="flex gap-2">
+                  <textarea
+                    value={token}
+                    readOnly
+                    onClick={(e) => e.currentTarget.select()}
+                    className="flex-1 bg-h4ks-dark-900 border border-h4ks-green-800 text-h4ks-green-400 px-3 py-2 font-mono text-sm cursor-pointer"
+                    rows={3}
+                  />
+                  <button
+                    onClick={copyToClipboard}
+                    className="bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white font-mono py-2 px-4 whitespace-nowrap self-start"
+                  >
+                    {copied ? '[COPIED!]' : '[COPY]'}
+                  </button>
+                </div>
                 <div className="mt-3 text-gray-500 text-xs space-y-1">
                   <p>• Max duration: {maxStreamingSeconds}s ({Math.floor(maxStreamingSeconds / 60)} min)</p>
                   <p>• Show: {shows.find((s) => s.id === selectedShowId)?.show_name}</p>

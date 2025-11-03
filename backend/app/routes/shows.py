@@ -18,6 +18,7 @@ from app.db.models import Show
 from app.db.models import ShowCreate
 from app.db.models import ShowPublic
 from app.db.models import ShowUpdate
+from app.db.models import User
 from app.dependencies import admin_auth
 from app.dependencies import get_jwt_token
 from app.models import ErrorResponse
@@ -164,8 +165,12 @@ def create_show_livestream_token(
     if show.owner_id is None or show.owner_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to create tokens for this show")
 
+    # Fetch user to get username for token
+    user = session.exec(select(User).where(User.id == user_id)).first()
+    username = user.username if user and user.username else str(user_id)
+
     token, expires_at = generate_livestream_token(
-        request.max_streaming_seconds, show.show_name, user_id, request.min_recording_duration, show.intro_filename
+        request.max_streaming_seconds, show.show_name, username, request.min_recording_duration, show.intro_filename
     )
     return LivestreamTokenResponse(
         token=token, expires_at=expires_at.isoformat(), max_streaming_seconds=request.max_streaming_seconds
@@ -244,7 +249,7 @@ async def admin_upload_show_intro(
         raise HTTPException(status_code=404, detail="Show not found")
 
     # Validate file type
-    allowed_extensions = {".mp3", ".wav", ".ogg", ".flac"}
+    allowed_extensions = {".mp3", ".wav", ".ogg", ".flac", ".m4a"}
     file_ext = Path(file.filename or "").suffix.lower()
     if file_ext not in allowed_extensions:
         raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}")

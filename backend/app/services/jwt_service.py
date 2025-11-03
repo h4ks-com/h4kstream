@@ -102,7 +102,7 @@ def get_max_add_requests(token: str) -> int:
 def generate_livestream_token(
     max_streaming_seconds: int,
     show_name: str | None = None,
-    user_id: str | UUID | None = None,
+    username: str | None = None,
     min_recording_duration: int = 60,
     intro_filename: str | None = None,
 ) -> tuple[str, datetime]:
@@ -110,7 +110,7 @@ def generate_livestream_token(
 
     :param max_streaming_seconds: Maximum allowed streaming time in seconds
     :param show_name: Optional show identifier (for show ownership tracking)
-    :param user_id: Optional user UUID who owns the show
+    :param username: Optional username who owns the show (for display purposes)
     :param min_recording_duration: Minimum duration in seconds to keep recording (default 60)
     :param intro_filename: Optional custom intro jingle filename
     :return: Tuple of (encoded JWT token, expiration datetime)
@@ -119,10 +119,10 @@ def generate_livestream_token(
     if max_streaming_seconds > max_duration:
         max_streaming_seconds = max_duration
 
-    if user_id is None:
-        user_id_str = uuid4().hex
+    if username is None:
+        username = uuid4().hex
     else:
-        user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
+        username = str(username)
 
     if show_name is None:
         show_name = "livestream"
@@ -131,7 +131,7 @@ def generate_livestream_token(
     payload = {
         "exp": expiration,
         "type": "livestream",
-        "user_id": user_id_str,
+        "user_id": username,
         "max_streaming_seconds": max_streaming_seconds,
         "show_name": show_name,
         "min_recording_duration": min_recording_duration,
