@@ -14,8 +14,15 @@ export const initializeApiClient = () => {
     TOKEN: async () => {
       const userToken = authUtils.getUserToken();
       const adminToken = authUtils.getAdminToken();
-      // Prefer admin token if both are present (for admin pages)
-      return adminToken || userToken || '';
+
+      // Use admin token only on /admin routes, user token elsewhere
+      const isAdminRoute = window.location.pathname.startsWith('/admin');
+
+      if (isAdminRoute) {
+        return adminToken || userToken || '';
+      } else {
+        return userToken || '';
+      }
     },
   });
 };

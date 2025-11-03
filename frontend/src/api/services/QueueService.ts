@@ -35,23 +35,26 @@ export class QueueService {
     }
     /**
      * List Queue Songs
-     * Get songs in the queue (shared by all users). Returns user queue songs first, then fallback playlist songs. No authentication required.
+     * Get songs in the queue (shared by all users). Returns user queue songs first, then fallback playlist songs. Optional filter to show only songs belonging to authenticated user. No authentication required unless user_only=true.
      * @param limit Maximum number of songs to return (1-20)
+     * @param userOnly Filter to show only user's own songs (requires authentication)
      * @returns SongItem Successful Response
      * @throws ApiError
      */
     public listSongsQueueListGet(
         limit: number = 20,
+        userOnly: boolean = false,
     ): CancelablePromise<Array<SongItem>> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/queue/list',
             query: {
                 'limit': limit,
+                'user_only': userOnly,
             },
             errors: {
                 400: `Invalid limit parameter`,
-                401: `Unauthorized`,
+                401: `Authentication required when user_only=true`,
                 403: `Forbidden`,
                 422: `Validation Error`,
             },

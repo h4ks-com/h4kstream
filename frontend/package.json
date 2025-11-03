@@ -54,5 +54,14 @@
     "postcss": "^8.4.49",
     "prettier": "^3.3.3",
     "tailwindcss": "^3.4.15"
+  },
+  "jest": {
+    "transformIgnorePatterns": [
+      "node_modules/(?!(janus-gateway|react-router|react-router-dom|@remix-run)/)"
+    ],
+    "moduleNameMapper": {
+      "^janus-gateway$": "<rootDir>/src/__mocks__/janus-gateway.ts",
+      "^react-router-dom$": "<rootDir>/src/__mocks__/react-router-dom.tsx"
+    }
   }
 }

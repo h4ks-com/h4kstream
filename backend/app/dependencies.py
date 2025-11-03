@@ -18,6 +18,7 @@ from app.services.redis_service import RedisService
 from app.settings import settings
 
 security = HTTPBearer()
+security_optional = HTTPBearer(auto_error=False)
 
 
 def _extract_token(credentials: HTTPAuthorizationCredentials) -> str:
@@ -111,6 +112,24 @@ def get_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security))
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def get_jwt_token_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
+) -> str | None:
+    """Extract JWT token from request if present (exclude admin tokens)."""
+    if not credentials:
+        return None
+
+    token = _extract_token(credentials)
+    if _is_admin_token(token):
+        return None
+
+    try:
+        validate_token(token)
+        return token
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
 
 
 def dep_liquidsoap_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> bool:

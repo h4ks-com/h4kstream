@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
+import { getUserLimits } from '../utils/jwt';
 import { QueueService, ShowsService } from '../utils/apiClient';
 import type { SongItem, ShowPublic } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
@@ -61,11 +62,25 @@ const QueueSection: React.FC = () => {
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [limits, setLimits] = useState<{ maxQueueSongs: number | null; maxAddRequests: number | null }>({
+    maxQueueSongs: null,
+    maxAddRequests: null,
+  });
+
+  // Extract limits from JWT token on mount
+  useEffect(() => {
+    const token = authUtils.getUserToken();
+    if (token) {
+      const userLimits = getUserLimits(token);
+      setLimits(userLimits);
+    }
+  }, []);
 
   const fetchQueue = async () => {
     try {
       setLoading(true);
-      const response = await QueueService().listSongsQueueListGet();
+      // Filter to show only user's own songs
+      const response = await QueueService().listSongsQueueListGet(20, true);
       setSongs(response || []);
     } catch (err: any) {
       setError(err.body?.detail || 'Failed to fetch queue');
@@ -90,9 +105,22 @@ const QueueSection: React.FC = () => {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-h4ks-green-400 mb-6 font-mono">
-        [MY QUEUE]
-      </h2>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-h4ks-green-400 mb-2 font-mono">
+          [MY QUEUE]
+        </h2>
+        {/* Display user limits */}
+        {(limits.maxQueueSongs !== null || limits.maxAddRequests !== null) && (
+          <div className="text-gray-400 text-sm font-mono space-x-4">
+            {limits.maxQueueSongs !== null && (
+              <span>Max Queue: {songs.length}/{limits.maxQueueSongs}</span>
+            )}
+            {limits.maxAddRequests !== null && (
+              <span>Total Adds: {limits.maxAddRequests}</span>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Add Song Form */}
       <div className="mb-6">
@@ -184,28 +212,17 @@ const LivestreamSection: React.FC = () => {
       setToken('');
       setCreating(true);
 
-      // This will use the regenerated API with the new endpoint
-      const response = await fetch(`/api/shows/${selectedShowId}/livestream/token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authUtils.getUserToken()}`,
-        },
-        body: JSON.stringify({
+      const response = await ShowsService().createShowLivestreamTokenShowsShowIdLivestreamTokenPost(
+        selectedShowId,
+        {
           max_streaming_seconds: maxStreamingSeconds,
           min_recording_duration: minRecordingDuration,
-        }),
-      });
+        }
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to create token');
-      }
-
-      const data = await response.json();
-      setToken(data.token);
+      setToken(response.token);
     } catch (err: any) {
-      setError(err.message || 'Failed to create token');
+      setError(err.body?.detail || 'Failed to create token');
     } finally {
       setCreating(false);
     }

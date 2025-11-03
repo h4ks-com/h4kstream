@@ -8,14 +8,14 @@ describe('AudioPlayer', () => {
     expect(screen.getByText('h4ks radio')).toBeInTheDocument();
   });
 
-  it('renders play button', () => {
+  it('renders mute/unmute button', () => {
     render(<AudioPlayer />);
-    const button = screen.getByRole('button', { name: /play|pause/i });
+    const button = screen.getByRole('button', { name: /mute|unmute/i });
     expect(button).toBeInTheDocument();
   });
 
-  it('renders volume control', () => {
+  it('renders volume percentage', () => {
     render(<AudioPlayer />);
-    expect(screen.getByText('VOL')).toBeInTheDocument();
+    expect(screen.getByText(/\d+%/)).toBeInTheDocument();
   });
 });

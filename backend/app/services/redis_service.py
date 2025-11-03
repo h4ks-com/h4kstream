@@ -109,6 +109,11 @@ class RedisService:
         """Map a song_id to user_id for cleanup tracking."""
         await self.redis.setex(f"song:{song_id}:user", 86400, user_id)
 
+    async def get_song_user(self, song_id: str) -> str | None:
+        """Get user_id that owns a song."""
+        user_id = await self.redis.get(f"song:{song_id}:user")
+        return user_id.decode() if user_id else None
+
     async def increment_user_add_count(self, user_id: str) -> int:
         """Increment and return total add requests count for user (lifetime counter)."""
         key = f"user:{user_id}:add_count"

@@ -37,6 +37,9 @@ frontend-build:
 	cd frontend && npm run build
 	@echo "Frontend build complete! Build output: frontend/build/"
 
+frontend-test:
+	cd frontend && npm run test
+
 run:
 	docker compose --profile dev down || true
 	docker compose down

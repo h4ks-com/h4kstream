@@ -14,3 +14,8 @@ build:
 	@echo "Building frontend..."
 	npm run build
 	@echo "✅ Build completed!"
+
+test:
+	@echo "Running frontend tests..."
+	npm run test
+	@echo "✅ Tests completed!"

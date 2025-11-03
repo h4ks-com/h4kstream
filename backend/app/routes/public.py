@@ -15,6 +15,7 @@ from fastapi import UploadFile
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
 from app.dependencies import get_jwt_token
+from app.dependencies import get_jwt_token_optional
 from app.exceptions import FileNotFoundInMPDError
 from app.exceptions import SongNotFoundError
 from app.models import ErrorResponse
@@ -129,22 +130,54 @@ async def add_song(
     description=(
         "Get songs in the queue (shared by all users). "
         "Returns user queue songs first, then fallback playlist songs. "
-        "No authentication required."
+        "Optional filter to show only songs belonging to authenticated user. "
+        "No authentication required unless user_only=true."
     ),
-    responses={400: {"model": ErrorResponse, "description": "Invalid limit parameter"}},
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid limit parameter"},
+        401: {"model": ErrorResponse, "description": "Authentication required when user_only=true"},
+    },
 )
 async def list_songs(
     limit: int = Query(20, ge=1, le=20, description="Maximum number of songs to return (1-20)"),
+    user_only: bool = Query(False, description="Filter to show only user's own songs (requires authentication)"),
     redis_client: RedisService = Depends(dep_redis_client),
+    token: str | None = Depends(get_jwt_token_optional),
 ) -> list[SongItem]:
     """Get songs from user queue and fallback playlist."""
+    # If user_only requested, require token
+    if user_only and not token:
+        raise HTTPException(status_code=401, detail="Authentication required when user_only=true")
+
+    user_id = get_user_id(token) if token else None
+
     user_mpd = playback_service.get_mpd_client("user")
     fallback_mpd = playback_service.get_mpd_client("fallback")
 
     try:
         await user_mpd.connect()
         await fallback_mpd.connect()
-        return await queue_service.get_next_songs(user_mpd, fallback_mpd, limit, redis_client)
+        all_songs = await queue_service.get_next_songs(user_mpd, fallback_mpd, limit, redis_client)
+
+        # Filter for user's songs if requested
+        if user_only and user_id:
+            filtered_songs = []
+            for song in all_songs:
+                # Parse song_id to get MPD id and playlist
+                try:
+                    mpd_id, playlist = parse_song_id(song.id)
+                    # Only include user playlist songs
+                    if playlist == "user":
+                        # Check if this song belongs to the user
+                        song_owner = await redis_client.get_song_user(str(mpd_id))
+                        if song_owner == user_id:
+                            filtered_songs.append(song)
+                except ValueError:
+                    continue
+
+            return filtered_songs
+
+        return all_songs
     finally:
         await user_mpd.disconnect()
         await fallback_mpd.disconnect()
