@@ -17,7 +17,8 @@ const App: React.FC = () => {
       <Route path="/admin/:section" element={<AdminPage />} />
       <Route path="/manage" element={<ManagePage />} />
       <Route path="/manage/:section" element={<ManagePage />} />
-      <Route path="/archives/:archiveId" element={<ArchiveDetailPage />} />
+      <Route path="/archives" element={<ArchiveDetailPage />} />
+      <Route path="/archives/:showName" element={<ArchiveDetailPage />} />
     </Routes>
   );
 };

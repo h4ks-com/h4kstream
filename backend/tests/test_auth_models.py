@@ -130,7 +130,7 @@ def test_generate_livestream_token_with_show(db_session):
     show = show_crud.create(db_session, obj_in={}, show_name="test_show", owner_id=user.id)
 
     token, expires_at = generate_livestream_token(
-        max_streaming_seconds=3600, show_name=show.show_name, user_id=user.id, min_recording_duration=60
+        max_streaming_seconds=3600, show_name=show.show_name, username=str(user.id), min_recording_duration=60
     )
 
     from app.services.jwt_service import decode_livestream_token

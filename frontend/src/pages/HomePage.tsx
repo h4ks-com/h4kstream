@@ -4,6 +4,7 @@ import { AudioPlayer } from '../components/AudioPlayer';
 import { MetadataDisplay } from '../components/MetadataDisplay';
 import { QueueList } from '../components/QueueList';
 import { ArchivesTab } from '../components/ArchivesTab';
+import { Footer } from '../components/Footer';
 import { authUtils } from '../utils/auth';
 
 export const HomePage: React.FC = () => {
@@ -71,12 +72,8 @@ export const HomePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer - Sticky at bottom */}
-      <footer className="bg-h4ks-dark-900 border-t border-h4ks-green-800 py-3">
-        <div className="max-w-6xl mx-auto px-4 text-center text-gray-400 text-sm">
-          h4kstream v1.0.0 | streaming live 24/7
-        </div>
-      </footer>
+      {/* Footer - No action button on home page */}
+      <Footer />
     </div>
   );
 };
