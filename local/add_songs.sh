@@ -8,19 +8,46 @@ cd "$(dirname "$0")"
 # Auto-detect admin token from .env
 if [ -f "../.env" ]; then
 	export $(grep ADMIN_API_TOKEN ../.env | xargs 2>/dev/null || true)
+  export $(grep API_URL ../.env | xargs 2>/dev/null || true)
 fi
 
-ADMIN_TOKEN="${ADMIN_API_TOKEN:-}"
+ADMIN_TOKEN="${ADMIN_API_TOKEN:-test-admin-token-12345}"
+BASE_URL="${API_URL:-http://localhost:8383}"
 
-TOKEN_RESPONSE=$(curl -s -X POST "${H4KSTREAM_URL}/admin/livestream/token" \
-	-H "Authorization: Bearer ${ADMIN_TOKEN}" \
-	-H "Content-Type: application/json" \
-	-d "{\"max_streaming_seconds\": ${DURATION}}")
+echo "Adding songs to user queue..."
+echo "================================"
 
-# loop over lines of short_songs.txt
-
+# Add songs from short_songs.txt to user queue
 while IFS= read -r line; do
-	echo $line
+	# Skip empty lines
+	[[ -z "$line" ]] && continue
+
+	echo "Adding to user queue: $line"
+	curl -X POST "${BASE_URL}/api/admin/queue/add?playlist=user" \
+		-H "Authorization: Bearer ${ADMIN_TOKEN}" \
+		-F "url=${line}" | jq -r '.status // .detail'
 done <short_songs.txt
 
-# curl 'http://localhost/api/admin/queue/add?playlist=user' \
+echo ""
+echo "Adding Rick Astley to fallback queue..."
+echo "========================================"
+
+
+# Add songs from short_songs.txt to fallback queue
+while IFS= read -r line; do
+	# Skip empty lines
+	[[ -z "$line" ]] && continue
+
+	echo "Adding to user queue: $line"
+	curl -X POST "${BASE_URL}/api/admin/queue/add?playlist=fallback" \
+		-H "Authorization: Bearer ${ADMIN_TOKEN}" \
+		-F "url=${line}" | jq -r '.status // .detail'
+done <short_songs.txt
+
+# Add Rick Astley - Never Gonna Give You Up to fallback queue
+curl -s -X POST "${BASE_URL}/api/admin/queue/add?playlist=fallback" \
+	-H "Authorization: Bearer ${ADMIN_TOKEN}" \
+	-F "url=https://www.youtube.com/watch?v=dQw4w9WgXcQ" | jq -r '.status // .detail'
+
+echo ""
+echo "✅ All songs added successfully!"

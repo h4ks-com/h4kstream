@@ -1,12 +1,40 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
-import { getUserLimits } from '../utils/jwt';
+import { getUserLimits, getTokenTimeRemaining, formatTimeRemaining } from '../utils/jwt';
 import { QueueService, ShowsService } from '../utils/apiClient';
 import type { SongItem, ShowPublic } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
 
 type Section = 'queue' | 'livestream';
+
+// Session timer component
+const SessionTimer: React.FC = () => {
+  const [timeRemaining, setTimeRemaining] = useState(0);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const token = authUtils.getUserToken();
+      if (token) {
+        setTimeRemaining(getTokenTimeRemaining(token));
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="mt-6 border-t border-h4ks-green-900 pt-4">
+      <div className="text-xs text-gray-500 mb-1">SESSION</div>
+      <div className={`text-sm font-mono ${timeRemaining < 300 ? 'text-yellow-500' : 'text-gray-400'}`}>
+        {formatTimeRemaining(timeRemaining)}
+      </div>
+    </div>
+  );
+};
 
 export const ManagePage: React.FC = () => {
   const { section } = useParams<{ section: Section }>();
@@ -46,6 +74,7 @@ export const ManagePage: React.FC = () => {
             [LIVESTREAM]
           </div>
         </nav>
+        <SessionTimer />
       </div>
 
       {/* Main content */}

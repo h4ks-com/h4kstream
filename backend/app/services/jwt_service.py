@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -10,23 +12,21 @@ from app.settings import settings
 
 
 def generate_token(
-    duration_seconds: int,
+    duration_seconds: int | None = None,
     user_id: str | UUID | None = None,
     max_queue_songs: int | None = None,
     max_add_requests: int | None = None,
+    expiry: datetime | None = None,
 ) -> str:
     """Generate a JWT token with specified duration and limits.
 
-    :param duration_seconds: Token validity duration in seconds (max 86400)
+    :param duration_seconds: Token validity duration in seconds (max 86400), ignored if expiry provided
     :param user_id: User UUID (None = generate random ID for temporary tokens)
     :param max_queue_songs: Maximum songs user can have in queue simultaneously (None = use default)
     :param max_add_requests: Total add requests allowed for lifetime of token (None = use default)
+    :param expiry: Explicit expiry datetime (overrides duration_seconds if provided)
     :return: Encoded JWT token
     """
-    max_duration = 86400
-    if duration_seconds > max_duration:
-        duration_seconds = max_duration
-
     if max_queue_songs is None:
         max_queue_songs = settings.DEFAULT_MAX_QUEUE_SONGS
 
@@ -38,7 +38,16 @@ def generate_token(
     else:
         user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
 
-    expiration = datetime.now(UTC) + timedelta(seconds=duration_seconds)
+    if expiry is None:
+        if duration_seconds is None:
+            duration_seconds = 3600
+        max_duration = 86400
+        if duration_seconds > max_duration:
+            duration_seconds = max_duration
+        expiration = datetime.now(UTC) + timedelta(seconds=duration_seconds)
+    else:
+        expiration = expiry
+
     payload = {
         "exp": expiration,
         "type": "temporary",
@@ -145,3 +154,34 @@ def decode_livestream_token(token: str) -> dict:
     if payload.get("type") != "livestream":
         raise jwt.InvalidTokenError("Token is not a livestream token")
     return payload
+
+
+def decode_token_ignore_expiry(token: str) -> dict:
+    """Decode JWT token without validating expiry."""
+    return jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"], options={"verify_exp": False})
+
+
+def generate_refresh_token() -> str:
+    """Generate a random refresh token."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_refresh_token(token: str) -> str:
+    """Hash refresh token for storage."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def preserve_token_expiry(old_token: str, threshold_seconds: int = 60) -> datetime | None:
+    """Extract expiry from old token if not yet expired, return None if should use new expiry."""
+    try:
+        payload = decode_token_ignore_expiry(old_token)
+        exp_timestamp = payload.get("exp")
+        if not exp_timestamp:
+            return None
+        exp_datetime = datetime.fromtimestamp(exp_timestamp, UTC)
+        now = datetime.now(UTC)
+        if exp_datetime > now + timedelta(seconds=threshold_seconds):
+            return exp_datetime
+    except (jwt.InvalidTokenError, KeyError, ValueError):
+        pass
+    return None

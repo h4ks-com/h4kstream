@@ -33,6 +33,8 @@ export { SongItem } from './models/SongItem';
 export type { SuccessResponse } from './models/SuccessResponse';
 export type { TokenCreateRequest } from './models/TokenCreateRequest';
 export type { TokenCreateResponse } from './models/TokenCreateResponse';
+export type { TokenRefreshRequest } from './models/TokenRefreshRequest';
+export type { TokenRefreshResponse } from './models/TokenRefreshResponse';
 export type { UserCreate } from './models/UserCreate';
 export type { UserLogin } from './models/UserLogin';
 export type { UserPublic } from './models/UserPublic';

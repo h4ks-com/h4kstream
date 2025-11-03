@@ -65,7 +65,7 @@ async def create_token(request: TokenCreateRequest) -> TokenCreateResponse:
         max_queue_songs=request.max_queue_songs,
         max_add_requests=request.max_add_requests,
     )
-    return TokenCreateResponse(token=token)
+    return TokenCreateResponse(token=token, refresh_token=None)
 
 
 @router.post(

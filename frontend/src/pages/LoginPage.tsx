@@ -21,7 +21,11 @@ export const LoginPage: React.FC = () => {
         password,
       });
 
-      authUtils.setUserToken(response.token);
+      if (response.refresh_token) {
+        authUtils.setUserTokens(response.token, response.refresh_token);
+      } else {
+        authUtils.setUserToken(response.token);
+      }
       navigate('/');
     } catch (err: any) {
       setError(err.body?.detail || 'Login failed');

@@ -17,6 +17,7 @@ import type { SuccessResponse } from '../models/SuccessResponse';
 import type { TokenCreateRequest } from '../models/TokenCreateRequest';
 import type { TokenCreateResponse } from '../models/TokenCreateResponse';
 import type { UserPublic } from '../models/UserPublic';
+import type { UserUpdate } from '../models/UserUpdate';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import type { BaseHttpRequest } from '../core/BaseHttpRequest';
 export class AdminService {
@@ -336,6 +337,56 @@ export class AdminService {
         return this.httpRequest.request({
             method: 'DELETE',
             url: '/admin/users/{user_id}',
+            path: {
+                'user_id': userId,
+            },
+            errors: {
+                401: `Unauthorized`,
+                404: `User not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update User Limits
+     * Admin endpoint to update user limits.
+     * @param userId
+     * @param requestBody
+     * @returns UserPublic Successful Response
+     * @throws ApiError
+     */
+    public updateUserLimitsAdminUsersUserIdPatch(
+        userId: string,
+        requestBody: UserUpdate,
+    ): CancelablePromise<UserPublic> {
+        return this.httpRequest.request({
+            method: 'PATCH',
+            url: '/admin/users/{user_id}',
+            path: {
+                'user_id': userId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                401: `Unauthorized`,
+                404: `User not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Logout User
+     * Admin endpoint to logout a user by deleting their refresh token.
+     * @param userId
+     * @returns boolean Successful Response
+     * @throws ApiError
+     */
+    public logoutUserAdminUsersUserIdLogoutPost(
+        userId: string,
+    ): CancelablePromise<Record<string, boolean>> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/admin/users/{user_id}/logout',
             path: {
                 'user_id': userId,
             },

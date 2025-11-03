@@ -5,6 +5,8 @@
 import type { PendingUserCreate } from '../models/PendingUserCreate';
 import type { PendingUserPublic } from '../models/PendingUserPublic';
 import type { TokenCreateResponse } from '../models/TokenCreateResponse';
+import type { TokenRefreshRequest } from '../models/TokenRefreshRequest';
+import type { TokenRefreshResponse } from '../models/TokenRefreshResponse';
 import type { UserCreate } from '../models/UserCreate';
 import type { UserLogin } from '../models/UserLogin';
 import type { UserPublic } from '../models/UserPublic';
@@ -78,6 +80,32 @@ export class UsersService {
             mediaType: 'application/json',
             errors: {
                 401: `Invalid credentials`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Refresh Token
+     * Refresh JWT token using a valid refresh token.
+     * @param xRefreshToken Refresh token
+     * @param requestBody
+     * @returns TokenRefreshResponse Successful Response
+     * @throws ApiError
+     */
+    public refreshTokenUsersAuthRefreshPost(
+        xRefreshToken: string,
+        requestBody: TokenRefreshRequest,
+    ): CancelablePromise<TokenRefreshResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/users/auth/refresh',
+            headers: {
+                'x-refresh-token': xRefreshToken,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                401: `Invalid or expired refresh token`,
                 422: `Validation Error`,
             },
         });
@@ -196,6 +224,56 @@ export class UsersService {
         return this.httpRequest.request({
             method: 'DELETE',
             url: '/admin/users/{user_id}',
+            path: {
+                'user_id': userId,
+            },
+            errors: {
+                401: `Unauthorized`,
+                404: `User not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update User Limits
+     * Admin endpoint to update user limits.
+     * @param userId
+     * @param requestBody
+     * @returns UserPublic Successful Response
+     * @throws ApiError
+     */
+    public updateUserLimitsAdminUsersUserIdPatch(
+        userId: string,
+        requestBody: UserUpdate,
+    ): CancelablePromise<UserPublic> {
+        return this.httpRequest.request({
+            method: 'PATCH',
+            url: '/admin/users/{user_id}',
+            path: {
+                'user_id': userId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                401: `Unauthorized`,
+                404: `User not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Logout User
+     * Admin endpoint to logout a user by deleting their refresh token.
+     * @param userId
+     * @returns boolean Successful Response
+     * @throws ApiError
+     */
+    public logoutUserAdminUsersUserIdLogoutPost(
+        userId: string,
+    ): CancelablePromise<Record<string, boolean>> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/admin/users/{user_id}/logout',
             path: {
                 'user_id': userId,
             },

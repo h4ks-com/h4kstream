@@ -3,16 +3,16 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Response model for JWT token creation.
+ * Response model for token refresh.
  */
-export type TokenCreateResponse = {
+export type TokenRefreshResponse = {
     /**
-     * JWT bearer token
+     * New JWT bearer token
      */
     token: string;
     /**
-     * Refresh token for renewing JWT
+     * New refresh token
      */
-    refresh_token?: (string | null);
+    refresh_token: string;
 };
 

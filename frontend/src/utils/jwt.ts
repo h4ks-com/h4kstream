@@ -53,3 +53,44 @@ export function getUserLimits(token: string): {
     maxAddRequests: payload?.max_add_requests ?? null,
   };
 }
+
+/**
+ * Get token expiry timestamp (Unix timestamp in seconds)
+ */
+export function getTokenExpiry(token: string): number | null {
+  const payload = decodeJWT(token);
+  return payload?.exp ?? null;
+}
+
+/**
+ * Get remaining time until token expires (in seconds)
+ */
+export function getTokenTimeRemaining(token: string): number {
+  const expiry = getTokenExpiry(token);
+  if (!expiry) {
+    return 0;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const remaining = expiry - now;
+
+  return Math.max(0, remaining);
+}
+
+/**
+ * Format seconds into a human-readable string (e.g., "45m 30s")
+ */
+export function formatTimeRemaining(seconds: number): string {
+  if (seconds <= 0) {
+    return 'Expired';
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+
+  if (minutes === 0) {
+    return `${secs}s`;
+  }
+
+  return `${minutes}m ${secs}s`;
+}

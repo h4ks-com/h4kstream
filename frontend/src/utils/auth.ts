@@ -4,6 +4,7 @@
 
 const USER_TOKEN_KEY = 'userToken';
 const ADMIN_TOKEN_KEY = 'adminToken';
+const USER_REFRESH_TOKEN_KEY = 'userRefreshToken';
 
 export const authUtils = {
   // User JWT token management
@@ -21,6 +22,25 @@ export const authUtils = {
 
   isUserAuthenticated: (): boolean => {
     return !!localStorage.getItem(USER_TOKEN_KEY);
+  },
+
+  // User refresh token management
+  getUserRefreshToken: (): string | null => {
+    return localStorage.getItem(USER_REFRESH_TOKEN_KEY);
+  },
+
+  setUserRefreshToken: (refreshToken: string): void => {
+    localStorage.setItem(USER_REFRESH_TOKEN_KEY, refreshToken);
+  },
+
+  clearUserRefreshToken: (): void => {
+    localStorage.removeItem(USER_REFRESH_TOKEN_KEY);
+  },
+
+  // Set both tokens at once (login/register)
+  setUserTokens: (token: string, refreshToken: string): void => {
+    localStorage.setItem(USER_TOKEN_KEY, token);
+    localStorage.setItem(USER_REFRESH_TOKEN_KEY, refreshToken);
   },
 
   // Admin token management
@@ -43,6 +63,7 @@ export const authUtils = {
   // Clear all tokens
   clearAll: (): void => {
     localStorage.removeItem(USER_TOKEN_KEY);
+    localStorage.removeItem(USER_REFRESH_TOKEN_KEY);
     localStorage.removeItem(ADMIN_TOKEN_KEY);
   },
 };

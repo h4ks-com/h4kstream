@@ -30,6 +30,8 @@ class User(UserBase, table=True):  # type: ignore[call-arg]
     password_hash: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     is_active: bool = Field(default=True)
+    max_queue_songs: int | None = Field(default=None)
+    max_add_requests: int | None = Field(default=None)
 
     shows: list["Show"] = Relationship(back_populates="owner")
 
@@ -46,6 +48,8 @@ class UserPublic(UserBase):
     id: UUID
     created_at: datetime
     is_active: bool
+    max_queue_songs: int | None
+    max_add_requests: int | None
 
 
 class UserUpdate(SQLModel):
@@ -54,6 +58,8 @@ class UserUpdate(SQLModel):
     username: str | None = None
     full_name: str | None = None
     password: str | None = None
+    max_queue_songs: int | None = None
+    max_add_requests: int | None = None
 
 
 class UserLogin(SQLModel):

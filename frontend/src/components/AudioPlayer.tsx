@@ -179,7 +179,7 @@ export const AudioPlayer: React.FC = () => {
   return (
     <div className="h4ks-card sticky top-0 z-10 relative">
       {/* High Quality Stream Button - Top Right */}
-      <div className="absolute top-3 right-3 z-20">
+      <div className="absolute top-0 right-0 z-20">
         <div className="relative">
           <button
             onClick={openHighQualityStream}
@@ -193,7 +193,7 @@ export const AudioPlayer: React.FC = () => {
               fill="none"
               viewBox="0 0 24 24"
               strokeWidth={1.5}
-              stroke="currentColor"
+              stroke="#fd7a08"
               className="w-4 h-4"
             >
               <path
@@ -205,7 +205,7 @@ export const AudioPlayer: React.FC = () => {
           </button>
           {showTooltip && (
             <div className="absolute right-0 top-full mt-1 bg-h4ks-dark-700 border border-h4ks-green-800 px-2 py-1 text-xs text-gray-300 whitespace-nowrap rounded shadow-lg z-30">
-              High quality stream (higher lag)
+              High quality stream - might have big delays
             </div>
           )}
         </div>

@@ -179,6 +179,22 @@ class RedisService:
             return json.loads(value)
         return None
 
+    async def set_refresh_token(self, user_id: str, refresh_token_hash: str) -> None:
+        """Store refresh token hash for user."""
+        key = f"refresh_token:{user_id}"
+        await self.redis.set(key, refresh_token_hash)
+
+    async def get_refresh_token(self, user_id: str) -> str | None:
+        """Get stored refresh token hash for user."""
+        key = f"refresh_token:{user_id}"
+        value = await self.redis.get(key)
+        return value.decode() if value else None
+
+    async def delete_refresh_token(self, user_id: str) -> None:
+        """Delete refresh token for user (logout)."""
+        key = f"refresh_token:{user_id}"
+        await self.redis.delete(key)
+
     async def set_active_source(self, source: str) -> None:
         """Set the currently active audio source."""
         await self.redis.set("metadata:active_source", source)

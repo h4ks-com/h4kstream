@@ -12,5 +12,7 @@ export type UserPublic = {
     id: string;
     created_at: string;
     is_active: boolean;
+    max_queue_songs: (number | null);
+    max_add_requests: (number | null);
 };
 

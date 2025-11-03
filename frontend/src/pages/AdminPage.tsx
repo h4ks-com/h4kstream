@@ -148,6 +148,9 @@ const UsersSection: React.FC = () => {
   const [maxQueueSongs, setMaxQueueSongs] = useState(10);
   const [maxAddRequests, setMaxAddRequests] = useState(5);
   const [copied, setCopied] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserPublic | null>(null);
+  const [editMaxQueueSongs, setEditMaxQueueSongs] = useState<number | null>(null);
+  const [editMaxAddRequests, setEditMaxAddRequests] = useState<number | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -200,6 +203,47 @@ const UsersSection: React.FC = () => {
       fetchUsers();
     } catch (err: any) {
       setError(err.body?.detail || 'Failed to delete user');
+    }
+  };
+
+  const openEditModal = (user: UserPublic) => {
+    setEditingUser(user);
+    setEditMaxQueueSongs(user.max_queue_songs ?? null);
+    setEditMaxAddRequests(user.max_add_requests ?? null);
+    setError('');
+  };
+
+  const closeEditModal = () => {
+    setEditingUser(null);
+    setEditMaxQueueSongs(null);
+    setEditMaxAddRequests(null);
+    setError('');
+  };
+
+  const updateUserLimits = async () => {
+    if (!editingUser) return;
+
+    try {
+      await AdminService().updateUserLimitsAdminUsersUserIdPatch(editingUser.id, {
+        max_queue_songs: editMaxQueueSongs,
+        max_add_requests: editMaxAddRequests,
+      });
+      closeEditModal();
+      fetchUsers();
+    } catch (err: any) {
+      setError(err.body?.detail || 'Failed to update user limits');
+    }
+  };
+
+  const logoutUser = async () => {
+    if (!editingUser) return;
+    if (!window.confirm('Logout this user? This will invalidate their refresh token.')) return;
+
+    try {
+      await AdminService().logoutUserAdminUsersUserIdLogoutPost(editingUser.id);
+      closeEditModal();
+    } catch (err: any) {
+      setError(err.body?.detail || 'Failed to logout user');
     }
   };
 
@@ -307,6 +351,8 @@ const UsersSection: React.FC = () => {
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Email</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Username</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Full Name</th>
+                <th className="text-left p-3 text-h4ks-green-400 font-mono">Queue</th>
+                <th className="text-left p-3 text-h4ks-green-400 font-mono">Adds</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Created</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Actions</th>
               </tr>
@@ -314,13 +360,13 @@ const UsersSection: React.FC = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="p-3 text-gray-400 text-center">
+                  <td colSpan={7} className="p-3 text-gray-400 text-center">
                     Loading...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-3 text-gray-400 text-center">
+                  <td colSpan={7} className="p-3 text-gray-400 text-center">
                     No users found
                   </td>
                 </tr>
@@ -330,10 +376,18 @@ const UsersSection: React.FC = () => {
                     <td className="p-3 text-gray-300">{user.email}</td>
                     <td className="p-3 text-gray-300">{user.username || '-'}</td>
                     <td className="p-3 text-gray-300">{user.full_name || '-'}</td>
+                    <td className="p-3 text-gray-400 text-sm">{user.max_queue_songs ?? 'None'}</td>
+                    <td className="p-3 text-gray-400 text-sm">{user.max_add_requests ?? 'None'}</td>
                     <td className="p-3 text-gray-400 text-sm">
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>
-                    <td className="p-3">
+                    <td className="p-3 space-x-2">
+                      <button
+                        onClick={() => openEditModal(user)}
+                        className="text-h4ks-green-400 hover:text-h4ks-green-300 font-mono text-sm"
+                      >
+                        [EDIT]
+                      </button>
                       <button
                         onClick={() => deleteUser(user.id)}
                         className="text-red-400 hover:text-red-300 font-mono text-sm"
@@ -348,6 +402,74 @@ const UsersSection: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Edit User Limits Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-h4ks-dark-900 border-2 border-h4ks-green-700 p-6 max-w-md w-full">
+            <h3 className="text-lg font-bold text-h4ks-green-400 mb-4 font-mono">
+              [EDIT USER LIMITS]
+            </h3>
+            <div className="mb-4">
+              <div className="text-gray-400 text-sm mb-3">
+                User: {editingUser.email}
+              </div>
+              <div className="mb-3">
+                <label className="block text-gray-400 text-sm mb-2">
+                  Max Queue Songs (null = unlimited)
+                </label>
+                <input
+                  type="number"
+                  value={editMaxQueueSongs ?? ''}
+                  onChange={(e) => setEditMaxQueueSongs(e.target.value ? Number(e.target.value) : null)}
+                  placeholder="Unlimited"
+                  className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
+                />
+              </div>
+              <div className="mb-3">
+                <label className="block text-gray-400 text-sm mb-2">
+                  Max Add Requests (null = unlimited)
+                </label>
+                <input
+                  type="number"
+                  value={editMaxAddRequests ?? ''}
+                  onChange={(e) => setEditMaxAddRequests(e.target.value ? Number(e.target.value) : null)}
+                  placeholder="Unlimited"
+                  className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-4 bg-red-900/20 border border-red-700 text-red-400 px-3 py-2 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex space-x-2 mb-4">
+              <button
+                onClick={updateUserLimits}
+                className="flex-1 bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white font-mono py-2 px-4"
+              >
+                [SAVE]
+              </button>
+              <button
+                onClick={closeEditModal}
+                className="flex-1 border border-h4ks-green-800 hover:border-h4ks-green-600 text-gray-400 hover:text-gray-300 font-mono py-2 px-4"
+              >
+                [CANCEL]
+              </button>
+            </div>
+
+            <button
+              onClick={logoutUser}
+              className="w-full bg-red-900/20 border border-red-700 hover:bg-red-900/30 text-red-400 hover:text-red-300 font-mono py-2 px-4"
+            >
+              [LOGOUT USER]
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

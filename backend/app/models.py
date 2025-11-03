@@ -33,6 +33,20 @@ class TokenCreateResponse(BaseModel):
     """Response model for JWT token creation."""
 
     token: str = Field(..., description="JWT bearer token")
+    refresh_token: str | None = Field(None, description="Refresh token for renewing JWT")
+
+
+class TokenRefreshRequest(BaseModel):
+    """Request model for token refresh."""
+
+    token: str = Field(..., description="Current JWT token (expired or valid)")
+
+
+class TokenRefreshResponse(BaseModel):
+    """Response model for token refresh."""
+
+    token: str = Field(..., description="New JWT bearer token")
+    refresh_token: str = Field(..., description="New refresh token")
 
 
 class SuccessResponse(BaseModel):
