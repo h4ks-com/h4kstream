@@ -4,6 +4,11 @@ import { authUtils } from '../utils/auth';
 import { AdminService, WebhooksService, ShowsService } from '../utils/apiClient';
 import type { UserPublic, ShowPublic, WebhookSubscription, SongItem } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
+import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import RadioIcon from '@mui/icons-material/Radio';
+import StopCircleIcon from '@mui/icons-material/StopCircle';
+import ShuffleIcon from '@mui/icons-material/Shuffle';
+import Tooltip from '@mui/material/Tooltip';
 
 type Section = 'users' | 'shows' | 'queue' | 'livestream' | 'webhooks' | 'transitions';
 
@@ -916,6 +921,23 @@ const LivestreamSection: React.FC = () => {
   );
 };
 
+// Helper function to get icon for webhook event type
+const getEventIcon = (eventType: string) => {
+  const iconProps = { style: { fontSize: '18px', color: '#9ca3af' } };
+  switch (eventType) {
+    case 'song_changed':
+      return <MusicNoteIcon {...iconProps} />;
+    case 'livestream_started':
+      return <RadioIcon {...iconProps} />;
+    case 'livestream_ended':
+      return <StopCircleIcon {...iconProps} />;
+    case 'queue_switched':
+      return <ShuffleIcon {...iconProps} />;
+    default:
+      return null;
+  }
+};
+
 // Webhooks Section Component
 const WebhooksSection: React.FC = () => {
   const [webhooks, setWebhooks] = useState<WebhookSubscription[]>([]);
@@ -1003,7 +1025,7 @@ const WebhooksSection: React.FC = () => {
             <label className="block text-gray-400 text-sm mb-2">Events * (select multiple)</label>
             <div className="space-y-2">
               {availableEvents.map((event) => (
-                <label key={event} className="flex items-center text-gray-400">
+                <label key={event} className="flex items-center text-gray-400 hover:text-gray-300 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={events.includes(event)}
@@ -1016,6 +1038,13 @@ const WebhooksSection: React.FC = () => {
                     }}
                     className="mr-2"
                   />
+                  <Tooltip
+                    title={event.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                    arrow
+                    placement="right"
+                  >
+                    <span className="mr-2 flex items-center">{getEventIcon(event)}</span>
+                  </Tooltip>
                   {event}
                 </label>
               ))}
@@ -1064,6 +1093,7 @@ const WebhooksSection: React.FC = () => {
             <thead>
               <tr className="border-b border-h4ks-green-800">
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">URL</th>
+                <th className="text-left p-3 text-h4ks-green-400 font-mono">Events</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Created</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Actions</th>
               </tr>
@@ -1071,13 +1101,13 @@ const WebhooksSection: React.FC = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={3} className="p-3 text-gray-400 text-center">
+                  <td colSpan={4} className="p-3 text-gray-400 text-center">
                     Loading...
                   </td>
                 </tr>
               ) : webhooks.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="p-3 text-gray-400 text-center">
+                  <td colSpan={4} className="p-3 text-gray-400 text-center">
                     No webhooks configured
                   </td>
                 </tr>
@@ -1085,6 +1115,21 @@ const WebhooksSection: React.FC = () => {
                 webhooks.map((webhook) => (
                   <tr key={webhook.webhook_id} className="border-b border-h4ks-green-900 hover:bg-h4ks-dark-800">
                     <td className="p-3 text-gray-300 font-mono text-sm">{webhook.url}</td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        {webhook.events.map((event) => (
+                          <Tooltip
+                            key={event}
+                            title={event.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                            arrow
+                          >
+                            <div className="flex items-center gap-1">
+                              {getEventIcon(event)}
+                            </div>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    </td>
                     <td className="p-3 text-gray-400 text-sm">
                       {new Date(webhook.created_at).toLocaleDateString()}
                     </td>
