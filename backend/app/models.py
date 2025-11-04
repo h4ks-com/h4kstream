@@ -197,7 +197,7 @@ class WebhookSubscriptionRequest(BaseModel):
     events: list[str] = Field(
         ...,
         min_length=1,
-        description="Event types to subscribe to: song_changed, livestream_started, livestream_ended, queue_switched",
+        description="Event types to subscribe to: song_changed, song_added, livestream_started, livestream_ended, queue_switched",
     )
     signing_key: str = Field(
         ..., min_length=16, description="Secret key for HMAC signature verification (min 16 chars)"
@@ -206,8 +206,7 @@ class WebhookSubscriptionRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_events(self) -> "WebhookSubscriptionRequest":
-        """Validate event types are recognized."""
-        valid_events = {"song_changed", "livestream_started", "livestream_ended", "queue_switched"}
+        valid_events = {"song_changed", "song_added", "livestream_started", "livestream_ended", "queue_switched"}
         for event in self.events:
             if event not in valid_events:
                 raise ValueError(f"Invalid event type: {event}. Must be one of {valid_events}")

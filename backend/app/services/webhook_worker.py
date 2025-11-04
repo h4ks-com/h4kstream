@@ -18,9 +18,9 @@ from app.services.event_publisher import EventPublisher
 from app.services.livestream_service import LivestreamService
 from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
-from app.services.redis_service import format_song_id
 from app.services.webhook_delivery import deliver_webhook
 from app.settings import settings
+from app.types import PlaylistType
 
 # Configure logging
 logging.basicConfig(
@@ -40,43 +40,6 @@ def signal_handler(signum: int, frame: object) -> None:
     shutdown_event.set()
 
 
-async def setup_mpd_instance(
-    client: MPDClient, name: str, enable_repeat: bool = False, enable_random: bool = False
-) -> None:
-    """Setup and start MPD instance if it has songs in queue."""
-    try:
-        await client.connect()
-        status = await client.get_status()
-        queue_length = int(status.get("playlistlength", 0))
-
-        if queue_length > 0:
-            if enable_repeat:
-                await client.set_repeat(True)
-            if enable_random:
-                await client.set_random(True)
-
-            mode_info = []
-            if enable_repeat:
-                mode_info.append("looping")
-            if enable_random:
-                mode_info.append("random")
-            mode_str = f", {' + '.join(mode_info)} enabled" if mode_info else ""
-
-            logger.info(f"{name}: {queue_length} songs{mode_str}, starting playback")
-            await client.play()
-        else:
-            logger.info(f"{name} empty")
-    except (ConnectionError, TimeoutError, OSError) as e:
-        logger.error(f"Failed to setup {name}: {e}", exc_info=True)
-    finally:
-        try:
-            await client.disconnect()
-        except (ConnectionError, OSError):
-            logger.debug(f"Error disconnecting from {name} (likely already disconnected)")
-        except Exception as e:
-            logger.warning(f"Unexpected error disconnecting from {name}: {e}")
-
-
 class WebhookWorker:
     """Webhook worker service for event processing and delivery."""
 
@@ -88,8 +51,8 @@ class WebhookWorker:
         self.pubsub: redis.client.PubSub | None = None
         self.livestream_service: LivestreamService | None = None
         self.event_publisher: EventPublisher | None = None
-        self.user_mpd: MPDClient | None = None
-        self.fallback_mpd: MPDClient | None = None
+        self.mpd_user: MPDClient | None = None
+        self.mpd_fallback: MPDClient | None = None
 
     async def initialize(self) -> None:
         """Initialize Redis connections and services."""
@@ -101,13 +64,9 @@ class WebhookWorker:
         self.livestream_service = LivestreamService(self.redis_client)
         self.event_publisher = EventPublisher(self.redis_client)
 
-        # Initialize MPD clients
-        self.user_mpd = MPDClient(host=settings.MPD_USER_HOST, port=settings.MPD_USER_PORT)
-        self.fallback_mpd = MPDClient(host=settings.MPD_FALLBACK_HOST, port=settings.MPD_FALLBACK_PORT)
-
-        # Resume playback for both MPD instances on startup
-        await setup_mpd_instance(self.user_mpd, "User queue")
-        await setup_mpd_instance(self.fallback_mpd, "Fallback playlist", enable_repeat=True, enable_random=True)
+        # Initialize MPD clients for metadata polling
+        self.mpd_user = MPDClient(settings.MPD_USER_HOST, settings.MPD_USER_PORT)
+        self.mpd_fallback = MPDClient(settings.MPD_FALLBACK_HOST, settings.MPD_FALLBACK_PORT)
 
         logger.info("Webhook worker initialized")
 
@@ -180,6 +139,7 @@ class WebhookWorker:
         # Subscribe to all event channels
         event_channels = [
             "events:song_changed",
+            "events:song_added",
             "events:livestream_started",
             "events:livestream_ended",
             "events:queue_switched",
@@ -256,108 +216,127 @@ class WebhookWorker:
         except asyncio.CancelledError:
             logger.info("Livestream monitor cancelled")
 
-    async def mpd_monitor_loop(self, mpd_client: MPDClient, playlist: str) -> None:
-        """Monitor MPD for song changes and publish events.
+    async def mpd_monitor_loop(self, source_name: PlaylistType, mpd_client: MPDClient) -> None:
+        """Monitor MPD for song changes and publish events respecting source priority.
 
-        Args:
-            mpd_client: MPD client to monitor (user or fallback)
-            playlist: Playlist type ("user" or "fallback")
+        Only publishes events when:
+        1. This source is the highest priority active source
+        2. The MPD player is actually in PLAYING state (not paused/stopped)
+        3. The song ID has changed
         """
-        logger.info(f"MPD monitor started for {playlist} playlist")
-        current_song_id = None
+        assert self.redis_service is not None, "RedisService not initialized"
+        assert self.event_publisher is not None, "EventPublisher not initialized"
+
+        logger.info(f"MPD monitor started for {source_name} playlist")
+        last_song_id: str | None = None
+
+        # Create dedicated MPD client for priority checking (separate from main monitor client)
+        check_client = MPDClient(settings.MPD_USER_HOST, settings.MPD_USER_PORT)
 
         try:
-            # Connect to MPD
-            await mpd_client.connect()
-
-            # Get initial current song
-            try:
-                current_song = await mpd_client.get_current_song()
-                current_song_id = current_song.get("id") if current_song else None
-                logger.info(f"Initial {playlist} song: {current_song_id}")
-            except (ConnectionError, OSError, ValueError) as e:
-                logger.error(f"Error getting initial {playlist} song: {e}")
-
             while not shutdown_event.is_set():
                 try:
-                    # Poll for song changes every 2 seconds
-                    await asyncio.sleep(2.0)
+                    # Use shared priority logic to determine active source
+                    active_source = await self.redis_service.determine_active_source(
+                        user_mpd_client=check_client,
+                        check_user_playing=True  # Check if user is actually PLAYING, not just has songs
+                    )
 
-                    try:
-                        current_song = await mpd_client.get_current_song()
-                        new_song_id = current_song.get("id") if current_song else None
-                    except Exception as e:
-                        logger.error(f"Error getting current song from {playlist} MPD: {e}")
+                    # Only proceed if THIS source is the active one
+                    if active_source != source_name:
+                        await asyncio.sleep(2)
                         continue
 
-                    # Check if song changed
-                    if new_song_id != current_song_id:
-                        logger.info(f"{playlist} song changed: {current_song_id} -> {new_song_id}")
-                        current_song_id = new_song_id
+                    # Get current song and playback status from THIS MPD
+                    await mpd_client.connect()
+                    status = await mpd_client.get_status()
+                    current_song = await mpd_client.get_current_song()
+                    await mpd_client.disconnect()
 
-                        if current_song and new_song_id is not None:
-                            # Publish song_changed event
-                            try:
-                                prefixed_id = format_song_id(
-                                    int(new_song_id), "user" if playlist == "user" else "fallback"
-                                )
-                                assert self.event_publisher is not None, "Event publisher not initialized"
-                                await self.event_publisher.publish(
-                                    event_type="song_changed",
-                                    data={
-                                        "song_id": prefixed_id,
-                                        "playlist": playlist,
-                                        "title": current_song.get("title", current_song.get("file")),
-                                        "artist": current_song.get("artist"),
-                                        "file": current_song.get("file"),
-                                    },
-                                    description=f"Song changed in {playlist} playlist",
-                                )
-                                logger.info(f"Published song_changed event for {playlist}: {prefixed_id}")
-                            except (ConnectionError, OSError, ValueError, RuntimeError) as e:
-                                logger.error(f"Error publishing song_changed event: {e}", exc_info=True)
+                    # Only publish if actually PLAYING (not paused/stopped)
+                    if status.get("state") != "play":
+                        await asyncio.sleep(2)
+                        continue
 
-                except asyncio.CancelledError:
-                    break
-                except (ConnectionError, OSError, ValueError, TimeoutError, MemoryError) as e:
-                    logger.error(f"Connection error in {playlist} MPD monitor: {e}", exc_info=True)
-                    # Try to reconnect
-                    try:
-                        await mpd_client.disconnect()
-                    except (ConnectionError, OSError, ValueError):
-                        pass
-                    await asyncio.sleep(5)  # Wait before reconnect
-                    try:
-                        await mpd_client.connect()
-                        logger.info(f"Reconnected to {playlist} MPD")
-                    except (ConnectionError, OSError) as reconnect_error:
-                        logger.error(f"Failed to reconnect to {playlist} MPD: {reconnect_error}")
+                    if not current_song or not current_song.get("file"):
+                        await asyncio.sleep(2)
+                        continue
+
+                    current_song_id = current_song.get("id")
+                    if current_song_id and current_song_id != last_song_id:
+                        last_song_id = current_song_id
+
+                        # Extract metadata from MPD
+                        title = current_song.get("title") or current_song.get("file", "Unknown")
+                        artist = current_song.get("artist")
+                        genre = current_song.get("genre")
+
+                        # Check Redis for metadata overrides (from custom add endpoints)
+                        overrides = await self.redis_service.get_song_metadata(source_name, str(current_song_id))
+                        if overrides:
+                            if "title" in overrides:
+                                title = overrides["title"]
+                            if "artist" in overrides:
+                                artist = overrides["artist"]
+
+                        # Store metadata in Redis
+                        metadata = {
+                            "title": title,
+                            "artist": artist,
+                            "genre": genre,
+                            "description": None,
+                        }
+                        await self.redis_service.set_metadata(source_name, metadata)
+                        await self.redis_service.set_active_source(source_name)
+
+                        # Publish song_changed event
+                        description = f"Playing next: {title}"
+                        if artist:
+                            description += f" by {artist}"
+
+                        await self.event_publisher.publish(
+                            event_type="song_changed",
+                            data={
+                                "playlist": source_name,  # CloudBot expects "playlist" not "source"
+                                "title": title,  # Flattened from metadata
+                                "artist": artist,  # Flattened from metadata
+                                "genre": genre,  # Flattened from metadata
+                            },
+                            description=description,
+                        )
+                        logger.info(f"Published song_changed for {source_name}: {title} - {artist}")
+
+                except (RedisConnectionError, ConnectionError, OSError, TimeoutError) as e:
+                    logger.error(f"Connection error in {source_name} MPD monitor: {e}", exc_info=True)
+                    await asyncio.sleep(5)
+                except Exception as e:
+                    logger.error(f"Error in {source_name} MPD monitor: {e}", exc_info=True)
+
+                await asyncio.sleep(2)
 
         except asyncio.CancelledError:
-            logger.info(f"MPD {playlist} monitor cancelled")
-        finally:
-            try:
-                await mpd_client.disconnect()
-            except (ConnectionError, OSError, ValueError):
-                pass
+            logger.info(f"MPD monitor cancelled for {source_name}")
 
     async def run(self) -> None:
-        """Run webhook worker service (main entry point)."""
+        """Run webhook worker service (main entry point).
+
+        Listens for Redis pub/sub events, delivers webhooks, and monitors MPD for song changes.
+        """
         logger.info("Starting webhook worker service...")
 
         await self.initialize()
 
-        # Verify all services are initialized
-        assert self.user_mpd is not None, "User MPD client not initialized"
-        assert self.fallback_mpd is not None, "Fallback MPD client not initialized"
-
         # Start background tasks
         pubsub_task = asyncio.create_task(self.pubsub_listener())
         livestream_monitor_task = asyncio.create_task(self.livestream_monitor_loop())
-        user_mpd_monitor_task = asyncio.create_task(self.mpd_monitor_loop(self.user_mpd, "user"))
-        fallback_mpd_monitor_task = asyncio.create_task(self.mpd_monitor_loop(self.fallback_mpd, "fallback"))
 
-        logger.info("Webhook worker running (Ctrl+C to stop)")
+        # Start MPD monitoring tasks with priority checking
+        assert self.mpd_user is not None
+        assert self.mpd_fallback is not None
+        mpd_user_monitor_task = asyncio.create_task(self.mpd_monitor_loop("user", self.mpd_user))
+        mpd_fallback_monitor_task = asyncio.create_task(self.mpd_monitor_loop("fallback", self.mpd_fallback))
+
+        logger.info("Webhook worker running with MPD monitors (Ctrl+C to stop)")
 
         # Wait for shutdown signal
         await shutdown_event.wait()
@@ -366,13 +345,13 @@ class WebhookWorker:
 
         pubsub_task.cancel()
         livestream_monitor_task.cancel()
-        user_mpd_monitor_task.cancel()
-        fallback_mpd_monitor_task.cancel()
+        mpd_user_monitor_task.cancel()
+        mpd_fallback_monitor_task.cancel()
         await asyncio.gather(
             pubsub_task,
             livestream_monitor_task,
-            user_mpd_monitor_task,
-            fallback_mpd_monitor_task,
+            mpd_user_monitor_task,
+            mpd_fallback_monitor_task,
             return_exceptions=True,
         )
 

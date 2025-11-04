@@ -130,8 +130,13 @@ async def update_metadata(
     request: MetadataUpdateRequest,
     redis_client: RedisService = Depends(dep_redis_client),
     event_publisher: EventPublisher = Depends(dep_event_publisher),
+    user_mpd: MPDClient = Depends(dep_mpd_user),
 ) -> SuccessResponse:
-    """Liquidsoap reports current track metadata."""
+    """Liquidsoap reports current track metadata.
+
+    Only publishes song_changed events if this source is actually playing (respecting priority).
+    Priority: livestream > user > fallback
+    """
     new_metadata = request.metadata.model_dump()
 
     # Get old active source to detect queue switches
@@ -159,41 +164,54 @@ async def update_metadata(
         merged = new_metadata
 
     await redis_client.set_metadata(request.source, merged)
-    await redis_client.set_active_source(request.source)
 
-    logger.info(f"Updated metadata for source '{request.source}': {merged}")
+    # Use shared priority logic to determine active source
+    active_source = await redis_client.determine_active_source(
+        user_mpd_client=user_mpd,
+        check_user_playing=True  # Only publish webhooks when actually PLAYING, not paused/stopped
+    )
 
-    # Publish queue_switched event if source changed
-    if old_source and old_source != request.source:
-        description = f"Switched from {old_source} to {request.source}"
+    # Only update active source and publish events if this source is actually playing
+    should_publish = request.source == active_source
+
+    if should_publish:
+        await redis_client.set_active_source(request.source)
+        logger.info(f"Active source '{request.source}' metadata updated: {merged}")
+
+        # Publish queue_switched event if source changed
+        if old_source and old_source != request.source:
+            description = f"Switched from {old_source} to {request.source}"
+            await event_publisher.publish(
+                event_type="queue_switched",
+                data={"from_source": old_source, "to_source": request.source},
+                description=description,
+            )
+            logger.info(f"Published queue_switched event: {description}")
+
+        # Publish song_changed event
+        title = merged.get("title", "Unknown")
+        artist = merged.get("artist", "Unknown")
+        description = f"Playing next: {title}"
+        if artist and artist != "Unknown":
+            description += f" by {artist}"
+
         await event_publisher.publish(
-            event_type="queue_switched",
-            data={"from_source": old_source, "to_source": request.source},
+            event_type="song_changed",
+            data={"source": request.source, "metadata": merged},
             description=description,
         )
-        logger.info(f"Published queue_switched event: {description}")
+        logger.debug(f"Published song_changed event for {request.source}")
 
-    # Publish song_changed event
-    title = merged.get("title", "Unknown")
-    artist = merged.get("artist", "Unknown")
-    description = f"Playing next: {title}"
-    if artist and artist != "Unknown":
-        description += f" by {artist}"
-
-    await event_publisher.publish(
-        event_type="song_changed",
-        data={"source": request.source, "metadata": merged},
-        description=description,
-    )
-    logger.debug(f"Published song_changed event for {request.source}")
-
-    # Publish metadata_updated event for recording worker
-    await event_publisher.publish(
-        event_type="metadata_updated",
-        data={"source": request.source, "metadata": merged},
-        description=f"Metadata updated for {request.source}",
-    )
-    logger.debug(f"Published metadata_updated event for {request.source}")
+        # Publish metadata_updated event for recording worker (only for livestream)
+        if request.source == "livestream":
+            await event_publisher.publish(
+                event_type="metadata_updated",
+                data={"source": request.source, "metadata": merged},
+                description=f"Metadata updated for {request.source}",
+            )
+            logger.debug(f"Published metadata_updated event for {request.source}")
+    else:
+        logger.debug(f"Ignored metadata from '{request.source}' (active source is '{active_source}')")
 
     return SuccessResponse()
 

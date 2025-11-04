@@ -124,7 +124,7 @@ services:
     environment:
     - REDIS_HOST=redis
     - REDIS_PORT=6379
-    - LIQUIDSOAP_HOST=liquidsoap
+    - LIQUIDSOAP_RECORDING_HOST=liquidsoap
     - LIQUIDSOAP_RECORDING_PORT=8004
     - DATA_PATH=/app/data
     - RECORDINGS_PATH=/app/data/recordings

@@ -48,7 +48,7 @@ class RedisService:
 
     async def close(self):
         """Close the Redis connection."""
-        await self.redis.close()
+        await self.redis.aclose()
 
     async def set_value(self, key: str, value: dict, ttl: int = 3600):
         """Set a key-value pair in Redis with optional TTL.
@@ -219,6 +219,49 @@ class RedisService:
     async def clear_livestream_active(self) -> None:
         """Clear livestream active flag."""
         await self.redis.delete("livestream:active_flag")
+
+    async def determine_active_source(self, user_mpd_client=None, check_user_playing: bool = False) -> str:
+        """Determine the currently active source based on priority: livestream > user > fallback.
+
+        Args:
+            user_mpd_client: Optional MPDClient instance to check if user queue is playing
+            check_user_playing: If True, check if user MPD is actually PLAYING (not just has a song)
+
+        Returns:
+            Active source name: "livestream", "user", or "fallback"
+        """
+        # Priority 1: Check livestream
+        livestream_active = await self.is_livestream_active()
+        if livestream_active:
+            return "livestream"
+
+        # Priority 2: Check if user queue is playing
+        if user_mpd_client:
+            try:
+                await user_mpd_client.connect()
+
+                if check_user_playing:
+                    # Check both that a song exists AND that MPD is in PLAYING state
+                    status = await user_mpd_client.get_status()
+                    user_song = await user_mpd_client.get_current_song()
+                    await user_mpd_client.disconnect()
+
+                    # User is active only if playing AND has a song file
+                    if status.get("state") == "play" and user_song and user_song.get("file"):
+                        return "user"
+                else:
+                    # Just check if a song exists (for /metadata/now endpoint)
+                    user_song = await user_mpd_client.get_current_song()
+                    await user_mpd_client.disconnect()
+
+                    if user_song and user_song.get("file"):
+                        return "user"
+            except Exception:
+                # If we can't check user MPD, fall through to fallback
+                pass
+
+        # Priority 3: Fallback
+        return "fallback"
 
     async def get_now_playing(self) -> dict:
         """Get current playing information (active source + its metadata)."""

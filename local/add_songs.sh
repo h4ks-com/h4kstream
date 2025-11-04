@@ -28,26 +28,26 @@ while IFS= read -r line; do
 		-F "url=${line}" | jq -r '.status // .detail'
 done <short_songs.txt
 
-echo ""
-echo "Adding Rick Astley to fallback queue..."
-echo "========================================"
+# echo ""
+# echo "Adding Rick Astley to fallback queue..."
+# echo "========================================"
 
 
-# Add songs from short_songs.txt to fallback queue
-while IFS= read -r line; do
-	# Skip empty lines
-	[[ -z "$line" ]] && continue
+# # Add songs from short_songs.txt to fallback queue
+# while IFS= read -r line; do
+# 	# Skip empty lines
+# 	[[ -z "$line" ]] && continue
 
-	echo "Adding to user queue: $line"
-	curl -X POST "${BASE_URL}/api/admin/queue/add?playlist=fallback" \
-		-H "Authorization: Bearer ${ADMIN_TOKEN}" \
-		-F "url=${line}" | jq -r '.status // .detail'
-done <short_songs.txt
+# 	echo "Adding to user queue: $line"
+# 	curl -X POST "${BASE_URL}/api/admin/queue/add?playlist=fallback" \
+# 		-H "Authorization: Bearer ${ADMIN_TOKEN}" \
+# 		-F "url=${line}" | jq -r '.status // .detail'
+# done <short_songs.txt
 
-# Add Rick Astley - Never Gonna Give You Up to fallback queue
-curl -s -X POST "${BASE_URL}/api/admin/queue/add?playlist=fallback" \
-	-H "Authorization: Bearer ${ADMIN_TOKEN}" \
-	-F "url=https://www.youtube.com/watch?v=dQw4w9WgXcQ" | jq -r '.status // .detail'
+# # Add Rick Astley - Never Gonna Give You Up to fallback queue
+# curl -s -X POST "${BASE_URL}/api/admin/queue/add?playlist=fallback" \
+# 	-H "Authorization: Bearer ${ADMIN_TOKEN}" \
+# 	-F "url=https://www.youtube.com/watch?v=dQw4w9WgXcQ" | jq -r '.status // .detail'
 
-echo ""
-echo "✅ All songs added successfully!"
+# echo ""
+# echo "✅ All songs added successfully!"

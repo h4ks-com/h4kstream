@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     def REDIS_URL(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
 
+    @property
+    def LIQUIDSOAP_RECORDING_URL(self) -> str:
+        """Get the full URL for Liquidsoap recording stream."""
+        return f"http://{self.LIQUIDSOAP_RECORDING_HOST}:{self.LIQUIDSOAP_RECORDING_PORT}/stream"
+
     MPD_USER_HOST: str = "localhost"
     MPD_USER_PORT: int = 6600
     MPD_FALLBACK_HOST: str = "localhost"
@@ -37,6 +42,8 @@ class Settings(BaseSettings):
 
     LIQUIDSOAP_TELNET_HOST: str = "liquidsoap"
     LIQUIDSOAP_TELNET_PORT: int = 1234
+    LIQUIDSOAP_RECORDING_HOST: str = "liquidsoap"
+    LIQUIDSOAP_RECORDING_PORT: int = 8004
 
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379

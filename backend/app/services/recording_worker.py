@@ -119,7 +119,7 @@ class RecordingWorker:
             await asyncio.sleep(retry_delay)
 
             logger.info(
-                f"Connecting to http://liquidsoap:8004/stream for recording "
+                f"Connecting to {settings.LIQUIDSOAP_RECORDING_URL} for recording "
                 f"(attempt {attempt + 1}/{max_retries})"
             )
 
@@ -128,7 +128,7 @@ class RecordingWorker:
                 "-loglevel",
                 "warning",
                 "-i",
-                "http://liquidsoap:8004/stream",
+                settings.LIQUIDSOAP_RECORDING_URL,
                 "-c:a",
                 "libmp3lame",
                 "-b:a",

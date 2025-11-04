@@ -418,7 +418,7 @@ def test_webhook_delivery_logs(
         headers=admin_headers,
         json={
             "url": webhook_server,
-            "events": ["song_changed"],
+            "events": ["song_added", "song_changed"],
             "signing_key": signing_key,
             "description": "Logging test webhook",
         },
@@ -454,7 +454,7 @@ def test_webhook_delivery_logs(
     # Verify delivery log structure
     delivery = deliveries[0]
     assert delivery["webhook_id"] == webhook_id
-    assert delivery["event_type"] == "song_changed"
+    assert delivery["event_type"] in ["song_added", "song_changed"]
     assert delivery["url"] == webhook_server
     assert delivery["status"] in ["success", "failed"]
     assert "timestamp" in delivery

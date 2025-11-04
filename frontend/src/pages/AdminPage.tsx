@@ -2,13 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
 import { AdminService, WebhooksService, ShowsService } from '../utils/apiClient';
-import type { UserPublic, ShowPublic, WebhookSubscription, SongItem } from '../api';
+import type { UserPublic, ShowPublic, WebhookSubscription, SongItem, WebhookDelivery } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import RadioIcon from '@mui/icons-material/Radio';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import Tooltip from '@mui/material/Tooltip';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 
 type Section = 'users' | 'shows' | 'queue' | 'livestream' | 'webhooks' | 'transitions';
 
@@ -927,6 +933,8 @@ const getEventIcon = (eventType: string) => {
   switch (eventType) {
     case 'song_changed':
       return <MusicNoteIcon {...iconProps} />;
+    case 'song_added':
+      return <PlaylistAddIcon {...iconProps} />;
     case 'livestream_started':
       return <RadioIcon {...iconProps} />;
     case 'livestream_ended':
@@ -948,7 +956,13 @@ const WebhooksSection: React.FC = () => {
   const [signingKey, setSigningKey] = useState('');
   const [description, setDescription] = useState('');
 
-  const availableEvents = ['song_changed', 'livestream_started', 'livestream_ended', 'queue_switched'];
+  // Delivery logs state
+  const [deliveryLogsOpen, setDeliveryLogsOpen] = useState(false);
+  const [selectedWebhook, setSelectedWebhook] = useState<WebhookSubscription | null>(null);
+  const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
+  const [loadingDeliveries, setLoadingDeliveries] = useState(false);
+
+  const availableEvents = ['song_changed', 'song_added', 'livestream_started', 'livestream_ended', 'queue_switched'];
 
   const fetchWebhooks = async () => {
     try {
@@ -993,6 +1007,26 @@ const WebhooksSection: React.FC = () => {
     } catch (err: any) {
       setError(err.body?.detail || 'Failed to delete webhook');
     }
+  };
+
+  const viewDeliveryLogs = async (webhook: WebhookSubscription) => {
+    setSelectedWebhook(webhook);
+    setDeliveryLogsOpen(true);
+    setLoadingDeliveries(true);
+    try {
+      const logs = await WebhooksService().getWebhookDeliveriesAdminWebhooksWebhookIdDeliveriesGet(webhook.webhook_id);
+      setDeliveries(logs);
+    } catch (err: any) {
+      console.error('Failed to fetch delivery logs:', err);
+    } finally {
+      setLoadingDeliveries(false);
+    }
+  };
+
+  const closeDeliveryLogs = () => {
+    setDeliveryLogsOpen(false);
+    setSelectedWebhook(null);
+    setDeliveries([]);
   };
 
   useEffect(() => {
@@ -1134,12 +1168,20 @@ const WebhooksSection: React.FC = () => {
                       {new Date(webhook.created_at).toLocaleDateString()}
                     </td>
                     <td className="p-3">
-                      <button
-                        onClick={() => deleteWebhook(webhook.webhook_id)}
-                        className="text-red-400 hover:text-red-300 font-mono text-sm"
-                      >
-                        [DELETE]
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => viewDeliveryLogs(webhook)}
+                          className="text-h4ks-green-400 hover:text-h4ks-green-300 font-mono text-sm"
+                        >
+                          [LOGS]
+                        </button>
+                        <button
+                          onClick={() => deleteWebhook(webhook.webhook_id)}
+                          className="text-red-400 hover:text-red-300 font-mono text-sm"
+                        >
+                          [DELETE]
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1148,6 +1190,85 @@ const WebhooksSection: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Delivery Logs Modal */}
+      <Dialog
+        open={deliveryLogsOpen}
+        onClose={closeDeliveryLogs}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          style: {
+            backgroundColor: '#0a0e14',
+            border: '2px solid #2d5a3c',
+            color: '#e5e7eb',
+          },
+        }}
+      >
+        <DialogTitle
+          style={{
+            backgroundColor: '#0a0e14',
+            color: '#4ade80',
+            fontFamily: 'monospace',
+            borderBottom: '1px solid #2d5a3c',
+          }}
+        >
+          [DELIVERY LOGS] - {selectedWebhook?.url}
+        </DialogTitle>
+        <DialogContent style={{ backgroundColor: '#0a0e14', padding: '16px' }}>
+          {loadingDeliveries ? (
+            <div className="text-gray-400 text-center py-4">Loading delivery logs...</div>
+          ) : deliveries.length === 0 ? (
+            <div className="text-gray-400 text-center py-4">No delivery attempts recorded yet</div>
+          ) : (
+            <div className="overflow-x-auto max-h-96 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-h4ks-green-800">
+                    <th className="text-left p-2 text-h4ks-green-400 font-mono">Status</th>
+                    <th className="text-left p-2 text-h4ks-green-400 font-mono">Event</th>
+                    <th className="text-left p-2 text-h4ks-green-400 font-mono">Time</th>
+                    <th className="text-left p-2 text-h4ks-green-400 font-mono">HTTP Code</th>
+                    <th className="text-left p-2 text-h4ks-green-400 font-mono">Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveries.map((delivery, idx) => (
+                    <tr key={idx} className="border-b border-h4ks-green-900 hover:bg-h4ks-dark-800">
+                      <td className="p-2">
+                        {delivery.status === 'success' ? (
+                          <CheckCircleIcon style={{ fontSize: '18px', color: '#4ade80' }} />
+                        ) : (
+                          <ErrorIcon style={{ fontSize: '18px', color: '#f87171' }} />
+                        )}
+                      </td>
+                      <td className="p-2 text-gray-300">
+                        <div className="flex items-center gap-1">
+                          {getEventIcon(delivery.event_type)}
+                          <span className="ml-1">{delivery.event_type}</span>
+                        </div>
+                      </td>
+                      <td className="p-2 text-gray-400">{new Date(delivery.timestamp).toLocaleString()}</td>
+                      <td className="p-2 text-gray-300">{delivery.status_code || '-'}</td>
+                      <td className="p-2 text-red-400 text-xs max-w-xs truncate" title={delivery.error || ''}>
+                        {delivery.error || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={closeDeliveryLogs}
+              className="bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white font-mono py-2 px-4"
+            >
+              [CLOSE]
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
