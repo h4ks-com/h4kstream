@@ -35,3 +35,8 @@ Check and create tests for new features. Run tests:
 ```sh
 make test-all
 ```
+
+# TODO
+
+- [ ] The worker for recording livestreams is probably not necessary as liquidsoap can do it
+- [ ] Get rid of 2 mpd containers. Liquidsoap could do that. (?)

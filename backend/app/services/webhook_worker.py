@@ -189,13 +189,31 @@ class WebhookWorker:
 
         try:
             while not shutdown_event.is_set():
-                # Check for messages with short timeout to allow shutdown
                 try:
-                    message = await asyncio.wait_for(
-                        self.pubsub.get_message(ignore_subscribe_messages=True), timeout=1.0
-                    )
-                except TimeoutError:
-                    continue
+                    # Use async for to avoid busy-waiting
+                    async for message in self.pubsub.listen():
+                        if shutdown_event.is_set():
+                            break
+
+                        if message["type"] == "subscribe":
+                            continue
+
+                        if message["type"] == "message":
+                            channel = message["channel"].decode()
+                            data = message["data"].decode()
+
+                            try:
+                                event_payload = json.loads(data)
+                                event_type = event_payload.get("event_type")
+
+                                logger.debug(f"Received {event_type} event from {channel}")
+
+                                # Process event asynchronously
+                                asyncio.create_task(self.process_event(event_type, event_payload))
+
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Failed to decode event payload: {e}")
+
                 except (RedisConnectionError, ConnectionError, OSError) as e:
                     logger.error(f"Redis connection error in pubsub listener: {e}")
                     await asyncio.sleep(5)  # Wait before reconnecting
@@ -207,22 +225,6 @@ class WebhookWorker:
                     except Exception as reconnect_error:
                         logger.error(f"Failed to reconnect pubsub: {reconnect_error}")
                     continue
-
-                if message and message["type"] == "message":
-                    channel = message["channel"].decode()
-                    data = message["data"].decode()
-
-                    try:
-                        event_payload = json.loads(data)
-                        event_type = event_payload.get("event_type")
-
-                        logger.debug(f"Received {event_type} event from {channel}")
-
-                        # Process event asynchronously
-                        asyncio.create_task(self.process_event(event_type, event_payload))
-
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to decode event payload: {e}")
 
         except asyncio.CancelledError:
             logger.info("Pub/Sub listener cancelled")
@@ -278,16 +280,15 @@ class WebhookWorker:
 
             while not shutdown_event.is_set():
                 try:
-                    # Wait for player or playlist changes (with 30s timeout to allow shutdown)
-                    try:
-                        changes = await asyncio.wait_for(mpd_client.idle(["player", "playlist"]), timeout=30.0)
-                        logger.debug(f"MPD {playlist} changes: {changes}")
-                    except TimeoutError:
-                        continue  # No changes, check shutdown and continue
+                    # Poll for song changes every 2 seconds
+                    await asyncio.sleep(2.0)
 
-                    # Get current song
-                    current_song = await mpd_client.get_current_song()
-                    new_song_id = current_song.get("id") if current_song else None
+                    try:
+                        current_song = await mpd_client.get_current_song()
+                        new_song_id = current_song.get("id") if current_song else None
+                    except Exception as e:
+                        logger.error(f"Error getting current song from {playlist} MPD: {e}")
+                        continue
 
                     # Check if song changed
                     if new_song_id != current_song_id:
@@ -363,13 +364,10 @@ class WebhookWorker:
 
         logger.info("Shutting down webhook worker...")
 
-        # Cancel tasks
         pubsub_task.cancel()
         livestream_monitor_task.cancel()
         user_mpd_monitor_task.cancel()
         fallback_mpd_monitor_task.cancel()
-
-        # Wait for tasks to finish
         await asyncio.gather(
             pubsub_task,
             livestream_monitor_task,
