@@ -1,0 +1,312 @@
+# Default values for hackstream
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  domain: hackstream.local
+  volumePath: /data/hackstream
+
+# Backend API configuration
+backend:
+  replicaCount: 3
+
+  image:
+    repository: mattfly/hackstream-backend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  # Keel annotations (optional - user can enable)
+  annotations: {}
+  # Example:
+  # keel.sh/policy: force
+  # keel.sh/trigger: poll
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  # Horizontal Pod Autoscaler (optional)
+  autoscaling:
+    enabled: false
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  env:
+    ROOT_PATH: "/api"
+    LOG_LEVEL: "INFO"
+    DEBUG: "false"
+    RELOAD: "false"
+
+  # Secrets - Override in production!
+  secrets:
+    ADMIN_API_TOKEN: "changeme"
+    LIQUIDSOAP_TOKEN: "changeme"
+    JWT_SECRET: "changeme"
+
+# Webhook worker configuration
+webhookWorker:
+  enabled: true
+
+  image:
+    repository: mattfly/hackstream-backend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+  env:
+    LOG_LEVEL: "INFO"
+
+# Recording worker configuration
+recordingWorker:
+  enabled: true
+
+  image:
+    repository: mattfly/hackstream-backend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+  env:
+    LOG_LEVEL: "INFO"
+
+# Redis configuration
+redis:
+  enabled: true
+
+  image:
+    repository: redis
+    tag: alpine
+    pullPolicy: IfNotPresent
+
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""  # Use default or specify (e.g., "nfs")
+    accessMode: ReadWriteOnce
+
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+# MPD User instance configuration
+mpdUser:
+  enabled: true
+
+  image:
+    repository: gists/mpd
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+# MPD Fallback instance configuration
+mpdFallback:
+  enabled: true
+
+  image:
+    repository: gists/mpd
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+# Liquidsoap configuration
+liquidsoap:
+  enabled: true
+
+  image:
+    repository: savonet/liquidsoap
+    tag: v2.4.0
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Janus WebRTC Gateway configuration
+janus:
+  enabled: true
+
+  # IMPORTANT: hostNetwork is required for mDNS candidates from browser
+  hostNetwork: true
+
+  # Use DaemonSet for predictable node assignment (optional)
+  useDaemonSet: false
+
+  # Node selector for Janus pods (useful with DaemonSet)
+  nodeSelector: {}
+  # Example:
+  # janus-capable: "true"
+
+  image:
+    repository: canyan/janus-gateway
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Persistent storage configuration
+persistence:
+  # Music library storage (shared across MPD instances)
+  music:
+    enabled: true
+    size: 50Gi
+    storageClass: ""  # Use default or specify (e.g., "nfs")
+    accessMode: ReadWriteMany  # Requires NFS or similar for RWX
+
+  # Recordings storage
+  recordings:
+    enabled: true
+    size: 100Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+
+  # Redis persistence
+  redis:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+
+# Ingress configuration (Traefik)
+ingress:
+  enabled: true
+  className: traefik
+
+  # Custom annotations (optional)
+  annotations: {}
+
+  # Domain configuration
+  host: ""  # Set to your domain (e.g., "hackstream.example.com")
+
+  # TLS configuration
+  tls:
+    enabled: false
+    secretName: ""  # Cert-manager will create this
+    certResolver: ""  # For cert-manager (e.g., "cloudflare")
+
+  # Route configurations
+  routes:
+    api:
+      enabled: true
+      path: /api
+      pathType: Prefix
+      service: backend
+      port: 8000
+
+    janus:
+      enabled: true
+      path: /janus
+      pathType: Prefix
+      service: janus
+      port: 8088
+
+    janusws:
+      enabled: true
+      path: /janusws
+      pathType: Prefix
+      service: janus
+      port: 8188
+
+    stream:
+      enabled: true
+      path: /stream
+      pathType: Prefix
+      service: liquidsoap
+      port: 8003
+
+    radio:
+      enabled: true
+      path: /radio
+      pathType: Prefix
+      service: liquidsoap
+      port: 8001
+
+  # Custom middlewares (users can add rate limiting, CORS, etc.)
+  customMiddlewares: []
+  # Example:
+  # - name: rate-limit
+  #   spec:
+  #     rateLimit:
+  #       average: 100
+  #       burst: 50
+
+# Service configuration
+service:
+  type: ClusterIP
+
+  backend:
+    port: 8000
+    targetPort: 8000
+
+  redis:
+    port: 6379
+    targetPort: 6379
+
+  mpdUser:
+    control: 6600
+    stream: 8001
+
+  mpdFallback:
+    control: 6601
+    stream: 8002
+
+  liquidsoap:
+    harbor: 8003
+    recording: 8004
+
+  janus:
+    http: 8088
+    ws: 8188
+    rtp: 5002
+
+# Name overrides
+nameOverride: ""
+fullnameOverride: ""

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: hackstream
+description: Music streaming platform with web-based control, live streaming, and WebRTC audio
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - music
+  - streaming
+  - radio
+  - webrtc
+  - liquidsoap
+home: https://github.com/yourusername/hackstream
+maintainers:
+  - name: Hackstream Team
+sources:
+  - https://github.com/yourusername/hackstream

@@ -1,0 +1,68 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+
+🌐 Application URL:
+   https://{{ .Values.ingress.host }}
+
+{{- if .Values.ingress.tls.enabled }}
+   TLS is enabled using {{ .Values.ingress.tls.certResolver | default "cert-manager" }}
+{{- end }}
+
+{{- else }}
+
+⚠️  Ingress is not enabled. To access the application:
+
+  1. Port-forward to the backend service:
+     kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "hackstream.fullname" . }}-backend 8000:{{ .Values.backend.service.port }}
+
+  2. Access the application at:
+     http://localhost:8000
+
+{{- end }}
+
+📦 Components deployed:
+{{- if .Values.backend.enabled }}
+  ✅ Backend API ({{ .Values.backend.replicaCount }} replicas)
+{{- end }}
+{{- if .Values.webhookWorker.enabled }}
+  ✅ Webhook Worker
+{{- end }}
+{{- if .Values.recordingWorker.enabled }}
+  ✅ Recording Worker
+{{- end }}
+{{- if .Values.mpdUser.enabled }}
+  ✅ MPD User Queue
+{{- end }}
+{{- if .Values.mpdFallback.enabled }}
+  ✅ MPD Fallback Queue
+{{- end }}
+{{- if .Values.liquidsoap.enabled }}
+  ✅ Liquidsoap Audio Mixer
+{{- end }}
+{{- if .Values.janus.enabled }}
+  ✅ Janus WebRTC Gateway{{ if .Values.janus.hostNetwork }} (hostNetwork mode){{ end }}
+{{- end }}
+{{- if .Values.redis.enabled }}
+  ✅ Redis
+{{- end }}
+
+🔐 Default credentials (CHANGE THESE IN PRODUCTION!):
+   Admin API Token: {{ .Values.backend.secrets.ADMIN_API_TOKEN }}
+   Liquidsoap Token: {{ .Values.backend.secrets.LIQUIDSOAP_TOKEN }}
+
+📝 Important next steps:
+
+1. Update secrets in values.yaml or use a secure secrets management solution
+2. Upload music files to the music PVC
+3. Configure your music library via the web interface
+4. Set up Keel annotations if you want automatic updates (see README.md)
+
+For more information, see the README.md in the chart directory.

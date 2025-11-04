@@ -1,0 +1,14 @@
+{{- if .Values.liquidsoap.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hackstream.fullname" . }}-liquidsoap
+  labels:
+    {{- include "hackstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: liquidsoap
+data:
+  radio.liq: |
+{{ .Files.Get "configs/liquidsoap/radio.liq" | indent 4 }}
+  default_transition.mp3: |
+{{ .Files.Get "configs/liquidsoap/default_transition.mp3" | b64enc | indent 4 }}
+{{- end }}

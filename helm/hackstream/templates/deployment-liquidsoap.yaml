@@ -1,0 +1,76 @@
+{{- if .Values.liquidsoap.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hackstream.fullname" . }}-liquidsoap
+  labels:
+    {{- include "hackstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: liquidsoap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hackstream.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: liquidsoap
+  template:
+    metadata:
+      labels:
+        {{- include "hackstream.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: liquidsoap
+    spec:
+      containers:
+        - name: liquidsoap
+          image: "{{ .Values.liquidsoap.image.repository }}:{{ .Values.liquidsoap.image.tag }}"
+          imagePullPolicy: {{ .Values.liquidsoap.image.pullPolicy }}
+          command:
+            - liquidsoap
+            - /etc/liquidsoap/radio.liq
+          env:
+            - name: MPD_USER_HOST
+              value: {{ include "hackstream.fullname" . }}-mpd-user
+            - name: MPD_USER_PORT
+              value: "6600"
+            - name: MPD_FALLBACK_HOST
+              value: {{ include "hackstream.fullname" . }}-mpd-fallback
+            - name: MPD_FALLBACK_PORT
+              value: "6601"
+            - name: BACKEND_HOST
+              value: {{ include "hackstream.fullname" . }}-backend
+            - name: BACKEND_PORT
+              value: "8000"
+            - name: BACKEND_BASE_PATH
+              value: "/api"  # Backend serves all routes under /api prefix
+            - name: JANUS_HOST
+              value: {{ include "hackstream.janusHost" . }}
+            - name: JANUS_RTP_PORT
+              value: "10000"
+            - name: LIQUIDSOAP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hackstream.fullname" . }}-secrets
+                  key: LIQUIDSOAP_TOKEN
+          ports:
+            - name: telnet
+              containerPort: 1234
+              protocol: TCP
+            - name: icecast
+              containerPort: 8003
+              protocol: TCP
+            - name: harbor
+              containerPort: 8004
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/liquidsoap
+            - name: recordings
+              mountPath: /recordings
+          resources:
+            {{- toYaml .Values.liquidsoap.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "hackstream.fullname" . }}-liquidsoap
+        - name: recordings
+          persistentVolumeClaim:
+            claimName: {{ include "hackstream.fullname" . }}-recordings
+{{- end }}

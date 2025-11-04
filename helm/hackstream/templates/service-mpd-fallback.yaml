@@ -1,0 +1,23 @@
+{{- if .Values.mpdFallback.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hackstream.fullname" . }}-mpd-fallback
+  labels:
+    {{- include "hackstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mpd-fallback
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6601
+      targetPort: mpd
+      protocol: TCP
+      name: mpd
+    - port: 8001
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "hackstream.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mpd-fallback
+{{- end }}

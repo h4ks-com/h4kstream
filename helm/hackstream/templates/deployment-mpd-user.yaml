@@ -1,0 +1,47 @@
+{{- if .Values.mpdUser.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hackstream.fullname" . }}-mpd-user
+  labels:
+    {{- include "hackstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mpd-user
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hackstream.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mpd-user
+  template:
+    metadata:
+      labels:
+        {{- include "hackstream.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mpd-user
+    spec:
+      containers:
+        - name: mpd-user
+          image: "{{ .Values.mpdUser.image.repository }}:{{ .Values.mpdUser.image.tag }}"
+          imagePullPolicy: {{ .Values.mpdUser.image.pullPolicy }}
+          ports:
+            - name: mpd
+              containerPort: 6600
+              protocol: TCP
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          volumeMounts:
+            - name: music
+              mountPath: /music
+            - name: config
+              mountPath: /etc/mpd.conf
+              subPath: mpd.conf
+          resources:
+            {{- toYaml .Values.mpdUser.resources | nindent 12 }}
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            claimName: {{ include "hackstream.fullname" . }}-music
+        - name: config
+          configMap:
+            name: {{ include "hackstream.fullname" . }}-mpd
+{{- end }}

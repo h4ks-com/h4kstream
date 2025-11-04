@@ -239,7 +239,7 @@ class WebhookWorker:
                     # Use shared priority logic to determine active source
                     active_source = await self.redis_service.determine_active_source(
                         user_mpd_client=check_client,
-                        check_user_playing=True  # Check if user is actually PLAYING, not just has songs
+                        check_user_playing=True,  # Check if user is actually PLAYING, not just has songs
                     )
 
                     # Only proceed if THIS source is the active one
@@ -297,10 +297,10 @@ class WebhookWorker:
                         await self.event_publisher.publish(
                             event_type="song_changed",
                             data={
-                                "playlist": source_name,  # CloudBot expects "playlist" not "source"
-                                "title": title,  # Flattened from metadata
-                                "artist": artist,  # Flattened from metadata
-                                "genre": genre,  # Flattened from metadata
+                                "playlist": source_name,
+                                "title": title,
+                                "artist": artist,
+                                "genre": genre,
                             },
                             description=description,
                         )

@@ -1,0 +1,154 @@
+# Development values for hackstream
+# This is an example configuration for local development or testing
+
+# Ingress configuration for local development
+ingress:
+  enabled: true
+  host: hackstream.local
+  annotations:
+    # Add to /etc/hosts: 127.0.0.1 hackstream.local
+  tls:
+    enabled: false  # Disable TLS for local development
+  internalApiWhitelist:
+  - 0.0.0.0/0    # Allow all IPs in development (DO NOT use in production!)
+
+# Backend configuration
+backend:
+  replicaCount: 1  # Single replica for development
+  image:
+    repository: mattfly/hackstream-backend
+    tag: latest
+    pullPolicy: Always  # Always pull latest in development
+
+  # Development secrets (CHANGE THESE!)
+  secrets:
+    ADMIN_API_TOKEN: "dev-admin-token-12345"
+    LIQUIDSOAP_TOKEN: "dev-liquidsoap-token-12345"
+    JWT_SECRET: "dev-jwt-secret-change-me"
+
+  # Disable autoscaling in development
+  autoscaling:
+    enabled: false
+
+  # Reduced resources for development
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Optional: Add Keel annotations for auto-update in dev
+  annotations: {}
+    # keel.sh/policy: force
+    # keel.sh/trigger: poll
+    # keel.sh/pollSchedule: "@every 2m"
+
+# Workers
+webhookWorker:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+recordingWorker:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# MPD instances
+mpdUser:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+mpdFallback:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Liquidsoap
+liquidsoap:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# Janus WebRTC
+janus:
+  enabled: true
+  hostNetwork: true  # Required for mDNS
+  useDaemonSet: false  # Single instance for development
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# Redis
+redis:
+  enabled: true
+  persistence:
+    enabled: true  # Keep data between restarts
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Storage configuration
+persistence:
+  # Music library
+  music:
+    enabled: true
+    size: 10Gi  # Smaller size for development
+    storageClass: ""  # Use default storage class
+    accessMode: ReadWriteOnce  # Can use RWO for single-node dev clusters
+
+  # Livestream recordings
+  recordings:
+    enabled: true
+    size: 5Gi  # Smaller size for development
+    storageClass: ""
+    accessMode: ReadWriteOnce
+
+  # Redis data
+  redis:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+
+# Frontend (served by backend)
+frontend:
+  # Frontend is built into backend image
+  enabled: true

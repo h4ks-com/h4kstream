@@ -1,0 +1,47 @@
+{{- if .Values.mpdFallback.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hackstream.fullname" . }}-mpd-fallback
+  labels:
+    {{- include "hackstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mpd-fallback
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hackstream.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mpd-fallback
+  template:
+    metadata:
+      labels:
+        {{- include "hackstream.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mpd-fallback
+    spec:
+      containers:
+        - name: mpd-fallback
+          image: "{{ .Values.mpdFallback.image.repository }}:{{ .Values.mpdFallback.image.tag }}"
+          imagePullPolicy: {{ .Values.mpdFallback.image.pullPolicy }}
+          ports:
+            - name: mpd
+              containerPort: 6601
+              protocol: TCP
+            - name: http
+              containerPort: 8001
+              protocol: TCP
+          volumeMounts:
+            - name: music
+              mountPath: /music
+            - name: config
+              mountPath: /etc/mpd.conf
+              subPath: mpd-fallback.conf
+          resources:
+            {{- toYaml .Values.mpdFallback.resources | nindent 12 }}
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            claimName: {{ include "hackstream.fullname" . }}-music
+        - name: config
+          configMap:
+            name: {{ include "hackstream.fullname" . }}-mpd
+{{- end }}
