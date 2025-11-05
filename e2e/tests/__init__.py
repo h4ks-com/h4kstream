@@ -1,1 +1,1 @@
-"""E2E tests for hackstream API."""
+"""E2E tests for h4kstream API."""

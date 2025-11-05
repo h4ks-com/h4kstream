@@ -1,0 +1,31 @@
+{{- if .Values.liquidsoap.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "h4kstream.fullname" . }}-liquidsoap
+  labels:
+    {{- include "h4kstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: liquidsoap
+spec:
+  type: ClusterIP
+  ports:
+    - port: 1234
+      targetPort: telnet
+      protocol: TCP
+      name: telnet
+    - port: 8001
+      targetPort: radio
+      protocol: TCP
+      name: radio
+    - port: 8003
+      targetPort: icecast
+      protocol: TCP
+      name: icecast
+    - port: 8004
+      targetPort: harbor
+      protocol: TCP
+      name: harbor
+  selector:
+    {{- include "h4kstream.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: liquidsoap
+{{- end }}

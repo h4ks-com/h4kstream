@@ -8,8 +8,8 @@ on:
 
 env:
   DOCKER_HUB_USERNAME: mattfly
-  BACKEND_IMAGE: mattfly/hackstream-backend
-  FRONTEND_IMAGE: mattfly/hackstream-frontend
+  BACKEND_IMAGE: mattfly/h4kstream-backend
+  FRONTEND_IMAGE: mattfly/h4kstream-frontend
 
 jobs:
   build-backend:

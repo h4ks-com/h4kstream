@@ -1,0 +1,60 @@
+{{- if .Values.mpdFallback.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "h4kstream.fullname" . }}-mpd-fallback
+  labels:
+    {{- include "h4kstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mpd-fallback
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "h4kstream.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mpd-fallback
+  template:
+    metadata:
+      labels:
+        {{- include "h4kstream.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mpd-fallback
+    spec:
+      containers:
+        - name: mpd-fallback
+          image: "{{ .Values.mpdFallback.image.repository }}:{{ .Values.mpdFallback.image.tag }}"
+          imagePullPolicy: {{ .Values.mpdFallback.image.pullPolicy }}
+          ports:
+            - name: mpd
+              containerPort: 6601
+              protocol: TCP
+            - name: http
+              containerPort: 8002  # MPD HTTP stream port (from mpd-fallback.conf)
+              protocol: TCP
+          volumeMounts:
+            - name: music
+              mountPath: /music
+            - name: config
+              mountPath: /etc/mpd.conf
+              subPath: mpd-fallback.conf
+            {{- if .Values.persistence.mpdFallback.enabled }}
+            - name: mpd-data
+              mountPath: /var/lib/mpd
+            {{- end }}
+          resources:
+            {{- toYaml .Values.mpdFallback.resources | nindent 12 }}
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            claimName: {{ include "h4kstream.fullname" . }}-music
+        - name: config
+          configMap:
+            name: {{ include "h4kstream.fullname" . }}-mpd
+        {{- if .Values.persistence.mpdFallback.enabled }}
+        - name: mpd-data
+          persistentVolumeClaim:
+            {{- if .Values.persistence.mpdFallback.existingClaim }}
+            claimName: {{ .Values.persistence.mpdFallback.existingClaim }}
+            {{- else }}
+            claimName: {{ include "h4kstream.fullname" . }}-mpd-fallback
+            {{- end }}
+        {{- end }}
+{{- end }}

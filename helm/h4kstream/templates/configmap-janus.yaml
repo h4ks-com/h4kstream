@@ -1,0 +1,14 @@
+{{- if .Values.janus.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "h4kstream.fullname" . }}-janus
+  labels:
+    {{- include "h4kstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: janus
+data:
+  janus.jcfg: |
+{{ .Files.Get "configs/janus/janus.jcfg" | indent 4 }}
+  janus.plugin.streaming.jcfg: |
+{{ .Files.Get "configs/janus/janus.plugin.streaming.jcfg" | indent 4 }}
+{{- end }}

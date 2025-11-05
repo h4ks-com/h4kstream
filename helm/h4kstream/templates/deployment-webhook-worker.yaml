@@ -1,0 +1,51 @@
+{{- if .Values.webhookWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "h4kstream.fullname" . }}-webhook-worker
+  labels:
+    {{- include "h4kstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: webhook-worker
+  {{- with .Values.webhookWorker.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "h4kstream.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: webhook-worker
+  template:
+    metadata:
+      labels:
+        {{- include "h4kstream.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: webhook-worker
+    spec:
+      containers:
+        - name: webhook-worker
+          image: "{{ .Values.webhookWorker.image.repository }}:{{ .Values.webhookWorker.image.tag }}"
+          imagePullPolicy: {{ .Values.webhookWorker.image.pullPolicy }}
+          command: ["uv", "run", "python", "-m", "app.services.webhook_worker"]
+          env:
+            - name: REDIS_HOST
+              value: {{ include "h4kstream.fullname" . }}-redis
+            - name: REDIS_PORT
+              value: "6379"
+            - name: MPD_USER_HOST
+              value: {{ include "h4kstream.fullname" . }}-mpd-user
+            - name: MPD_USER_PORT
+              value: "6600"
+            - name: MPD_FALLBACK_HOST
+              value: {{ include "h4kstream.fullname" . }}-mpd-fallback
+            - name: MPD_FALLBACK_PORT
+              value: "6601"
+            - name: LIQUIDSOAP_TELNET_HOST
+              value: {{ include "h4kstream.fullname" . }}-liquidsoap
+            - name: LIQUIDSOAP_TELNET_PORT
+              value: "1234"
+            - name: LOG_LEVEL
+              value: {{ .Values.webhookWorker.env.LOG_LEVEL | quote }}
+          resources:
+            {{- toYaml .Values.webhookWorker.resources | nindent 12 }}
+{{- end }}

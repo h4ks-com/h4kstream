@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 # Set environment variables BEFORE any imports to ensure Settings picks them up
-temp_dir = tempfile.mkdtemp(prefix="hackstream_test_")
+temp_dir = tempfile.mkdtemp(prefix="h4kstream_test_")
 music_root = Path(temp_dir) / "music"
 songs_root = Path(temp_dir) / "songs"
 music_root.mkdir(parents=True, exist_ok=True)
