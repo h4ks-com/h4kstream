@@ -312,6 +312,15 @@ persistence:
     storageClass: ""
     accessMode: ReadWriteOnce
 
+  # Application database (SQLite database for backend)
+  database:
+    enabled: true
+    create: true  # Set to false to use existing PVC
+    existingClaim: ""  # Name of existing PVC (if create: false)
+    size: 5Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+
 # Ingress configuration (Traefik)
 ingress:
   enabled: true

@@ -1,0 +1,20 @@
+{{- if .Values.persistence.database.enabled }}
+{{- if .Values.persistence.database.create }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "h4kstream.fullname" . }}-database
+  labels:
+    {{- include "h4kstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  accessModes:
+    - {{ .Values.persistence.database.accessMode }}
+  {{- if .Values.persistence.database.storageClass }}
+  storageClassName: {{ .Values.persistence.database.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.database.size }}
+{{- end }}
+{{- end }}

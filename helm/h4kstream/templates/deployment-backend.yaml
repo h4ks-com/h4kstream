@@ -86,6 +86,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /app/data
+            - name: database
+              mountPath: /app/data/db
             - name: music
               mountPath: /music
             - name: songs
@@ -112,6 +114,17 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ include "h4kstream.fullname" . }}-recordings
+        - name: database
+          persistentVolumeClaim:
+            {{- if .Values.persistence.database.enabled }}
+            {{- if .Values.persistence.database.existingClaim }}
+            claimName: {{ .Values.persistence.database.existingClaim }}
+            {{- else }}
+            claimName: {{ include "h4kstream.fullname" . }}-database
+            {{- end }}
+            {{- else }}
+            claimName: {{ include "h4kstream.fullname" . }}-recordings
+            {{- end }}
         - name: music
           persistentVolumeClaim:
             claimName: {{ include "h4kstream.fullname" . }}-music
