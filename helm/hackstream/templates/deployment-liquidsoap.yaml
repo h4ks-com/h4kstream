@@ -26,24 +26,36 @@ spec:
             - liquidsoap
             - /etc/liquidsoap/radio.liq
           env:
+            # MPD User - HTTP stream port (not control port)
             - name: MPD_USER_HOST
               value: {{ include "hackstream.fullname" . }}-mpd-user
             - name: MPD_USER_PORT
-              value: "6600"
+              value: "8001"  # HTTP stream port (mpd.conf)
+            # MPD Fallback - HTTP stream port (not control port)
             - name: MPD_FALLBACK_HOST
               value: {{ include "hackstream.fullname" . }}-mpd-fallback
             - name: MPD_FALLBACK_PORT
-              value: "6601"
+              value: "8002"  # HTTP stream port (mpd-fallback.conf)
+            # Backend API connection
             - name: BACKEND_HOST
               value: {{ include "hackstream.fullname" . }}-backend
             - name: BACKEND_PORT
               value: "8000"
             - name: BACKEND_BASE_PATH
               value: "/api"  # Backend serves all routes under /api prefix
+            # Janus RTP connection (Janus uses hostNetwork)
+            {{- if .Values.janus.hostNetwork }}
             - name: JANUS_HOST
-              value: {{ include "hackstream.janusHost" . }}
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            {{- else }}
+            - name: JANUS_HOST
+              value: {{ include "hackstream.fullname" . }}-janus
+            {{- end }}
             - name: JANUS_RTP_PORT
-              value: "10000"
+              value: "5002"  # RTP port for streaming to Janus
+            # Liquidsoap auth token
             - name: LIQUIDSOAP_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -52,6 +64,9 @@ spec:
           ports:
             - name: telnet
               containerPort: 1234
+              protocol: TCP
+            - name: radio
+              containerPort: 8001
               protocol: TCP
             - name: icecast
               containerPort: 8003
@@ -64,6 +79,11 @@ spec:
               mountPath: /etc/liquidsoap
             - name: recordings
               mountPath: /recordings
+            {{- if .Values.persistence.transitions.enabled }}
+            - name: transitions
+              mountPath: /transitions
+              readOnly: true
+            {{- end }}
           resources:
             {{- toYaml .Values.liquidsoap.resources | nindent 12 }}
       volumes:
@@ -73,4 +93,13 @@ spec:
         - name: recordings
           persistentVolumeClaim:
             claimName: {{ include "hackstream.fullname" . }}-recordings
+        {{- if .Values.persistence.transitions.enabled }}
+        - name: transitions
+          persistentVolumeClaim:
+            {{- if .Values.persistence.transitions.existingClaim }}
+            claimName: {{ .Values.persistence.transitions.existingClaim }}
+            {{- else }}
+            claimName: {{ include "hackstream.fullname" . }}-transitions
+            {{- end }}
+        {{- end }}
 {{- end }}

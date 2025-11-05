@@ -1,4 +1,4 @@
-{{- if .Values.persistence.music.enabled }}
+{{- if and .Values.persistence.music.enabled .Values.persistence.music.create }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

@@ -27,7 +27,7 @@ spec:
               containerPort: 6601
               protocol: TCP
             - name: http
-              containerPort: 8001
+              containerPort: 8002  # MPD HTTP stream port (from mpd-fallback.conf)
               protocol: TCP
           volumeMounts:
             - name: music
@@ -35,6 +35,10 @@ spec:
             - name: config
               mountPath: /etc/mpd.conf
               subPath: mpd-fallback.conf
+            {{- if .Values.persistence.mpdFallback.enabled }}
+            - name: mpd-data
+              mountPath: /var/lib/mpd
+            {{- end }}
           resources:
             {{- toYaml .Values.mpdFallback.resources | nindent 12 }}
       volumes:
@@ -44,4 +48,13 @@ spec:
         - name: config
           configMap:
             name: {{ include "hackstream.fullname" . }}-mpd
+        {{- if .Values.persistence.mpdFallback.enabled }}
+        - name: mpd-data
+          persistentVolumeClaim:
+            {{- if .Values.persistence.mpdFallback.existingClaim }}
+            claimName: {{ .Values.persistence.mpdFallback.existingClaim }}
+            {{- else }}
+            claimName: {{ include "hackstream.fullname" . }}-mpd-fallback
+            {{- end }}
+        {{- end }}
 {{- end }}

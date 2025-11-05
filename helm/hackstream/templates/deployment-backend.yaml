@@ -117,4 +117,12 @@ spec:
             claimName: {{ include "hackstream.fullname" . }}-music
         - name: songs
           persistentVolumeClaim:
+            {{- if .Values.persistence.songs.enabled }}
+            {{- if .Values.persistence.songs.existingClaim }}
+            claimName: {{ .Values.persistence.songs.existingClaim }}
+            {{- else }}
+            claimName: {{ include "hackstream.fullname" . }}-songs
+            {{- end }}
+            {{- else }}
             claimName: {{ include "hackstream.fullname" . }}-music
+            {{- end }}

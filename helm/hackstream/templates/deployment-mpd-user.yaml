@@ -27,7 +27,7 @@ spec:
               containerPort: 6600
               protocol: TCP
             - name: http
-              containerPort: 8000
+              containerPort: 8001  # MPD HTTP stream port (from mpd.conf)
               protocol: TCP
           volumeMounts:
             - name: music
@@ -35,6 +35,10 @@ spec:
             - name: config
               mountPath: /etc/mpd.conf
               subPath: mpd.conf
+            {{- if .Values.persistence.mpdUser.enabled }}
+            - name: mpd-data
+              mountPath: /var/lib/mpd
+            {{- end }}
           resources:
             {{- toYaml .Values.mpdUser.resources | nindent 12 }}
       volumes:
@@ -44,4 +48,13 @@ spec:
         - name: config
           configMap:
             name: {{ include "hackstream.fullname" . }}-mpd
+        {{- if .Values.persistence.mpdUser.enabled }}
+        - name: mpd-data
+          persistentVolumeClaim:
+            {{- if .Values.persistence.mpdUser.existingClaim }}
+            claimName: {{ .Values.persistence.mpdUser.existingClaim }}
+            {{- else }}
+            claimName: {{ include "hackstream.fullname" . }}-mpd-user
+            {{- end }}
+        {{- end }}
 {{- end }}

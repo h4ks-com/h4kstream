@@ -15,20 +15,21 @@ general: {
 	session_timeout = 60
 }
 
-# NAT configuration for Docker/localhost
+# NAT configuration
 nat: {
-	# Disable ice_lite mode - use full ICE for localhost
+	# Disable ice_lite mode - use full ICE
 	ice_lite = false
 
-	# Allow ICE to work within Docker network
+	# Allow ICE to work within Docker/Kubernetes network
 	ice_ignore_list = "vmnet"
 
 	# Enable TCP as fallback
 	ice_tcp = true
 
-	# Map internal Docker IP to localhost for browser access
-	# This tells Janus to advertise 127.0.0.1 instead of 172.18.0.x
-	nat_1_1_mapping = "127.0.0.1"
+	# For Kubernetes with hostNetwork: comment out nat_1_1_mapping
+	# to allow binding to all interfaces (0.0.0.0)
+	# For Docker Compose: uncomment and set to "127.0.0.1"
+	# nat_1_1_mapping = "127.0.0.1"
 
 	# Keep connections alive
 	keep_private_host = true

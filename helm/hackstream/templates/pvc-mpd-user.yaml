@@ -1,0 +1,18 @@
+{{- if and .Values.persistence.mpdUser.enabled .Values.persistence.mpdUser.create }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hackstream.fullname" . }}-mpd-user
+  labels:
+    {{- include "hackstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - {{ .Values.persistence.mpdUser.accessMode }}
+  {{- if .Values.persistence.mpdUser.storageClass }}
+  storageClassName: {{ .Values.persistence.mpdUser.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.mpdUser.size }}
+{{- end }}

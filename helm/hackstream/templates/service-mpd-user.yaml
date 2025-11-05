@@ -13,7 +13,7 @@ spec:
       targetPort: mpd
       protocol: TCP
       name: mpd
-    - port: 8000
+    - port: 8001  # Expose MPD HTTP stream (from mpd.conf port 8001)
       targetPort: http
       protocol: TCP
       name: http

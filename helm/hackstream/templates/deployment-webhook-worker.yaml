@@ -6,6 +6,10 @@ metadata:
   labels:
     {{- include "hackstream.labels" . | nindent 4 }}
     app.kubernetes.io/component: webhook-worker
+  {{- with .Values.webhookWorker.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   replicas: 1
   selector:

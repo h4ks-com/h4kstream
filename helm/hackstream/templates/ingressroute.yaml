@@ -38,19 +38,62 @@ spec:
         - name: {{ include "hackstream.fullname" . }}-backend
           port: {{ .Values.backend.service.port }}
 
-    # Stream endpoint (Liquidsoap Icecast)
-    - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/stream`)
+    # Radio output stream (Liquidsoap HTTP audio stream)
+    - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/radio`)
       kind: Rule
+      services:
+        - name: {{ include "hackstream.fullname" . }}-liquidsoap
+          port: 8001
+
+    # Livestream input endpoint (Liquidsoap Icecast harbor)
+    # More specific route for /stream/live - strip /stream prefix so liquidsoap gets /live
+    - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/stream/live`)
+      kind: Rule
+      middlewares:
+        - name: {{ include "hackstream.fullname" . }}-strip-stream-prefix
       services:
         - name: {{ include "hackstream.fullname" . }}-liquidsoap
           port: 8003
 
-    # All other routes (frontend, API without /api prefix, etc.)
+    # Streaming UI page - serve frontend for /stream (without /live)
+    - match: Host(`{{ .Values.ingress.host }}`) && Path(`/stream`)
+      kind: Rule
+      services:
+        {{- if .Values.frontend.enabled }}
+        - name: {{ include "hackstream.fullname" . }}-frontend
+          port: 80
+        {{- else }}
+        - name: {{ include "hackstream.fullname" . }}-backend
+          port: {{ .Values.backend.service.port }}
+        {{- end }}
+
+    {{- if .Values.janus.enabled }}
+    # Janus WebSocket endpoint (WebRTC signaling)
+    - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/janusws`)
+      kind: Rule
+      services:
+        - name: {{ include "hackstream.fullname" . }}-janus
+          port: 8188
+
+    # Janus HTTP API endpoint (WebRTC signaling and long-polling)
+    - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/janus`)
+      kind: Rule
+      services:
+        - name: {{ include "hackstream.fullname" . }}-janus
+          port: 8088
+    {{- end }}
+
+    # Root and all other routes - serve from frontend (static React app)
     - match: Host(`{{ .Values.ingress.host }}`)
       kind: Rule
       services:
+        {{- if .Values.frontend.enabled }}
+        - name: {{ include "hackstream.fullname" . }}-frontend
+          port: 80
+        {{- else }}
         - name: {{ include "hackstream.fullname" . }}-backend
           port: {{ .Values.backend.service.port }}
+        {{- end }}
 
   {{- if .Values.ingress.tls.enabled }}
   tls:
