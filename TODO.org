@@ -32,6 +32,7 @@ https://chatgpt.com/c/67436428-aff0-8003-a47a-d006df6bdc40
 - [x] Keep internal EPs internal only
 - [x] Helm chart?
 
-- [ ] db missing in helm
+- [x] db missing in helm
 - [ ] mixxx cannot stream to this thing
 - [ ] Cache songs. Create new table with file hash before audio was trimmed, optional url. We dont store metadtata, if the user override we use the override, but we just avoid duplicating files. We have a column referencing the trimmed version we already have. Both for fallback and user queue, so that is also a column.
+- [ ] Transitions always playing even though playlist didn't change...

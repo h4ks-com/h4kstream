@@ -27,6 +27,8 @@ spec:
         - name: janus
           image: "{{ .Values.janus.image.repository }}:{{ .Values.janus.image.tag }}"
           imagePullPolicy: {{ .Values.janus.image.pullPolicy }}
+          command: ["/usr/local/bin/janus"]
+          args: ["--configs-folder=/usr/local/etc/janus"]
           ports:
             - name: http
               containerPort: 8088
