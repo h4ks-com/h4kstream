@@ -140,10 +140,10 @@ def on_livestream_connect(headers) =
   # Prepare auth headers for API calls
   auth_headers = [("Authorization", "Bearer #{liquidsoap_token}"), ("Content-Type", "application/json")]
 
-  # Extract initial metadata from Icecast headers (capitalized header names)
-  title = headers["Ice-Name"] ?? ""
-  description = headers["Ice-Description"] ?? ""
-  genre = headers["Ice-Genre"] ?? ""
+  # Extract initial metadata from Icecast headers (lowercase)
+  title = headers["ice-name"] ?? ""
+  description = headers["ice-description"] ?? ""
+  genre = headers["ice-genre"] ?? ""
 
   # Parse artist from title if available (format: "Artist - Title")
   # Split on " - " separator
