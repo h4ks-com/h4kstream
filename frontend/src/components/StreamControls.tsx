@@ -1,10 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { useAudioStreaming } from '../hooks/useAudioStreaming';
 import type { AudioSource } from '../utils/audioStreaming';
+import { UsersService } from '../utils/apiClient';
 
 interface StreamControlsProps {
   initialToken?: string;
 }
+
+const formatTimeRemaining = (seconds: number): string => {
+  if (seconds <= 0) {
+    return '0s';
+  }
+
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  const parts: string[] = [];
+  if (days > 0) {
+    parts.push(`${days}d`);
+  }
+  if (hours > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes}m`);
+  }
+  if (secs > 0 || parts.length === 0) {
+    parts.push(`${secs}s`);
+  }
+
+  return parts.join(' ');
+};
 
 export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '' }) => {
   const { state, startStream, stopStream, reconnect, parseToken } = useAudioStreaming();
@@ -17,6 +45,11 @@ export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '
   const [genre, setGenre] = useState('');
   const [description, setDescription] = useState('');
   const [showDesktopAudioDialog, setShowDesktopAudioDialog] = useState(false);
+
+  // Time remaining state
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
+  const [loadingTime, setLoadingTime] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
 
   // Update token when initialToken prop changes
   useEffect(() => {
@@ -32,6 +65,54 @@ export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '
     }
   }, [token, parseToken]);
 
+  // Fetch time remaining when token changes
+  useEffect(() => {
+    const fetchTimeRemaining = async () => {
+      if (!token) {
+        setTimeRemaining('');
+        setSecondsRemaining(null);
+        return;
+      }
+
+      try {
+        setLoadingTime(true);
+        const response = await UsersService().checkLivestreamTimeRemainingUsersLivestreamTimeRemainingPost(
+          { token }
+        );
+        setSecondsRemaining(response.seconds_remaining);
+        setTimeRemaining(formatTimeRemaining(response.seconds_remaining));
+      } catch (err) {
+        console.error('Failed to fetch time remaining:', err);
+        setTimeRemaining('');
+        setSecondsRemaining(null);
+      } finally {
+        setLoadingTime(false);
+      }
+    };
+
+    fetchTimeRemaining();
+  }, [token]);
+
+  // Countdown timer while streaming
+  useEffect(() => {
+    if (state.status !== 'streaming' || secondsRemaining === null) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setSecondsRemaining((prev) => {
+        if (prev === null || prev <= 0) {
+          return 0;
+        }
+        const newValue = prev - 1;
+        setTimeRemaining(formatTimeRemaining(newValue));
+        return newValue;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [state.status, secondsRemaining]);
+
   const handleStartStop = async () => {
     if (state.status === 'streaming') {
       stopStream();
@@ -46,6 +127,17 @@ export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '
   };
 
   const startStreamWithMetadata = async () => {
+    // Refetch time remaining before starting to get fresh value
+    try {
+      const response = await UsersService().checkLivestreamTimeRemainingUsersLivestreamTimeRemainingPost(
+        { token }
+      );
+      setSecondsRemaining(response.seconds_remaining);
+      setTimeRemaining(formatTimeRemaining(response.seconds_remaining));
+    } catch (err) {
+      console.error('Failed to refresh time remaining:', err);
+    }
+
     await startStream(token, source, {
       title: title || undefined,
       artist: artist || undefined,
@@ -124,6 +216,14 @@ export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '
               <div>• Max Duration: <span className="text-gray-300">
                 {Math.floor(state.tokenInfo.maxStreamingSeconds / 60)} minutes
               </span></div>
+            )}
+            {!loadingTime && timeRemaining && (
+              <div>• Time Remaining: <span className="text-h4ks-green-400 font-medium">
+                {timeRemaining}
+              </span></div>
+            )}
+            {loadingTime && (
+              <div>• Time Remaining: <span className="text-gray-400">Loading...</span></div>
             )}
             {state.tokenInfo.expiresAt && (
               <div>• Expires: <span className={
@@ -271,6 +371,13 @@ export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '
       {state.status === 'streaming' && (
         <div className="border-t border-h4ks-green-900 pt-3">
           <div className="text-xs font-mono text-gray-500 space-y-1">
+            {secondsRemaining !== null && (
+              <div>Time Remaining: <span className={
+                secondsRemaining < 60 ? 'text-red-400 font-bold' :
+                secondsRemaining < 300 ? 'text-orange-400 font-medium' :
+                'text-h4ks-green-400 font-medium'
+              }>{timeRemaining}</span></div>
+            )}
             <div>Duration: <span className="text-gray-300">{formatDuration(state.duration)}</span></div>
             <div>Data Sent: <span className="text-gray-300">{formatBytes(state.bytesSent)}</span></div>
             <div>Bitrate: <span className="text-gray-300">~128 kbps (Opus)</span></div>

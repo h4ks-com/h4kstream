@@ -16,6 +16,8 @@ export type { Body_admin_upload_show_intro_admin_shows__show_id__intro_post } fr
 export type { Body_upload_transition_admin_transitions_upload_post } from './models/Body_upload_transition_admin_transitions_upload_post';
 export type { ErrorResponse } from './models/ErrorResponse';
 export type { HTTPValidationError } from './models/HTTPValidationError';
+export type { LivestreamTimeRemainingRequest } from './models/LivestreamTimeRemainingRequest';
+export type { LivestreamTimeRemainingResponse } from './models/LivestreamTimeRemainingResponse';
 export type { LivestreamTokenCreateRequest } from './models/LivestreamTokenCreateRequest';
 export type { LivestreamTokenResponse } from './models/LivestreamTokenResponse';
 export type { NowPlayingMetadata } from './models/NowPlayingMetadata';

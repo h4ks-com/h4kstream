@@ -4,6 +4,7 @@ import { authUtils } from '../utils/auth';
 import { AdminService, WebhooksService, ShowsService } from '../utils/apiClient';
 import type { UserPublic, ShowPublic, WebhookSubscription, SongItem, WebhookDelivery } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
+import { LivestreamTokenDisplay } from '../components/LivestreamTokenDisplay';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import RadioIcon from '@mui/icons-material/Radio';
@@ -907,19 +908,10 @@ const LivestreamSection: React.FC = () => {
           )}
 
           {token && (
-            <div className="bg-h4ks-dark-800 border border-h4ks-green-700 p-3">
-              <p className="text-gray-400 text-sm mb-2">Livestream Token:</p>
-              <textarea
-                value={token}
-                readOnly
-                onClick={(e) => e.currentTarget.select()}
-                className="w-full bg-h4ks-dark-900 border border-h4ks-green-800 text-h4ks-green-400 px-3 py-2 font-mono text-sm cursor-pointer"
-                rows={3}
-              />
-              <p className="text-gray-500 text-xs mt-2">
-                Use this token for streaming. Max duration: {maxStreamingSeconds}s
-              </p>
-            </div>
+            <LivestreamTokenDisplay
+              token={token}
+              maxStreamingSeconds={maxStreamingSeconds}
+            />
           )}
         </div>
       </div>

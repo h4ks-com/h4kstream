@@ -7,7 +7,9 @@ from datetime import datetime
 from datetime import timedelta
 from uuid import UUID
 
+import jwt
 from fastapi import APIRouter
+from fastapi import Body
 from fastapi import Depends
 from fastapi import Header
 from fastapi import HTTPException
@@ -28,10 +30,13 @@ from app.dependencies import admin_auth
 from app.dependencies import dep_redis_client
 from app.dependencies import get_jwt_token
 from app.models import ErrorResponse
+from app.models import LivestreamTimeRemainingRequest
+from app.models import LivestreamTimeRemainingResponse
 from app.models import TokenCreateResponse
 from app.models import TokenRefreshRequest
 from app.models import TokenRefreshResponse
 from app.services.crud_service import CRUDService
+from app.services.jwt_service import decode_livestream_token
 from app.services.jwt_service import decode_token
 from app.services.jwt_service import decode_token_ignore_expiry
 from app.services.jwt_service import generate_refresh_token
@@ -444,3 +449,43 @@ async def logout_user(
 
     await redis.delete_refresh_token(str(user_id))
     return {"ok": True}
+
+
+@router.post(
+    "/livestream/time-remaining",
+    response_model=LivestreamTimeRemainingResponse,
+    summary="Check Livestream Time Remaining",
+    description=(
+        "Check how much streaming time remains for a livestream token. "
+        "Returns remaining time in seconds (includes 10-second threshold buffer). "
+        "No authentication required - only the livestream token itself."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid or expired token"},
+    },
+)
+async def check_livestream_time_remaining(
+    request: LivestreamTimeRemainingRequest = Body(...),
+    redis_client: RedisService = Depends(dep_redis_client),
+) -> LivestreamTimeRemainingResponse:
+    """Check remaining streaming time for a livestream token."""
+    try:
+        payload = decode_livestream_token(request.token)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="Livestream token has expired")
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid livestream token: {str(e)}")
+
+    user_id = payload["user_id"]
+    max_streaming_seconds = payload["max_streaming_seconds"]
+
+    total_used_key = f"livestream:user:{user_id}:total"
+    total_used = await redis_client.redis.get(total_used_key)
+    total_used_seconds = int(total_used) if total_used else 0
+
+    seconds_remaining = max_streaming_seconds - total_used_seconds + 10
+
+    if seconds_remaining < 0:
+        seconds_remaining = 0
+
+    return LivestreamTimeRemainingResponse(seconds_remaining=seconds_remaining)

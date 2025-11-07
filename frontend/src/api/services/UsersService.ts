@@ -2,6 +2,8 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { LivestreamTimeRemainingRequest } from '../models/LivestreamTimeRemainingRequest';
+import type { LivestreamTimeRemainingResponse } from '../models/LivestreamTimeRemainingResponse';
 import type { PendingUserCreate } from '../models/PendingUserCreate';
 import type { PendingUserPublic } from '../models/PendingUserPublic';
 import type { TokenCreateResponse } from '../models/TokenCreateResponse';
@@ -138,6 +140,27 @@ export class UsersService {
             body: requestBody,
             mediaType: 'application/json',
             errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Check Livestream Time Remaining
+     * Check how much streaming time remains for a livestream token. Returns remaining time in seconds (includes 10-second threshold buffer). No authentication required - only the livestream token itself.
+     * @param requestBody
+     * @returns LivestreamTimeRemainingResponse Successful Response
+     * @throws ApiError
+     */
+    public checkLivestreamTimeRemainingUsersLivestreamTimeRemainingPost(
+        requestBody: LivestreamTimeRemainingRequest,
+    ): CancelablePromise<LivestreamTimeRemainingResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/users/livestream/time-remaining',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                400: `Invalid or expired token`,
                 422: `Validation Error`,
             },
         });

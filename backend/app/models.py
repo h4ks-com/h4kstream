@@ -289,3 +289,15 @@ class RecordingsListResponse(BaseModel):
     total_recordings: int = Field(..., description="Total number of recordings")
     page: int = Field(..., description="Current page number")
     page_size: int = Field(..., description="Page size")
+
+
+class LivestreamTimeRemainingRequest(BaseModel):
+    """Request for checking livestream time remaining."""
+
+    token: str = Field(..., description="Livestream JWT token")
+
+
+class LivestreamTimeRemainingResponse(BaseModel):
+    """Response with livestream time remaining."""
+
+    seconds_remaining: int = Field(..., description="Remaining time in seconds (includes 10s threshold)")
