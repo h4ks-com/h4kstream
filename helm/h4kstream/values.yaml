@@ -205,6 +205,22 @@ liquidsoap:
     tag: v2.4.0
     pullPolicy: IfNotPresent
 
+  # Service configuration for direct streaming access
+  service:
+    # Type can be ClusterIP, NodePort, or LoadBalancer
+    type: ClusterIP
+    # Direct streaming service (bypasses ingress) - use LoadBalancer or NodePort
+    directStreaming:
+      enabled: false
+      # Service type: LoadBalancer (for external port 8000) or NodePort (30000-32767)
+      type: LoadBalancer
+      # External port to expose
+      port: 8000
+      # Target port in the container (harbor/icecast port)
+      targetPort: 8003
+      # LoadBalancer IP (optional, leave empty for dynamic assignment)
+      loadBalancerIP: ""
+
   resources:
     requests:
       memory: "512Mi"

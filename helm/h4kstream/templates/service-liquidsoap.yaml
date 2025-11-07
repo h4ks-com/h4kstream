@@ -7,7 +7,7 @@ metadata:
     {{- include "h4kstream.labels" . | nindent 4 }}
     app.kubernetes.io/component: liquidsoap
 spec:
-  type: ClusterIP
+  type: {{ .Values.liquidsoap.service.type | default "ClusterIP" }}
   ports:
     - port: 1234
       targetPort: telnet
@@ -21,11 +21,35 @@ spec:
       targetPort: icecast
       protocol: TCP
       name: icecast
-    - port: 8004
+    - port: 8005
       targetPort: harbor
       protocol: TCP
       name: harbor
   selector:
     {{- include "h4kstream.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: liquidsoap
+---
+{{- if .Values.liquidsoap.service.directStreaming.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "h4kstream.fullname" . }}-liquidsoap-streaming
+  labels:
+    {{- include "h4kstream.labels" . | nindent 4 }}
+    app.kubernetes.io/component: liquidsoap
+    app.kubernetes.io/service-type: direct-streaming
+spec:
+  type: {{ .Values.liquidsoap.service.directStreaming.type }}
+  {{- if and (eq .Values.liquidsoap.service.directStreaming.type "LoadBalancer") .Values.liquidsoap.service.directStreaming.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.liquidsoap.service.directStreaming.loadBalancerIP }}
+  {{- end }}
+  ports:
+    - port: {{ .Values.liquidsoap.service.directStreaming.port }}
+      targetPort: icecast
+      protocol: TCP
+      name: streaming
+  selector:
+    {{- include "h4kstream.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: liquidsoap
+{{- end }}
 {{- end }}
