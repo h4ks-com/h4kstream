@@ -11,9 +11,11 @@ from fastapi import Form
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi import UploadFile
+from sqlmodel import Session
 from sqlmodel import select
 
 from app.db import get_session
+from app.db.models import FileCachePublic
 from app.db.models import Show
 from app.dependencies import admin_auth
 from app.dependencies import dep_redis_client
@@ -27,6 +29,7 @@ from app.models import SongItem
 from app.models import SuccessResponse
 from app.models import TokenCreateRequest
 from app.models import TokenCreateResponse
+from app.services import cache_service
 from app.services import playback_service
 from app.services import queue_service
 from app.services.jwt_service import generate_livestream_token
@@ -125,6 +128,7 @@ async def admin_add_song(
     file: UploadFile | None = None,
     playlist: PlaylistType = Query("user", description="Target playlist (user or fallback)"),
     redis_client: RedisService = Depends(dep_redis_client),
+    db_session: Session = Depends(get_session),
 ) -> SongAddedResponse:
     """Add song to specified playlist without any restrictions or validation."""
     mpd_client = get_mpd_client(playlist)
@@ -134,6 +138,7 @@ async def admin_add_song(
         song_id = await queue_service.add_song(
             playlist=playlist,
             mpd_client=mpd_client,
+            db_session=db_session,
             url=url,
             file=file,
             song_name=song_name,
@@ -277,3 +282,62 @@ async def admin_resume(
     """Resume playback on specified playlist."""
     await playback_service.control_playback("resume", playlist)
     return SuccessResponse()
+
+
+@router.get(
+    "/cache",
+    response_model=dict,
+    summary="List Cached Files",
+    description="List all cached files with pagination and search",
+)
+async def list_cache(
+    playlist: PlaylistType | None = Query(None, description="Filter by playlist type"),
+    search: str | None = Query(None, description="Search in filename or origin_url"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db_session: Session = Depends(get_session),
+) -> dict:
+    """List cached files with pagination and search."""
+    entries, total = await cache_service.list_cache_entries(
+        db_session, playlist_type=playlist, search=search, offset=offset, limit=limit
+    )
+
+    return {
+        "entries": [FileCachePublic.model_validate(entry) for entry in entries],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
+
+
+@router.delete(
+    "/cache/{cache_id}",
+    response_model=SuccessResponse,
+    summary="Delete Cache Entry",
+    description="Delete a cache entry and optionally the file",
+    responses={404: {"model": ErrorResponse, "description": "Cache entry not found"}},
+)
+async def delete_cache(
+    cache_id: int,
+    delete_file: bool = Query(False, description="Also delete the physical file"),
+    db_session: Session = Depends(get_session),
+) -> SuccessResponse:
+    """Delete cache entry and optionally the file."""
+    try:
+        await cache_service.delete_cache_entry(db_session, cache_id, delete_file)
+        return SuccessResponse()
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get(
+    "/cache/stats",
+    response_model=dict,
+    summary="Cache Statistics",
+    description="Get cache statistics",
+)
+async def cache_stats(
+    db_session: Session = Depends(get_session),
+) -> dict:
+    """Get cache statistics."""
+    return await cache_service.get_cache_stats(db_session)

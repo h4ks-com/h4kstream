@@ -98,7 +98,8 @@ class TestAddSong:
         mock_file.read = AsyncMock(return_value=b"fake audio data")
 
         with patch("builtins.open", mock_open()), \
-             patch("app.services.queue_service.shutil.move"):
+             patch("app.services.queue_service.shutil.move"), \
+             patch("app.services.cache_service.calculate_md5", return_value="fake_md5_hash"):
             await queue_service.add_song(
                 playlist="user",
                 mpd_client=mock_mpd_client,
@@ -224,7 +225,8 @@ class TestUploadValidation:
 
         with patch("builtins.open", mock_open()), \
              patch("app.services.queue_service.get_duration") as mock_duration, \
-             patch("app.services.queue_service.shutil.move"):
+             patch("app.services.queue_service.shutil.move"), \
+             patch("app.services.cache_service.calculate_md5", return_value="fake_md5_hash"):
             mock_duration.return_value = 2000  # 33 minutes
 
             with pytest.raises(ValueError, match="Song duration.*exceeds maximum"):
@@ -248,7 +250,8 @@ class TestUploadValidation:
 
         with patch("builtins.open", mock_open()), \
              patch("app.services.queue_service.get_duration") as mock_duration, \
-             patch("app.services.queue_service.shutil.move"):
+             patch("app.services.queue_service.shutil.move"), \
+             patch("app.services.cache_service.calculate_md5", return_value="fake_md5_hash"):
             mock_duration.return_value = 5000  # Very long duration
 
             await queue_service.add_song(

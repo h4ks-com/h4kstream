@@ -1,6 +1,5 @@
-# Janus Gateway main configuration - LOCAL DEVELOPMENT
-# This config is for Docker Compose local development (STUN disabled)
-# For Kubernetes deployment, see janus.k8s.jcfg (STUN enabled)
+# Janus Gateway main configuration
+# Minimal configuration for streaming use case
 
 general: {
 	# Logging configuration
@@ -18,10 +17,10 @@ general: {
 
 # NAT configuration
 nat: {
-	# STUN server for NAT traversal (disabled for local development)
+	# STUN server for NAT traversal (enabled for Kubernetes/production)
 	# Using IPv4 address directly to force IPv4 discovery (hostname resolves to IPv6 first)
-	# stun_server = "74.125.250.129"  # stun.l.google.com IPv4
-	# stun_port = 19302
+	stun_server = "74.125.250.129"  # stun.l.google.com IPv4
+	stun_port = 19302
 
 	# Disable ice_lite mode - use full ICE
 	ice_lite = false

@@ -144,6 +144,36 @@ class PendingUserCreate(SQLModel):
     max_add_requests: int = Field(default=10, ge=1)
 
 
+class FileCache(SQLModel, table=True):  # type: ignore[call-arg]
+    """Cached uploaded/downloaded files to avoid re-downloading."""
+
+    __tablename__ = "file_cache"
+
+    id: int | None = Field(default=None, primary_key=True)
+    filename: str = Field(index=True)
+    filepath: str
+    origin_url: str | None = Field(default=None, index=True)
+    md5_hash: str = Field(index=True)
+    file_size: int
+    playlist_type: str = Field(index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
+    last_used_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    use_count: int = Field(default=1)
+
+
+class FileCachePublic(SQLModel):
+    """Public file cache model."""
+
+    id: int
+    filename: str
+    origin_url: str | None
+    file_size: int
+    playlist_type: str
+    created_at: datetime
+    last_used_at: datetime
+    use_count: int
+
+
 class PendingUserPublic(SQLModel):
     """Public pending user model."""
 

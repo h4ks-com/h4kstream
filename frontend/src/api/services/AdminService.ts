@@ -233,6 +233,80 @@ export class AdminService {
         });
     }
     /**
+     * List Cached Files
+     * List all cached files with pagination and search
+     * @param playlist Filter by playlist type
+     * @param search Search in filename or origin_url
+     * @param offset
+     * @param limit
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public listCacheAdminCacheGet(
+        playlist?: ('user' | 'fallback' | null),
+        search?: (string | null),
+        offset?: number,
+        limit: number = 50,
+    ): CancelablePromise<Record<string, any>> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/admin/cache',
+            query: {
+                'playlist': playlist,
+                'search': search,
+                'offset': offset,
+                'limit': limit,
+            },
+            errors: {
+                401: `Unauthorized`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Cache Entry
+     * Delete a cache entry and optionally the file
+     * @param cacheId
+     * @param deleteFile Also delete the physical file
+     * @returns SuccessResponse Successful Response
+     * @throws ApiError
+     */
+    public deleteCacheAdminCacheCacheIdDelete(
+        cacheId: number,
+        deleteFile: boolean = false,
+    ): CancelablePromise<SuccessResponse> {
+        return this.httpRequest.request({
+            method: 'DELETE',
+            url: '/admin/cache/{cache_id}',
+            path: {
+                'cache_id': cacheId,
+            },
+            query: {
+                'delete_file': deleteFile,
+            },
+            errors: {
+                401: `Unauthorized`,
+                404: `Cache entry not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Cache Statistics
+     * Get cache statistics
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public cacheStatsAdminCacheStatsGet(): CancelablePromise<Record<string, any>> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/admin/cache/stats',
+            errors: {
+                401: `Unauthorized`,
+            },
+        });
+    }
+    /**
      * Delete Recording
      * Delete a livestream recording (file and database entry)
      * @param recordingId

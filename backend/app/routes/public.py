@@ -11,7 +11,9 @@ from fastapi import Form
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi import UploadFile
+from sqlmodel import Session
 
+from app.db import get_session
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
 from app.dependencies import get_jwt_token
@@ -69,6 +71,7 @@ async def add_song(
     mpd_client: MPDClient = Depends(dep_mpd_user),
     redis_client: RedisService = Depends(dep_redis_client),
     token: str = Depends(get_jwt_token),
+    db_session: Session = Depends(get_session),
 ) -> SongAddedResponse:
     """Add a song to your user queue with validation checks."""
     user_id = get_user_id(token)
@@ -100,6 +103,7 @@ async def add_song(
         song_id = await queue_service.add_song(
             playlist="user",
             mpd_client=mpd_client,
+            db_session=db_session,
             url=url,
             file=file,
             song_name=song_name,

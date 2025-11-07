@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: janus
 data:
   janus.jcfg: |
-{{ .Files.Get "configs/janus/janus.jcfg" | indent 4 }}
+{{ .Files.Get "configs/janus/janus.k8s.jcfg" | indent 4 }}
   janus.plugin.streaming.jcfg: |
 {{ .Files.Get "configs/janus/janus.plugin.streaming.jcfg" | indent 4 }}
 {{- end }}

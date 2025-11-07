@@ -15,6 +15,7 @@ from mutagen.id3 import TPE2
 from mutagen.mp3 import MP3
 
 from app.services import ffmpeg
+from app.services.cache_service import calculate_md5
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ class YoutubeDownloadResult(NamedTuple):
     artist: str | None
     path: pathlib.Path
     length: int
+    md5_before_trim: str
 
 
 def _extract_info_sync(url: str) -> dict:
@@ -147,6 +149,9 @@ async def download_song(url: str, mainloop: bool = False) -> YoutubeDownloadResu
         if not video_path.exists():
             raise YoutubeDownloadException(YoutubeErrorType.DOWNLOAD_ERROR)
 
+        # Calculate MD5 hash before trimming (for cache identification)
+        md5_before_trim = await calculate_md5(video_path)
+
         # Trim silence from beginning and end
         try:
             await ffmpeg.trim_silence(
@@ -170,4 +175,6 @@ async def download_song(url: str, mainloop: bool = False) -> YoutubeDownloadResu
     # Set file permissions in thread pool (non-blocking)
     await asyncio.to_thread(video_path.chmod, 0o777)
 
-    return YoutubeDownloadResult(title=video_title, artist=video_artist, path=video_path, length=video_length)
+    return YoutubeDownloadResult(
+        title=video_title, artist=video_artist, path=video_path, length=video_length, md5_before_trim=md5_before_trim
+    )

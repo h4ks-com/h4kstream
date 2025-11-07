@@ -10,9 +10,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import UploadFile
+from sqlmodel import Session
 from yt_dlp.utils import sanitize_filename
 
 from app.models import SongItem
+from app.services import cache_service
 from app.services.event_publisher import EventPublisher
 from app.services.ffmpeg import get_duration
 from app.services.mpd_service import MPDClient
@@ -111,6 +113,7 @@ async def check_duplicate_in_queue(
 async def add_song(
     playlist: PlaylistType,
     mpd_client: MPDClient,
+    db_session: Session | None = None,
     url: str | None = None,
     file: UploadFile | None = None,
     song_name: str | None = None,
@@ -158,27 +161,43 @@ async def add_song(
 
     # Temporary path for validation
     temp_path: Path | None = None
+    md5_hash: str | None = None
+    cache_hit = False
 
     try:
         if url:
-            # Check video info before downloading to fail early
-            if not skip_validation:
-                video_info = await get_video_info(url)
-                video_duration = video_info.get("duration", 0)
-                if video_duration > settings.MAX_SONG_DURATION_SECONDS:
-                    max_minutes = settings.MAX_SONG_DURATION_SECONDS / 60
-                    actual_minutes = video_duration / 60
-                    raise ValueError(
-                        f"Song duration ({actual_minutes:.1f} min) exceeds maximum allowed duration ({max_minutes:.0f} min)"
-                    )
+            # Check cache by URL first
+            if db_session:
+                cached_entry = await cache_service.lookup_by_url(db_session, url, playlist)
+                if cached_entry:
+                    logger.info(f"Using cached file for URL: {url}")
+                    cached_path = Path(cached_entry.filepath)
+                    shutil.copy2(str(cached_path), str(target_path))
+                    cache_hit = True
+                    temp_path = target_path
 
-            result = await download_song(url)
-            temp_path = Path(result.path)
+                    md5_hash = cached_entry.md5_hash
 
-            if not final_title:
-                final_title = result.title
-            if not final_artist:
-                final_artist = result.artist
+            if not cache_hit:
+                # Check video info before downloading to fail early
+                if not skip_validation:
+                    video_info = await get_video_info(url)
+                    video_duration = video_info.get("duration", 0)
+                    if video_duration > settings.MAX_SONG_DURATION_SECONDS:
+                        max_minutes = settings.MAX_SONG_DURATION_SECONDS / 60
+                        actual_minutes = video_duration / 60
+                        raise ValueError(
+                            f"Song duration ({actual_minutes:.1f} min) exceeds maximum allowed duration ({max_minutes:.0f} min)"
+                        )
+
+                result = await download_song(url)
+                temp_path = Path(result.path)
+                md5_hash = result.md5_before_trim
+
+                if not final_title:
+                    final_title = result.title
+                if not final_artist:
+                    final_artist = result.artist
         elif file:
             # Validate file size first (before writing)
             if not skip_validation:
@@ -189,6 +208,23 @@ async def add_song(
             with open(file_temp_path, "wb") as f:
                 f.write(content)
             temp_path = file_temp_path
+
+            # Calculate MD5 for file uploads
+            md5_hash = await cache_service.calculate_md5(temp_path)
+
+            # Check cache by MD5 hash
+            if db_session:
+                cached_entry = await cache_service.lookup_by_hash(db_session, md5_hash, playlist)
+                if cached_entry:
+                    logger.info(f"Using cached file for hash: {md5_hash}")
+                    cached_path = Path(cached_entry.filepath)
+
+                    if temp_path.exists():
+                        os.unlink(temp_path)
+
+                    shutil.copy2(str(cached_path), str(target_path))
+                    cache_hit = True
+                    temp_path = target_path
 
         # Validation checks (skip for admin uploads)
         if not skip_validation:
@@ -215,15 +251,25 @@ async def add_song(
                     f"Song '{final_title}' by '{final_artist or 'Unknown'}' is already in the next {settings.DUPLICATE_CHECK_LIMIT} songs"
                 )
 
-        # Move to final location
-        if not temp_path:
-            raise ValueError("No file to process")
+        # Move to final location (skip if cache hit already placed file there)
+        if not cache_hit:
+            if not temp_path:
+                raise ValueError("No file to process")
 
-        # Ensure target directory exists
-        target_path.parent.mkdir(parents=True, exist_ok=True)
+            # Ensure target directory exists
+            target_path.parent.mkdir(parents=True, exist_ok=True)
 
-        shutil.move(str(temp_path), str(target_path))
-        temp_path = None
+            shutil.move(str(temp_path), str(target_path))
+            temp_path = None
+
+            # Create cache entry for newly processed file
+            if db_session and md5_hash:
+                try:
+                    await cache_service.create_cache_entry(
+                        db_session, target_path, md5_hash, playlist, origin_url=url if url else None
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to create cache entry: {e}")
     except Exception:
         # Clean up temp file on error
         if temp_path and temp_path.exists():
