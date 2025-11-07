@@ -48,6 +48,7 @@ export const AudioPlayer: React.FC = () => {
   const [isAudioMuted, setIsAudioMuted] = useState(true); // Always start muted
   const [error, setError] = useState<string | null>(null);
   const [amplitude, setAmplitude] = useState(0);
+  const [showFallbackBanner, setShowFallbackBanner] = useState(false);
 
   // WebRTC connection via Janus using WebSocket
   // Construct WebSocket URL based on current page protocol
@@ -97,6 +98,22 @@ export const AudioPlayer: React.FC = () => {
     // Apply volume and mute through gain
     gainNode.gain.value = isAudioMuted ? 0 : volume;
   }, [volume, isAudioMuted]);
+
+  // Show fallback banner after 10 seconds if still connecting
+  useEffect(() => {
+    if (isConnected || isPlaying) {
+      setShowFallbackBanner(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (!isConnected && !isPlaying) {
+        setShowFallbackBanner(true);
+      }
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [isConnected, isPlaying]);
 
 
   useEffect(() => {
@@ -152,6 +169,16 @@ export const AudioPlayer: React.FC = () => {
     const newMuted = !isAudioMuted;
     setIsAudioMuted(newMuted);
 
+    // Resume AudioContext (Firefox requires explicit resume after user gesture)
+    if (!newMuted && audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      try {
+        await audioContextRef.current.resume();
+        console.log('AudioContext resumed');
+      } catch (err) {
+        console.error('Failed to resume AudioContext:', err);
+      }
+    }
+
     // Ensure audio element is playing (needed for Web Audio API)
     if (!newMuted && audioRef.current && audioRef.current.paused) {
       try {
@@ -172,89 +199,117 @@ export const AudioPlayer: React.FC = () => {
   };
 
   return (
-    <div className="h4ks-card sticky top-0 z-10 relative">
-      {/* High Quality Stream Button - Top Right */}
-      <div className="absolute top-0 right-0 z-20">
-        <OpenInNewTabButton
-          tooltip="High quality stream - might have big delays"
-          url="/radio"
-        />
-      </div>
-
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center space-x-4">
+    <>
+      {/* Fallback Banner - shown after 10s if still connecting */}
+      {showFallbackBanner && (
+        <div className="bg-orange-900/30 border-l-4 border-orange-500 text-orange-300 px-4 py-3 mb-4 relative animate-[slideDown_0.3s_ease-out]">
           <button
-            onClick={togglePlayPause}
-            className="h4ks-btn text-2xl w-14 h-14 flex items-center justify-center"
-            aria-label={isAudioMuted ? 'Unmute' : 'Mute'}
-            disabled={!isConnected}
+            onClick={() => setShowFallbackBanner(false)}
+            className="absolute top-2 right-2 text-orange-400 hover:text-orange-200 text-xl"
+            aria-label="Dismiss"
           >
-            {isAudioMuted ? '▶' : '⏸'}
+            ×
           </button>
-
-          <div className="flex flex-col">
-            <div className="text-h4ks-green-400 font-bold text-xl">
-              h4ks radio
+          <div className="pr-8">
+            <div className="font-bold mb-1">⚠️ Connection Taking Too Long?</div>
+            <div className="text-sm">
+              WebRTC stream having trouble connecting. Try the{' '}
+              <a
+                href="/radio"
+                className="underline hover:text-orange-100 font-medium"
+              >
+                high-quality fallback stream
+              </a>
+              {' '}instead (may have higher latency).
             </div>
-            {error && (
-              <div className="text-orange-400 text-sm">
-                {error}
-              </div>
-            )}
-            {!error && (
-              <div className="text-gray-400 text-sm">
-                {!isConnected ? 'CONNECTING...' : isAudioMuted ? 'MUTED' : 'LIVE'}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={handleVolumeChange}
-            disabled={!isConnected}
-            className="w-32 h-2 bg-h4ks-dark-600 rounded-lg appearance-none cursor-pointer
-                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4
-                     [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-h4ks-green-500
-                     [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer
-                     disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          <span className="text-h4ks-green-400 text-sm w-10 text-right font-mono">
-            {Math.round(volume * 100)}%
-          </span>
-        </div>
-      </div>
-
-      {/* Amplitude Visualizer */}
-      {isPlaying && (
-        <div className="mt-3">
-          <div className="relative w-full h-2 bg-h4ks-dark-600 border border-h4ks-green-900">
-            <div
-              className={`h-full transition-all duration-75 ${
-                amplitude < 0.3 ? 'bg-h4ks-green-600' :
-                amplitude < 0.6 ? 'bg-orange-600' :
-                'bg-red-600'
-              }`}
-              style={{ width: `${amplitude * 100}%` }}
-            />
           </div>
         </div>
       )}
 
-      {/* WebRTC audio element - muted because Web Audio API handles playback */}
-      <audio
-        ref={audioRef}
-        preload="none"
-        autoPlay
-        muted
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-      />
-    </div>
+      <div className="h4ks-card sticky top-0 z-10 relative">
+        {/* High Quality Stream Button - Top Right */}
+        <div className="absolute top-0 right-0 z-20">
+          <OpenInNewTabButton
+            tooltip="High quality stream - might have big delays"
+            url="/radio"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={togglePlayPause}
+              className="h4ks-btn text-2xl w-14 h-14 flex items-center justify-center"
+              aria-label={isAudioMuted ? 'Unmute' : 'Mute'}
+              disabled={!isConnected}
+            >
+              {isAudioMuted ? '▶' : '⏸'}
+            </button>
+
+            <div className="flex flex-col">
+              <div className="text-h4ks-green-400 font-bold text-xl">
+                h4ks radio
+              </div>
+              {error && (
+                <div className="text-orange-400 text-sm">
+                  {error}
+                </div>
+              )}
+              {!error && (
+                <div className="text-gray-400 text-sm">
+                  {!isConnected ? 'CONNECTING...' : isAudioMuted ? 'MUTED' : 'LIVE'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={handleVolumeChange}
+              disabled={!isConnected}
+              className="w-32 h-2 bg-h4ks-dark-600 rounded-lg appearance-none cursor-pointer
+                       [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4
+                       [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-h4ks-green-500
+                       [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <span className="text-h4ks-green-400 text-sm w-10 text-right font-mono">
+              {Math.round(volume * 100)}%
+            </span>
+          </div>
+        </div>
+
+        {/* Amplitude Visualizer */}
+        {isPlaying && (
+          <div className="mt-3">
+            <div className="relative w-full h-2 bg-h4ks-dark-600 border border-h4ks-green-900">
+              <div
+                className={`h-full transition-all duration-75 ${
+                  amplitude < 0.3 ? 'bg-h4ks-green-600' :
+                  amplitude < 0.6 ? 'bg-orange-600' :
+                  'bg-red-600'
+                }`}
+                style={{ width: `${amplitude * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* WebRTC audio element - muted because Web Audio API handles playback */}
+        <audio
+          ref={audioRef}
+          preload="none"
+          autoPlay
+          muted
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+        />
+      </div>
+    </>
   );
 };

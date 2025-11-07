@@ -72,17 +72,32 @@ export const useJanusStream = ({
                 if (jsep) {
                   console.log('Got JSEP:', jsep);
 
+                  // Firefox-specific: Add transceiver before creating answer
+                  // This ensures Firefox properly negotiates media tracks
+                  const pc = streamingHandleRef.current?.webrtcStuff?.pc;
+                  if (pc && pc.addTransceiver) {
+                    const transceivers = pc.getTransceivers();
+                    console.log('Current transceivers:', transceivers.length);
+
+                    // Only add transceiver if none exist (Firefox requirement)
+                    if (transceivers.length === 0) {
+                      console.log('Adding audio transceiver for Firefox compatibility');
+                      pc.addTransceiver('audio', { direction: 'recvonly' });
+                    }
+                  }
+
                   // Create answer
                   streamingHandleRef.current?.createAnswer({
                     jsep: jsep,
                     media: { audioSend: false, videoSend: false },
                     success: (ourJsep: any) => {
-                      console.log('Created answer');
+                      console.log('Created answer:', ourJsep);
                       const body = { request: 'start' };
                       streamingHandleRef.current?.send({ message: body, jsep: ourJsep });
                     },
                     error: (err: string) => {
                       console.error('Error creating answer:', err);
+                      console.error('Firefox debugging: Check about:webrtc for details');
                       setError(`Answer error: ${err}`);
                     }
                   });

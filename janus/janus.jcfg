@@ -25,8 +25,10 @@ nat: {
 	# Disable ice_lite mode - use full ICE
 	ice_lite = false
 
-	# Allow ICE to work within Docker/Kubernetes network
-	ice_ignore_list = "vmnet"
+	# Ignore Docker/Kubernetes internal networks to prevent advertising unreachable IPs
+	# This forces Janus to only advertise the main network interface (eth0)
+	# vmnet = VMware/VirtualBox, docker0 = Docker bridge, br- = Docker custom bridges, veth = Docker virtual ethernet
+	ice_ignore_list = "vmnet,docker0,br-,veth"
 
 	# Enable TCP as fallback
 	ice_tcp = true
