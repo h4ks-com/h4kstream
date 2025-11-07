@@ -21,7 +21,7 @@ spec:
       targetPort: icecast
       protocol: TCP
       name: icecast
-    - port: 8005
+    - port: 8004
       targetPort: harbor
       protocol: TCP
       name: harbor

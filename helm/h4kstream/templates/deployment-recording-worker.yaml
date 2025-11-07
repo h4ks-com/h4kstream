@@ -55,10 +55,21 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /app/data
+            - name: database
+              mountPath: /app/data/db
           resources:
             {{- toYaml .Values.recordingWorker.resources | nindent 12 }}
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: {{ include "h4kstream.fullname" . }}-recordings
+        - name: database
+          persistentVolumeClaim:
+            {{- if .Values.persistence.database.enabled }}
+            {{- if .Values.persistence.database.existingClaim }}
+            claimName: {{ .Values.persistence.database.existingClaim }}
+            {{- else }}
+            claimName: {{ include "h4kstream.fullname" . }}-database
+            {{- end }}
+            {{- end }}
 {{- end }}
