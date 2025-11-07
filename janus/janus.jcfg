@@ -17,6 +17,11 @@ general: {
 
 # NAT configuration
 nat: {
+	# STUN server for NAT traversal (dynamic public IP discovery)
+	# Using IPv4 address directly to force IPv4 discovery (hostname resolves to IPv6 first)
+	stun_server = "74.125.250.129"  # stun.l.google.com IPv4
+	stun_port = 19302
+
 	# Disable ice_lite mode - use full ICE
 	ice_lite = false
 
@@ -26,6 +31,9 @@ nat: {
 	# Enable TCP as fallback
 	ice_tcp = true
 
+	# Enable full trickle ICE for better NAT traversal
+	full_trickle = true
+
 	# For Kubernetes with hostNetwork: comment out nat_1_1_mapping
 	# to allow binding to all interfaces (0.0.0.0)
 	# For Docker Compose: uncomment and set to "127.0.0.1"
@@ -33,6 +41,14 @@ nat: {
 
 	# Keep connections alive
 	keep_private_host = true
+}
+
+# Media configuration
+media: {
+	# RTP/RTCP port range for WebRTC media
+	# Must be open in firewall/router for external clients
+	# 2000 ports = ~1000 concurrent connections (more than enough for homelab)
+	rtp_port_range = "20000-22000"
 }
 
 # HTTP transport
