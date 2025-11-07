@@ -3,6 +3,12 @@
 # Allow running as root
 settings.init.allow_root.set(true)
 
+# Harbor configuration for Icecast2/Shoutcast support
+# Add application/ogg to supported ICY formats (for Mixxx/Ogg Vorbis streams)
+settings.harbor.icy_formats := ["audio/mpeg", "audio/aacp", "audio/aac", "audio/x-aac", "audio/wav", "audio/wave", "application/ogg"]
+# Enable verbose logging for debugging
+settings.harbor.verbose := true
+
 # Get environment variables
 janus_host = environment.get("JANUS_HOST")
 janus_rtp_port = int_of_string(environment.get("JANUS_RTP_PORT"))

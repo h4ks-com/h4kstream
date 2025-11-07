@@ -123,13 +123,13 @@
 			header_up Content-Type {header.Content-Type}
 			header_up X-Real-IP {remote_host}
 
-			# Forward Icecast metadata headers
-			header_up ice-name {header.ice-name}
-			header_up ice-description {header.ice-description}
-			header_up ice-genre {header.ice-genre}
-			header_up ice-artist {header.ice-artist}
-			header_up ice-url {header.ice-url}
-			header_up ice-public {header.ice-public}
+			# Forward Icecast metadata headers (case-insensitive)
+			header_up Ice-Name {header.Ice-Name}
+			header_up Ice-Description {header.Ice-Description}
+			header_up Ice-Genre {header.Ice-Genre}
+			header_up Ice-Artist {header.Ice-Artist}
+			header_up Ice-Url {header.Ice-Url}
+			header_up Ice-Public {header.Ice-Public}
 
 			# Streaming-optimized settings for chunked PUT requests
 			flush_interval -1

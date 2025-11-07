@@ -206,6 +206,7 @@ services:
     - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
     ports:
     - '8004:8004'  # HTTP stream for recording worker
+    - '8003:8003'  # HTTP stream for recording worker
     depends_on:
     - mpd-user
     - mpd-fallback
