@@ -11,7 +11,7 @@ x-backend-common: &backend-common
   - REDIS_HOST=redis
   - REDIS_PORT=6379
   - JANUS_HOST=host.docker.internal
-  - JANUS_HTTP_PORT=8088
+  - JANUS_HTTP_PORT=8100
   - JANUS_WS_PORT=8188
   - MPD_USER_HOST=mpd-user
   - MPD_USER_PORT=6600
@@ -221,6 +221,7 @@ services:
     # Note: Uses host networking to resolve mDNS candidates from browser
     volumes:
     - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
+    - ./janus/janus.transport.http.jcfg:/usr/local/etc/janus/janus.transport.http.jcfg:ro
     - ./janus/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro
     restart: unless-stopped
     command: ["/usr/local/bin/janus", "--configs-folder=/usr/local/etc/janus"]

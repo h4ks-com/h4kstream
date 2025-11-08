@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { MetadataDisplay } from '../components/MetadataDisplay';
@@ -9,8 +9,25 @@ import { authUtils } from '../utils/auth';
 
 export const HomePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'queue' | 'archives'>('queue');
+  const [listenerCount, setListenerCount] = useState<number | null>(null);
   const navigate = useNavigate();
   const isUserLoggedIn = authUtils.isUserAuthenticated();
+
+  useEffect(() => {
+    const fetchListeners = async () => {
+      try {
+        const response = await fetch('/api/public/clients');
+        const data = await response.json();
+        setListenerCount(data.total || 0);
+      } catch (error) {
+        console.error('Failed to fetch listener count:', error);
+      }
+    };
+
+    fetchListeners();
+    const interval = setInterval(fetchListeners, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen bg-h4ks-dark-800 flex flex-col">
@@ -24,6 +41,11 @@ export const HomePage: React.FC = () => {
             <p className="text-gray-400 text-sm mt-1">
               streaming.live / 24.7
             </p>
+            {listenerCount !== null && (
+              <p className="text-h4ks-green-500 text-sm mt-1 font-mono">
+                ▸ {listenerCount} {listenerCount === 1 ? 'listener' : 'listeners'}
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             <button

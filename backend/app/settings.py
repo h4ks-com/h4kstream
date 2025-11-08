@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     ICECAST_HOST: str = "icecast"
     ICECAST_PORT: int = 8000
 
+    JANUS_HOST: str = "host.docker.internal"
+    JANUS_HTTP_PORT: int = 8100
+
     DEFAULT_MAX_QUEUE_SONGS: int = 3
     DEFAULT_MAX_ADD_REQUESTS: int = 10
 

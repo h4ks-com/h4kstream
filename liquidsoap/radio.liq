@@ -379,13 +379,39 @@ output.harbor(
 log("HTTP output for recording worker configured on port 8004 (livestream only)")
 
 # Output 3: HTTP stream for public radio playback (full mix: live > user > fallback > emergency)
-output.harbor(
+# Track connected listeners using callbacks
+listener_count = ref(0)
+
+def on_harbor_connect(headers) =
+  listener_count := !listener_count + 1
+  log("Harbor listener connected. Total: #{!listener_count}")
+end
+
+def on_harbor_disconnect(uri) =
+  listener_count := max(0, !listener_count - 1)
+  log("Harbor listener disconnected. Total: #{!listener_count}")
+end
+
+harbor_output = output.harbor(
   %mp3(bitrate=320, stereo=true),
   port=8001,
   mount="/radio",
   radio
 )
 
+harbor_output.on_connect(synchronous=true, on_harbor_connect)
+harbor_output.on_disconnect(synchronous=true, on_harbor_disconnect)
+
 log("HTTP radio output configured on port 8001/radio (full radio mix)")
+
+# Register telnet command to return harbor listener count
+server.register(
+  namespace="radio",
+  description="Get number of connected listeners on harbor output",
+  "listeners",
+  fun (_) -> string(!listener_count)
+)
+
+log("Telnet command 'radio.listeners' registered for harbor listener count")
 
 log("Liquidsoap started - continuous streaming with 4-tier failsafe (live > user > fallback > emergency)")

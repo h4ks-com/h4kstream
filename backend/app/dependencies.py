@@ -10,6 +10,7 @@ from fastapi.security import HTTPBearer
 from sqlmodel import Session
 
 from app.db import engine
+from app.services.client_count_service import ClientCountService
 from app.services.event_publisher import EventPublisher
 from app.services.jwt_service import validate_token
 from app.services.livestream_service import LivestreamService
@@ -149,3 +150,8 @@ async def dep_event_publisher() -> AsyncGenerator[EventPublisher, None]:
         yield publisher
     finally:
         await redis_client.close()
+
+
+def dep_client_count_service() -> ClientCountService:
+    """Client count service for tracking radio listeners."""
+    return ClientCountService()

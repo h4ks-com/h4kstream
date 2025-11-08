@@ -273,6 +273,7 @@ class RecordingMetadata(BaseModel):
     description: str | None = Field(None, description="Description")
     duration_seconds: float = Field(..., description="Duration in seconds")
     stream_url: str = Field(..., description="Relative URL to stream the recording")
+    max_listeners: int | None = Field(None, description="Peak concurrent listener count during recording")
 
 
 class ShowRecordings(BaseModel):
@@ -302,3 +303,11 @@ class LivestreamTimeRemainingResponse(BaseModel):
     """Response with livestream time remaining."""
 
     seconds_remaining: int = Field(..., description="Remaining time in seconds (includes 10s threshold)")
+
+
+class ClientCountsResponse(BaseModel):
+    """Response for current client/listener counts from all sources."""
+
+    icecast: int = Field(..., description="Current Icecast (harbor output) listener count")
+    webrtc: int = Field(..., description="Current WebRTC (Janus) viewer count")
+    total: int = Field(..., description="Combined total listener count")

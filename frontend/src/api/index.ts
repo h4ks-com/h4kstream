@@ -14,6 +14,7 @@ export type { Body_add_song_queue_add_post } from './models/Body_add_song_queue_
 export type { Body_admin_add_song_admin_queue_add_post } from './models/Body_admin_add_song_admin_queue_add_post';
 export type { Body_admin_upload_show_intro_admin_shows__show_id__intro_post } from './models/Body_admin_upload_show_intro_admin_shows__show_id__intro_post';
 export type { Body_upload_transition_admin_transitions_upload_post } from './models/Body_upload_transition_admin_transitions_upload_post';
+export type { ClientCountsResponse } from './models/ClientCountsResponse';
 export type { ErrorResponse } from './models/ErrorResponse';
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export type { LivestreamTimeRemainingRequest } from './models/LivestreamTimeRemainingRequest';
@@ -51,6 +52,7 @@ export type { WebhookSubscriptionResponse } from './models/WebhookSubscriptionRe
 export { AdminService } from './services/AdminService';
 export { DefaultService } from './services/DefaultService';
 export { MetadataService } from './services/MetadataService';
+export { PublicService } from './services/PublicService';
 export { QueueService } from './services/QueueService';
 export { RecordingsService } from './services/RecordingsService';
 export { ShowsService } from './services/ShowsService';

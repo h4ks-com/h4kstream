@@ -1,4 +1,4 @@
-"""Public API endpoints for user queue management.
+"""Public API endpoints for user queue management and radio information.
 
 User-facing endpoints that require JWT tokens. Users can only access their own user queue, not the radio playlist.
 """
@@ -14,18 +14,21 @@ from fastapi import UploadFile
 from sqlmodel import Session
 
 from app.db import get_session
+from app.dependencies import dep_client_count_service
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
 from app.dependencies import get_jwt_token
 from app.dependencies import get_jwt_token_optional
 from app.exceptions import FileNotFoundInMPDError
 from app.exceptions import SongNotFoundError
+from app.models import ClientCountsResponse
 from app.models import ErrorResponse
 from app.models import SongAddedResponse
 from app.models import SongItem
 from app.models import SuccessResponse
 from app.services import playback_service
 from app.services import queue_service
+from app.services.client_count_service import ClientCountService
 from app.services.jwt_service import get_max_add_requests
 from app.services.jwt_service import get_max_queue_songs
 from app.services.jwt_service import get_user_id
@@ -43,6 +46,11 @@ router = APIRouter(
         401: {"model": ErrorResponse, "description": "Unauthorized"},
         403: {"model": ErrorResponse, "description": "Forbidden"},
     },
+)
+
+public_router = APIRouter(
+    prefix="/public",
+    tags=["public"],
 )
 
 
@@ -221,3 +229,20 @@ async def delete_song(
         raise HTTPException(status_code=404, detail=str(e))
 
     return SuccessResponse()
+
+
+@public_router.get(
+    "/clients",
+    response_model=ClientCountsResponse,
+    summary="Get Client Counts",
+    description=(
+        "Get current listener counts from all sources (Icecast harbor output and Janus WebRTC). "
+        "Returns separate counts for each source and combined total. "
+        "Always available (public endpoint, no authentication required)."
+    ),
+)
+async def get_client_counts(
+    client_count_service: ClientCountService = Depends(dep_client_count_service),
+) -> ClientCountsResponse:
+    """Get current client counts from Icecast and WebRTC sources."""
+    return await client_count_service.get_client_counts()

@@ -58,7 +58,7 @@ media: {
 transports: {
 	http: {
 		enabled = true
-		port = 8088
+		port = 8100
 		base_path = "/janus"
 		threads = "unlimited"
 		http = true

@@ -66,7 +66,7 @@
 
 	# Janus WebRTC API endpoints
 	handle /janus {
-		reverse_proxy host.docker.internal:8088 {
+		reverse_proxy host.docker.internal:8100 {
 			# WebRTC signaling headers
 			header_up X-Real-IP {remote_host}
 			header_up X-Forwarded-For {remote_host}
@@ -84,7 +84,7 @@
 	}
 
 	handle /janus/* {
-		reverse_proxy host.docker.internal:8088 {
+		reverse_proxy host.docker.internal:8100 {
 			# WebRTC signaling headers
 			header_up X-Real-IP {remote_host}
 			header_up X-Forwarded-For {remote_host}

@@ -22,6 +22,7 @@ from app.db import init_db
 from app.db.models import LivestreamRecording
 from app.db.models import Show
 from app.services import ffmpeg
+from app.services.client_count_service import ClientCountService
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -36,13 +37,16 @@ class RecordingSession:
     filepath: Path
     process: asyncio.subprocess.Process
     started_at: float
-    metadata: dict[str, str | None]  # Capture metadata at recording start
+    metadata: dict[str, str | None]
+    max_listeners: int = 0
 
 
 class RecordingWorker:
     def __init__(self) -> None:
         self.active_recordings: dict[str, RecordingSession] = {}
         self.redis: aioredis.Redis | None = None
+        self.client_count_service = ClientCountService()
+        self.listener_poll_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         init_db()
@@ -54,10 +58,12 @@ class RecordingWorker:
         await pubsub.subscribe(
             "events:livestream_started",
             "events:livestream_ended",
-            "events:metadata_updated"  # Subscribe to metadata updates
+            "events:metadata_updated"
         )
 
         logger.info("Recording worker started, listening for livestream events and metadata updates")
+
+        self.listener_poll_task = asyncio.create_task(self._poll_listener_counts())
 
         async for message in pubsub.listen():
             if message["type"] == "message":
@@ -251,18 +257,15 @@ class RecordingWorker:
         """Update metadata for active recording sessions when metadata changes."""
         source = data.get("source")
 
-        # Only update livestream metadata (user queue metadata shouldn't affect recordings)
         if source != "livestream":
             return
 
         new_metadata = data.get("metadata", {})
 
-        # Update all active recording sessions with new metadata
         for user_id, session in self.active_recordings.items():
-            # Update session metadata with new values (preserve existing if not provided)
             session.metadata.update({
                 k: v for k, v in new_metadata.items()
-                if v is not None  # Only update non-null values
+                if v is not None
             })
 
             logger.info(
@@ -272,6 +275,30 @@ class RecordingWorker:
                 f"genre={session.metadata.get('genre')}, "
                 f"description={session.metadata.get('description')}"
             )
+
+    async def _poll_listener_counts(self) -> None:
+        """Background task to poll listener counts and update max_listeners for active recordings."""
+        while True:
+            try:
+                if not self.active_recordings:
+                    await asyncio.sleep(10)
+                    continue
+
+                counts = await self.client_count_service.get_client_counts()
+                current_listeners = counts.total
+
+                for user_id, session in self.active_recordings.items():
+                    if current_listeners > session.max_listeners:
+                        session.max_listeners = current_listeners
+                        logger.debug(
+                            f"Updated max_listeners for {session.filename}: {session.max_listeners}"
+                        )
+
+                await asyncio.sleep(5)
+
+            except Exception as e:
+                logger.exception(f"Error polling listener counts: {e}")
+                await asyncio.sleep(10)
 
     def _write_mp3_metadata(self, filepath: Path, metadata: dict[str, str | None]) -> None:
         """Write metadata to MP3 file using mutagen ID3 tags."""
@@ -339,13 +366,15 @@ class RecordingWorker:
                 description=metadata.get("description"),
                 duration_seconds=duration,
                 file_path=session.filename,
+                max_listeners=session.max_listeners,
             )
             db.add(recording)
             db.commit()
             db.refresh(recording)
             logger.info(
                 f"Saved recording {session.filename} ({duration:.1f}s) to database "
-                f"(ID: {recording.id}, show: {show.show_name}, title: {recording.title or 'Untitled'})"
+                f"(ID: {recording.id}, show: {show.show_name}, title: {recording.title or 'Untitled'}, "
+                f"max_listeners: {recording.max_listeners or 0})"
             )
 
 

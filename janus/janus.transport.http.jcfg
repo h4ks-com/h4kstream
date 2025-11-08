@@ -1,0 +1,17 @@
+general: {
+	json = "indented"
+	base_path = "/janus"
+	http = true
+	port = 8100
+	https = false
+}
+
+admin: {
+	admin_http = true
+	admin_port = 7088
+	admin_base_path = "/admin"
+}
+
+cors: {
+	allow_origin = "*"
+}

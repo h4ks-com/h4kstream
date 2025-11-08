@@ -88,6 +88,7 @@ async def list_recordings(
             description=recording.description,
             duration_seconds=recording.duration_seconds,
             stream_url=f"{settings.ROOT_PATH}/recordings/stream/{recording.id}",
+            max_listeners=recording.max_listeners,
         )
 
         show_name = recording.show.show_name

@@ -8,6 +8,7 @@ import { FetchHttpRequest } from './core/FetchHttpRequest';
 import { AdminService } from './services/AdminService';
 import { DefaultService } from './services/DefaultService';
 import { MetadataService } from './services/MetadataService';
+import { PublicService } from './services/PublicService';
 import { QueueService } from './services/QueueService';
 import { RecordingsService } from './services/RecordingsService';
 import { ShowsService } from './services/ShowsService';
@@ -18,6 +19,7 @@ export class ApiClient {
     public readonly admin: AdminService;
     public readonly default: DefaultService;
     public readonly metadata: MetadataService;
+    public readonly public: PublicService;
     public readonly queue: QueueService;
     public readonly recordings: RecordingsService;
     public readonly shows: ShowsService;
@@ -39,6 +41,7 @@ export class ApiClient {
         this.admin = new AdminService(this.request);
         this.default = new DefaultService(this.request);
         this.metadata = new MetadataService(this.request);
+        this.public = new PublicService(this.request);
         this.queue = new QueueService(this.request);
         this.recordings = new RecordingsService(this.request);
         this.shows = new ShowsService(this.request);

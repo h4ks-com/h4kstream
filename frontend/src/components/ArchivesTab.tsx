@@ -11,6 +11,7 @@ interface Recording {
   description: string | null;
   duration_seconds: number;
   stream_url: string;
+  max_listeners: number | null;
 }
 
 interface ShowGroup {
@@ -127,6 +128,11 @@ export const ArchivesTab: React.FC = () => {
                     </div>
                     <div className="text-xs text-gray-500 ml-3">
                       {new Date(recording.created_at).toLocaleDateString()} • {Math.floor(recording.duration_seconds / 60)}m
+                      {recording.max_listeners !== null && recording.max_listeners > 0 && (
+                        <span className="text-h4ks-green-600 ml-2">
+                          ▸ {recording.max_listeners} peak
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

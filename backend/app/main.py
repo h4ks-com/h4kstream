@@ -58,6 +58,7 @@ async def health_check():
 
 # Include routes
 app.include_router(public.router)
+app.include_router(public.public_router)
 app.include_router(admin.router)
 app.include_router(internal.router)
 app.include_router(webhooks.router)

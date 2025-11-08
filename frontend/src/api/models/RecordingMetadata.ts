@@ -38,5 +38,9 @@ export type RecordingMetadata = {
      * Relative URL to stream the recording
      */
     stream_url: string;
+    /**
+     * Peak concurrent listener count during recording
+     */
+    max_listeners?: (number | null);
 };
 

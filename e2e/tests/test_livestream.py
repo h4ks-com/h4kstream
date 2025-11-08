@@ -1,6 +1,9 @@
+import subprocess
 import time
 
 import httpx
+
+from tests.conftest import stream_to_liquidsoap
 
 
 def test_create_livestream_token(client: httpx.Client, admin_headers: dict[str, str]) -> None:
@@ -135,3 +138,66 @@ def test_livestream_token_requires_admin_auth(client: httpx.Client, admin_header
 
     jwt_response = client.post("/admin/livestream/token", json={"max_streaming_seconds": 3600}, headers=jwt_headers)
     assert jwt_response.status_code == 401
+
+
+def test_livestream_max_listeners_tracking(
+    client: httpx.Client, admin_headers: dict[str, str], delay_between_recording_tests
+) -> None:
+    """Test that max_listeners field is tracked and stored in recordings."""
+    show_name = f"test_max_listeners_{int(time.time())}"
+
+    token_response = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 3600, "show_name": show_name, "min_recording_duration": 5},
+        headers=admin_headers,
+    )
+    assert token_response.status_code == 200
+    token = token_response.json()["token"]
+
+    # Actually stream audio to liquidsoap for 10 seconds (exceeds min_recording_duration of 5)
+    ffmpeg_process = stream_to_liquidsoap(token, duration=10)
+
+    try:
+        stdout, stderr = ffmpeg_process.communicate(timeout=20)
+    except subprocess.TimeoutExpired:
+        ffmpeg_process.kill()
+        raise AssertionError("FFmpeg streaming timed out")
+
+    # Poll for recording to appear (recording worker needs time to process and save)
+    max_wait = 60
+    poll_interval = 3
+    recordings_data = None
+
+    print(f"\n[DEBUG] Starting poll loop for show_name: {show_name}")
+    for attempt in range(max_wait // poll_interval):
+        time.sleep(poll_interval)
+        print(f"[DEBUG] Polling attempt {attempt + 1}/{max_wait // poll_interval}")
+        recordings_response = client.get("/recordings/list", params={"show_name": show_name})
+        print(f"[DEBUG] Response status: {recordings_response.status_code}")
+        assert recordings_response.status_code == 200
+        recordings_data = recordings_response.json()
+        print(f"[DEBUG] Response data: {recordings_data}")
+
+        if "shows" in recordings_data and len(recordings_data["shows"]) > 0:
+            print("[DEBUG] Found recording! Breaking loop.")
+            break
+    else:
+        print("[DEBUG] Poll loop completed without finding recording")
+        raise AssertionError(f"Recording not found after {max_wait}s wait")
+
+    assert "shows" in recordings_data
+    assert len(recordings_data["shows"]) > 0
+
+    found_recording = False
+    for show in recordings_data["shows"]:
+        if show["show_name"] == show_name:
+            assert len(show["recordings"]) > 0
+            recording = show["recordings"][0]
+            assert "max_listeners" in recording
+            assert recording["max_listeners"] is not None
+            assert isinstance(recording["max_listeners"], int)
+            assert recording["max_listeners"] >= 0
+            found_recording = True
+            break
+
+    assert found_recording, f"Recording for {show_name} with max_listeners field not found"

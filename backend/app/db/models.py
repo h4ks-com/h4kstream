@@ -198,6 +198,7 @@ class LivestreamRecording(SQLModel, table=True):  # type: ignore[call-arg]
     description: str | None = Field(default=None, sa_type=Text)
     duration_seconds: float
     file_path: str = Field(unique=True)
+    max_listeners: int | None = Field(default=None)
 
     show: Show = Relationship(back_populates="recordings")
 

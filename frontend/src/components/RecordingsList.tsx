@@ -9,6 +9,7 @@ interface Recording {
   description: string | null;
   duration_seconds: number;
   stream_url: string;
+  max_listeners: number | null;
 }
 
 interface RecordingsListProps {
@@ -107,6 +108,11 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ showName }) => {
               <div className="text-gray-500 text-sm text-right ml-4">
                 <div>{formatDate(recording.created_at)}</div>
                 <div>{formatDuration(recording.duration_seconds)}</div>
+                {recording.max_listeners !== null && recording.max_listeners !== undefined && (
+                  <div className="text-h4ks-green-400/70">
+                    👥 {recording.max_listeners} peak
+                  </div>
+                )}
               </div>
             </div>
 
