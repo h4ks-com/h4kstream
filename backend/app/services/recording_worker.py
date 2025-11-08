@@ -311,7 +311,6 @@ class RecordingWorker:
             )
             duration = await ffmpeg.get_duration(session.filepath)
 
-            # Check duration again after trimming - recording might be too short after silence removal
             if duration < session.min_duration:
                 os.remove(session.filepath)
                 logger.info(
