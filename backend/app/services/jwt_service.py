@@ -125,7 +125,7 @@ def generate_livestream_token(
         username = str(username)
 
     if show_name is None:
-        show_name = "livestream"
+        show_name = "Anonymous Livestream"
 
     expiration = datetime.now(UTC) + timedelta(hours=24)
     payload = {
