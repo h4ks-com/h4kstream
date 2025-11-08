@@ -22,12 +22,6 @@ backend:
     pullPolicy: Always
     tag: "latest"
 
-  # Keel annotations for automatic updates from DockerHub
-  annotations:
-    keel.sh/policy: force      # Force update even if tag is same
-    keel.sh/trigger: poll      # Poll DockerHub for new images
-    keel.sh/pollSchedule: "@every 5m"  # Check every 5 minutes
-
   resources:
     requests:
       memory: "256Mi"
@@ -71,12 +65,6 @@ frontend:
     pullPolicy: Always
     tag: "latest"
 
-  # Keel annotations for automatic updates from DockerHub
-  annotations:
-    keel.sh/policy: force
-    keel.sh/trigger: poll
-    keel.sh/pollSchedule: "@every 5m"
-
   resources:
     requests:
       memory: "64Mi"
@@ -93,12 +81,6 @@ webhookWorker:
     repository: mattfly/h4kstream-backend
     pullPolicy: Always
     tag: "latest"
-
-  # Keel annotations for automatic updates from DockerHub
-  annotations:
-    keel.sh/policy: force
-    keel.sh/trigger: poll
-    keel.sh/pollSchedule: "@every 5m"
 
   resources:
     requests:
@@ -119,12 +101,6 @@ recordingWorker:
     repository: mattfly/h4kstream-backend
     pullPolicy: Always
     tag: "latest"
-
-  # Keel annotations for automatic updates from DockerHub
-  annotations:
-    keel.sh/policy: force
-    keel.sh/trigger: poll
-    keel.sh/pollSchedule: "@every 5m"
 
   resources:
     requests:

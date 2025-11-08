@@ -200,10 +200,15 @@ def on_livestream_connect(headers) =
     livestream_intro_queue.push(request.create(default_jingle))
   end
 
-  # Pause user queue when livestream starts
-  pause_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/admin/playback/pause?playlist=user"
-  pause_response = http.post(headers=auth_headers, pause_url)
-  log("User queue pause response: #{pause_response}")
+  # Pause both user and fallback queues when livestream starts
+  # This prevents metadata overrides and avoids playback conflicts
+  pause_user_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/admin/playback/pause?playlist=user"
+  pause_user_response = http.post(headers=auth_headers, pause_user_url)
+  log("User queue pause response: #{pause_user_response}")
+
+  pause_fallback_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/admin/playback/pause?playlist=radio"
+  pause_fallback_response = http.post(headers=auth_headers, pause_fallback_url)
+  log("Fallback queue pause response: #{pause_fallback_response}")
 end
 
 # Disconnection callback for live streaming
@@ -218,10 +223,14 @@ def on_livestream_disconnect() =
   response = http.post(headers=auth_headers, data=body, disconnect_url)
   log("Disconnect callback response: #{response}")
 
-  # Resume user queue when livestream ends
-  resume_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/admin/playback/resume?playlist=user"
-  resume_response = http.post(headers=auth_headers, resume_url)
-  log("User queue resume response: #{resume_response}")
+  # Resume both user and fallback queues when livestream ends
+  resume_user_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/admin/playback/resume?playlist=user"
+  resume_user_response = http.post(headers=auth_headers, resume_user_url)
+  log("User queue resume response: #{resume_user_response}")
+
+  resume_fallback_url = "http://#{backend_host}:#{backend_port}#{backend_base_path}/admin/playback/resume?playlist=radio"
+  resume_fallback_response = http.post(headers=auth_headers, resume_fallback_url)
+  log("Fallback queue resume response: #{resume_fallback_response}")
 
   current_livestream_token := ""
 end
