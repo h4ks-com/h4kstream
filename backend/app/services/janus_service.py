@@ -17,7 +17,7 @@ class JanusService:
         self.host = settings.JANUS_HOST
         self.http_port = settings.JANUS_HTTP_PORT
         self.base_url = f"http://{self.host}:{self.http_port}/janus"
-        self.admin_url = f"http://{self.host}:7088/admin"
+        self.admin_url = f"http://{self.host}:{self.http_port}/admin"
         self.admin_secret = ""
         self.mountpoint_id = 1
 
