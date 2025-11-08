@@ -46,36 +46,59 @@ export const ManagePage: React.FC = () => {
     return <Navigate to="/login" />;
   }
 
+  const handleLogout = () => {
+    authUtils.clearUserTokens();
+    navigate('/login');
+  };
+
   return (
     <div className="min-h-screen bg-h4ks-dark-800 flex">
       {/* Sidebar */}
-      <div className="w-64 bg-h4ks-dark-900 border-r-2 border-h4ks-green-800 p-6">
-        <h1 className="text-xl font-bold text-h4ks-green-400 mb-6 font-mono">
-          [MY MANAGEMENT]
-        </h1>
-        <nav className="space-y-2 font-mono">
-          <div
-            onClick={() => navigate('/manage/queue')}
-            className={`pl-3 cursor-pointer transition-colors border-l-2 ${
-              activeSection === 'queue'
-                ? 'text-h4ks-green-400 border-h4ks-green-500'
-                : 'text-gray-400 border-transparent hover:text-gray-300'
-            }`}
-          >
-            [QUEUE]
-          </div>
-          <div
-            onClick={() => navigate('/manage/livestream')}
-            className={`pl-3 cursor-pointer transition-colors border-l-2 ${
-              activeSection === 'livestream'
-                ? 'text-h4ks-green-400 border-h4ks-green-500'
-                : 'text-gray-400 border-transparent hover:text-gray-300'
-            }`}
-          >
-            [LIVESTREAM]
-          </div>
-        </nav>
-        <SessionTimer />
+      <div className="w-64 bg-h4ks-dark-900 border-r-2 border-h4ks-green-800 p-6 flex flex-col">
+        <div className="flex-1">
+          <h1 className="text-xl font-bold text-h4ks-green-400 mb-6 font-mono">
+            [MY MANAGEMENT]
+          </h1>
+          <nav className="space-y-2 font-mono">
+            <div
+              onClick={() => navigate('/manage/queue')}
+              className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+                activeSection === 'queue'
+                  ? 'text-h4ks-green-400 border-h4ks-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              [QUEUE]
+            </div>
+            <div
+              onClick={() => navigate('/manage/livestream')}
+              className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+                activeSection === 'livestream'
+                  ? 'text-h4ks-green-400 border-h4ks-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              [LIVESTREAM]
+            </div>
+            {authUtils.isAdminAuthenticated() && (
+              <div
+                onClick={() => navigate('/admin')}
+                className="pl-3 cursor-pointer transition-colors border-l-2 text-gray-400 border-transparent hover:text-gray-300"
+              >
+                [ADMIN]
+              </div>
+            )}
+          </nav>
+          <SessionTimer />
+        </div>
+
+        {/* Logout button */}
+        <button
+          onClick={handleLogout}
+          className="w-full bg-red-900/20 border border-red-700 hover:bg-red-900/30 text-red-400 hover:text-red-300 font-mono py-2 px-4 transition-colors"
+        >
+          [LOGOUT]
+        </button>
       </div>
 
       {/* Main content */}

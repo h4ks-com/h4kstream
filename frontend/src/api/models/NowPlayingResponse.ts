@@ -10,10 +10,20 @@ export type NowPlayingResponse = {
     /**
      * Current source: user, fallback, or livestream
      */
-    source: string;
+    source: NowPlayingResponse.source;
     /**
      * Track metadata
      */
     metadata: NowPlayingMetadata;
 };
+export namespace NowPlayingResponse {
+    /**
+     * Current source: user, fallback, or livestream
+     */
+    export enum source {
+        LIVESTREAM = 'livestream',
+        USER = 'user',
+        FALLBACK = 'fallback',
+    }
+}
 

@@ -24,12 +24,32 @@ export const AdminPage: React.FC = () => {
   const navigate = useNavigate();
   const [showPrompt, setShowPrompt] = useState(!authUtils.isAdminAuthenticated());
   const [password, setPassword] = useState('');
+  const [validating, setValidating] = useState(false);
+  const [error, setError] = useState('');
   const activeSection = (section as Section) || 'users';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    authUtils.setAdminToken(password);
-    setShowPrompt(false);
+    setValidating(true);
+    setError('');
+
+    try {
+      authUtils.setAdminToken(password);
+
+      await AdminService().listUsersAdminUsersGet();
+
+      setShowPrompt(false);
+    } catch (err: any) {
+      authUtils.clearAdminToken();
+      setError(err.body?.detail || 'Invalid admin token');
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const handleLogout = () => {
+    authUtils.clearAdminToken();
+    navigate('/');
   };
 
   if (showPrompt) {
@@ -48,15 +68,22 @@ export const AdminPage: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2 focus:outline-none focus:border-h4ks-green-500"
+                  disabled={validating}
+                  className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2 focus:outline-none focus:border-h4ks-green-500 disabled:opacity-50"
                   placeholder="Enter admin token..."
                 />
               </div>
+              {error && (
+                <div className="bg-red-900/20 border border-red-700 text-red-400 px-3 py-2 text-sm">
+                  {error}
+                </div>
+              )}
               <button
                 type="submit"
-                className="w-full bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white font-mono py-2 px-4 transition-colors"
+                disabled={validating}
+                className="w-full bg-h4ks-green-700 hover:bg-h4ks-green-600 text-white font-mono py-2 px-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                [AUTHENTICATE]
+                {validating ? '[VALIDATING...]' : '[AUTHENTICATE]'}
               </button>
             </form>
           </div>
@@ -68,21 +95,30 @@ export const AdminPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-h4ks-dark-800 flex">
       {/* Sidebar */}
-      <div className="w-64 bg-h4ks-dark-900 border-r-2 border-h4ks-green-800 p-6">
-        <h1 className="text-xl font-bold text-h4ks-green-400 mb-6 font-mono">
-          [ADMIN PANEL]
-        </h1>
-        <nav className="space-y-2 font-mono">
-          <div
-            onClick={() => navigate('/admin/users')}
-            className={`pl-3 cursor-pointer transition-colors border-l-2 ${
-              activeSection === 'users'
-                ? 'text-h4ks-green-400 border-h4ks-green-500'
-                : 'text-gray-400 border-transparent hover:text-gray-300'
-            }`}
-          >
-            [USERS]
-          </div>
+      <div className="w-64 bg-h4ks-dark-900 border-r-2 border-h4ks-green-800 p-6 flex flex-col">
+        <div className="flex-1">
+          <h1 className="text-xl font-bold text-h4ks-green-400 mb-6 font-mono">
+            [ADMIN PANEL]
+          </h1>
+          <nav className="space-y-2 font-mono">
+            {authUtils.isUserAuthenticated() && (
+              <div
+                onClick={() => navigate('/manage')}
+                className="pl-3 cursor-pointer transition-colors border-l-2 text-gray-400 border-transparent hover:text-gray-300"
+              >
+                [YOU]
+              </div>
+            )}
+            <div
+              onClick={() => navigate('/admin/users')}
+              className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+                activeSection === 'users'
+                  ? 'text-h4ks-green-400 border-h4ks-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              [USERS]
+            </div>
           <div
             onClick={() => navigate('/admin/shows')}
             className={`pl-3 cursor-pointer transition-colors border-l-2 ${
@@ -134,6 +170,15 @@ export const AdminPage: React.FC = () => {
             [TRANSITIONS]
           </div>
         </nav>
+        </div>
+
+        {/* Logout button */}
+        <button
+          onClick={handleLogout}
+          className="w-full bg-red-900/20 border border-red-700 hover:bg-red-900/30 text-red-400 hover:text-red-300 font-mono py-2 px-4 transition-colors"
+        >
+          [LOGOUT]
+        </button>
       </div>
 
       {/* Main content */}

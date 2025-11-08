@@ -43,6 +43,12 @@ export const authUtils = {
     localStorage.setItem(USER_REFRESH_TOKEN_KEY, refreshToken);
   },
 
+  // Clear both user tokens
+  clearUserTokens: (): void => {
+    localStorage.removeItem(USER_TOKEN_KEY);
+    localStorage.removeItem(USER_REFRESH_TOKEN_KEY);
+  },
+
   // Admin token management
   getAdminToken: (): string | null => {
     return localStorage.getItem(ADMIN_TOKEN_KEY);

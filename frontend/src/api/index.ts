@@ -21,7 +21,7 @@ export type { LivestreamTimeRemainingResponse } from './models/LivestreamTimeRem
 export type { LivestreamTokenCreateRequest } from './models/LivestreamTokenCreateRequest';
 export type { LivestreamTokenResponse } from './models/LivestreamTokenResponse';
 export type { NowPlayingMetadata } from './models/NowPlayingMetadata';
-export type { NowPlayingResponse } from './models/NowPlayingResponse';
+export { NowPlayingResponse } from './models/NowPlayingResponse';
 export type { PendingUserCreate } from './models/PendingUserCreate';
 export type { PendingUserPublic } from './models/PendingUserPublic';
 export type { RecordingMetadata } from './models/RecordingMetadata';
