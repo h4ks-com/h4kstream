@@ -9,6 +9,6 @@ metadata:
 data:
   radio.liq: |
 {{ .Files.Get "configs/liquidsoap/radio.liq" | indent 4 }}
-  default_transition.mp3: |
-{{ .Files.Get "configs/liquidsoap/default_transition.mp3" | b64enc | indent 4 }}
+binaryData:
+  default_transition.mp3: {{ .Files.Get "configs/liquidsoap/default_transition.mp3" | b64enc }}
 {{- end }}

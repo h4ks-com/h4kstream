@@ -8,6 +8,7 @@ from datetime import datetime
 import redis.asyncio as redis
 
 from app.types import PlaylistType
+from app.types import SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -127,12 +128,12 @@ class RedisService:
         count = await self.redis.get(key)
         return int(count) if count else 0
 
-    async def set_metadata(self, source: str, metadata: dict) -> None:
+    async def set_metadata(self, source: SourceType, metadata: dict) -> None:
         """Set metadata for a source (user, fallback, livestream)."""
         key = f"metadata:{source}"
         await self.redis.set(key, json.dumps(metadata))
 
-    async def get_metadata(self, source: str) -> dict | None:
+    async def get_metadata(self, source: SourceType) -> dict | None:
         """Get metadata for a source."""
         key = f"metadata:{source}"
         value = await self.redis.get(key)
@@ -140,7 +141,7 @@ class RedisService:
             return json.loads(value)
         return None
 
-    async def delete_metadata(self, source: str) -> None:
+    async def delete_metadata(self, source: SourceType) -> None:
         """Delete metadata for a source."""
         key = f"metadata:{source}"
         await self.redis.delete(key)
@@ -195,11 +196,11 @@ class RedisService:
         key = f"refresh_token:{user_id}"
         await self.redis.delete(key)
 
-    async def set_active_source(self, source: str) -> None:
+    async def set_active_source(self, source: SourceType) -> None:
         """Set the currently active audio source."""
         await self.redis.set("metadata:active_source", source)
 
-    async def get_active_source(self) -> str | None:
+    async def get_active_source(self) -> SourceType | None:
         """Get the currently active audio source."""
         value = await self.redis.get("metadata:active_source")
         return value.decode() if value else None
@@ -220,7 +221,7 @@ class RedisService:
         """Clear livestream active flag."""
         await self.redis.delete("livestream:active_flag")
 
-    async def determine_active_source(self, user_mpd_client=None, check_user_playing: bool = False) -> str:
+    async def determine_active_source(self, user_mpd_client=None, check_user_playing: bool = False) -> SourceType:
         """Determine the currently active source based on priority: livestream > user > fallback.
 
         Args:

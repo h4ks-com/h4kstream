@@ -4,6 +4,7 @@ from pydantic import model_validator
 
 from app.types import PlaybackAction
 from app.types import PlaylistType
+from app.types import SourceType
 
 
 class TokenCreateRequest(BaseModel):
@@ -165,7 +166,7 @@ class NowPlayingMetadata(BaseModel):
 class MetadataUpdateRequest(BaseModel):
     """Request for updating track metadata (from Liquidsoap)."""
 
-    source: str = Field(..., description="Source type: user, fallback, or livestream")
+    source: SourceType = Field(..., description="Source type: user, fallback, or livestream")
     metadata: NowPlayingMetadata = Field(..., description="Track metadata")
 
 
@@ -181,7 +182,7 @@ class MetadataSetRequest(BaseModel):
 class NowPlayingResponse(BaseModel):
     """Response for current playing track information."""
 
-    source: str = Field(..., description="Current source: user, fallback, or livestream")
+    source: SourceType = Field(..., description="Current source: user, fallback, or livestream")
     metadata: NowPlayingMetadata = Field(..., description="Track metadata")
 
 

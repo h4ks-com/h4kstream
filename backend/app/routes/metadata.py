@@ -41,10 +41,15 @@ async def get_now_playing(
     user_mpd: MPDClient = Depends(dep_mpd_user),
     fallback_mpd: MPDClient = Depends(dep_mpd_fallback),
 ) -> NowPlayingResponse:
-    """Get current playing track information with live MPD data."""
-    livestream_active = await redis_client.is_livestream_active()
+    """Get current playing track information using priority-based source detection."""
+    # Use the priority system to determine which source should be active
+    active_source = await redis_client.determine_active_source(
+        user_mpd_client=user_mpd,
+        check_user_playing=False  # For /metadata/now, just check if song exists
+    )
 
-    if livestream_active:
+    # Get metadata for the active source
+    if active_source == "livestream":
         metadata = await redis_client.get_metadata("livestream") or {}
         # Provide fallback values if metadata fields are empty
         if not metadata.get("title"):
@@ -53,23 +58,27 @@ async def get_now_playing(
             metadata["artist"] = "Unknown Artist"
         return NowPlayingResponse(source="livestream", metadata=NowPlayingMetadata(**metadata))
 
-    try:
-        await user_mpd.connect()
-        user_song = await user_mpd.get_current_song()
-        await user_mpd.disconnect()
+    # For user or fallback: fetch fresh MPD data with metadata overrides
+    mpd_client = user_mpd if active_source == "user" else fallback_mpd
+    default_title = "User Queue" if active_source == "user" else "Fallback Playlist"
 
-        if user_song and user_song.get("file"):
+    try:
+        await mpd_client.connect()
+        current_song = await mpd_client.get_current_song()
+        await mpd_client.disconnect()
+
+        if current_song and current_song.get("file"):
             # Start with MPD metadata
             metadata = {
-                "title": user_song.get("title") or user_song.get("file", "User Queue"),
-                "artist": user_song.get("artist"),
-                "genre": user_song.get("genre"),
+                "title": current_song.get("title") or current_song.get("file", default_title),
+                "artist": current_song.get("artist"),
+                "genre": current_song.get("genre"),
                 "description": None,
             }
 
             # Check for per-song metadata overrides
-            if user_song.get("id"):
-                overrides = await redis_client.get_song_metadata("user", str(user_song["id"]))
+            if current_song.get("id"):
+                overrides = await redis_client.get_song_metadata(active_source, str(current_song["id"]))
                 if overrides:
                     # Apply overrides - Redis takes precedence
                     if "title" in overrides:
@@ -77,44 +86,13 @@ async def get_now_playing(
                     if "artist" in overrides:
                         metadata["artist"] = overrides["artist"]
 
-            await redis_client.set_metadata("user", metadata)
-            await redis_client.set_active_source("user")
-            return NowPlayingResponse(source="user", metadata=NowPlayingMetadata(**metadata))
+            return NowPlayingResponse(source=active_source, metadata=NowPlayingMetadata(**metadata))
     except Exception as e:
-        logger.warning(f"Failed to fetch user MPD metadata: {e}")
+        logger.warning(f"Failed to fetch {active_source} MPD metadata: {e}")
 
-    try:
-        await fallback_mpd.connect()
-        fallback_song = await fallback_mpd.get_current_song()
-        await fallback_mpd.disconnect()
-
-        if fallback_song and fallback_song.get("file"):
-            # Start with MPD metadata
-            metadata = {
-                "title": fallback_song.get("title") or fallback_song.get("file", "Fallback Playlist"),
-                "artist": fallback_song.get("artist"),
-                "genre": fallback_song.get("genre"),
-                "description": None,
-            }
-
-            # Check for per-song metadata overrides
-            if fallback_song.get("id"):
-                overrides = await redis_client.get_song_metadata("fallback", str(fallback_song["id"]))
-                if overrides:
-                    # Apply overrides - Redis takes precedence
-                    if "title" in overrides:
-                        metadata["title"] = overrides["title"]
-                    if "artist" in overrides:
-                        metadata["artist"] = overrides["artist"]
-
-            await redis_client.set_metadata("fallback", metadata)
-            await redis_client.set_active_source("fallback")
-            return NowPlayingResponse(source="fallback", metadata=NowPlayingMetadata(**metadata))
-    except Exception as e:
-        logger.warning(f"Failed to fetch fallback MPD metadata: {e}")
-
-    metadata = {"title": "Fallback Playlist", "artist": None, "genre": None, "description": None}
-    return NowPlayingResponse(source="fallback", metadata=NowPlayingMetadata(**metadata))
+    # Fallback if MPD connection fails
+    metadata = {"title": default_title, "artist": None, "genre": None, "description": None}
+    return NowPlayingResponse(source=active_source, metadata=NowPlayingMetadata(**metadata))
 
 
 @internal_router.post(
