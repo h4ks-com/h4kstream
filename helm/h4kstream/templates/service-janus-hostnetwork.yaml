@@ -20,6 +20,9 @@ spec:
     - port: 8188
       protocol: TCP
       name: websocket
+    - port: 7088
+      protocol: TCP
+      name: admin
 ---
 # Endpoints for Janus pointing to the Kubernetes node
 # Janus uses hostNetwork, so it's accessible at the node's IP
@@ -49,4 +52,7 @@ subsets:
       - port: 8188
         protocol: TCP
         name: websocket
+      - port: 7088
+        protocol: TCP
+        name: admin
 {{- end }}

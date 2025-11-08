@@ -1,6 +1,7 @@
 """Webhook worker service - standalone microservice for event processing.
 
 Subscribes to Redis Pub/Sub channels, delivers webhooks, and monitors livestreams.
+Metadata is now exclusively managed by Liquidsoap via the /internal/metadata/update endpoint.
 Run as: python -m app.services.webhook_worker
 """
 
@@ -14,13 +15,10 @@ import redis.asyncio as redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.db import init_db
-from app.services.event_publisher import EventPublisher
 from app.services.livestream_service import LivestreamService
-from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
 from app.services.webhook_delivery import deliver_webhook
 from app.settings import settings
-from app.types import PlaylistType
 
 # Configure logging
 logging.basicConfig(
@@ -50,9 +48,6 @@ class WebhookWorker:
         self.redis_service: RedisService | None = None
         self.pubsub: redis.client.PubSub | None = None
         self.livestream_service: LivestreamService | None = None
-        self.event_publisher: EventPublisher | None = None
-        self.mpd_user: MPDClient | None = None
-        self.mpd_fallback: MPDClient | None = None
 
     async def initialize(self) -> None:
         """Initialize Redis connections and services."""
@@ -62,11 +57,6 @@ class WebhookWorker:
         self.redis_client = redis.from_url(self.redis_url)
         self.redis_service = RedisService(self.redis_client)
         self.livestream_service = LivestreamService(self.redis_client)
-        self.event_publisher = EventPublisher(self.redis_client)
-
-        # Initialize MPD clients for metadata polling
-        self.mpd_user = MPDClient(settings.MPD_USER_HOST, settings.MPD_USER_PORT)
-        self.mpd_fallback = MPDClient(settings.MPD_FALLBACK_HOST, settings.MPD_FALLBACK_PORT)
 
         logger.info("Webhook worker initialized")
 
@@ -216,111 +206,10 @@ class WebhookWorker:
         except asyncio.CancelledError:
             logger.info("Livestream monitor cancelled")
 
-    async def mpd_monitor_loop(self, source_name: PlaylistType, mpd_client: MPDClient) -> None:
-        """Monitor MPD for song changes and publish events respecting source priority.
-
-        Only publishes events when:
-        1. This source is the highest priority active source
-        2. The MPD player is actually in PLAYING state (not paused/stopped)
-        3. The song ID has changed
-        """
-        assert self.redis_service is not None, "RedisService not initialized"
-        assert self.event_publisher is not None, "EventPublisher not initialized"
-
-        logger.info(f"MPD monitor started for {source_name} playlist")
-        last_song_id: str | None = None
-
-        # Create dedicated MPD client for priority checking (separate from main monitor client)
-        check_client = MPDClient(settings.MPD_USER_HOST, settings.MPD_USER_PORT)
-
-        try:
-            while not shutdown_event.is_set():
-                try:
-                    # Use shared priority logic to determine active source
-                    active_source = await self.redis_service.determine_active_source(
-                        user_mpd_client=check_client,
-                        check_user_playing=True,  # Check if user is actually PLAYING, not just has songs
-                    )
-
-                    # Only proceed if THIS source is the active one
-                    if active_source != source_name:
-                        await asyncio.sleep(2)
-                        continue
-
-                    # Get current song and playback status from THIS MPD
-                    await mpd_client.connect()
-                    status = await mpd_client.get_status()
-                    current_song = await mpd_client.get_current_song()
-                    await mpd_client.disconnect()
-
-                    # Only publish if actually PLAYING (not paused/stopped)
-                    if status.get("state") != "play":
-                        await asyncio.sleep(2)
-                        continue
-
-                    if not current_song or not current_song.get("file"):
-                        await asyncio.sleep(2)
-                        continue
-
-                    current_song_id = current_song.get("id")
-                    if current_song_id and current_song_id != last_song_id:
-                        last_song_id = current_song_id
-
-                        # Extract metadata from MPD
-                        title = current_song.get("title") or current_song.get("file", "Unknown")
-                        artist = current_song.get("artist")
-                        genre = current_song.get("genre")
-
-                        # Check Redis for metadata overrides (from custom add endpoints)
-                        overrides = await self.redis_service.get_song_metadata(source_name, str(current_song_id))
-                        if overrides:
-                            if "title" in overrides:
-                                title = overrides["title"]
-                            if "artist" in overrides:
-                                artist = overrides["artist"]
-
-                        # Store metadata in Redis
-                        metadata = {
-                            "title": title,
-                            "artist": artist,
-                            "genre": genre,
-                            "description": None,
-                        }
-                        await self.redis_service.set_metadata(source_name, metadata)
-                        await self.redis_service.set_active_source(source_name)
-
-                        # Publish song_changed event
-                        description = f"Playing next: {title}"
-                        if artist:
-                            description += f" by {artist}"
-
-                        await self.event_publisher.publish(
-                            event_type="song_changed",
-                            data={
-                                "playlist": source_name,
-                                "title": title,
-                                "artist": artist,
-                                "genre": genre,
-                            },
-                            description=description,
-                        )
-                        logger.info(f"Published song_changed for {source_name}: {title} - {artist}")
-
-                except (RedisConnectionError, ConnectionError, OSError, TimeoutError) as e:
-                    logger.error(f"Connection error in {source_name} MPD monitor: {e}", exc_info=True)
-                    await asyncio.sleep(5)
-                except Exception as e:
-                    logger.error(f"Error in {source_name} MPD monitor: {e}", exc_info=True)
-
-                await asyncio.sleep(2)
-
-        except asyncio.CancelledError:
-            logger.info(f"MPD monitor cancelled for {source_name}")
-
     async def run(self) -> None:
         """Run webhook worker service (main entry point).
 
-        Listens for Redis pub/sub events, delivers webhooks, and monitors MPD for song changes.
+        Listens for Redis pub/sub events and delivers webhooks. Metadata is now exclusively managed by Liquidsoap.
         """
         logger.info("Starting webhook worker service...")
 
@@ -330,13 +219,7 @@ class WebhookWorker:
         pubsub_task = asyncio.create_task(self.pubsub_listener())
         livestream_monitor_task = asyncio.create_task(self.livestream_monitor_loop())
 
-        # Start MPD monitoring tasks with priority checking
-        assert self.mpd_user is not None
-        assert self.mpd_fallback is not None
-        mpd_user_monitor_task = asyncio.create_task(self.mpd_monitor_loop("user", self.mpd_user))
-        mpd_fallback_monitor_task = asyncio.create_task(self.mpd_monitor_loop("fallback", self.mpd_fallback))
-
-        logger.info("Webhook worker running with MPD monitors (Ctrl+C to stop)")
+        logger.info("Webhook worker running (metadata managed by Liquidsoap) (Ctrl+C to stop)")
 
         # Wait for shutdown signal
         await shutdown_event.wait()
@@ -345,13 +228,9 @@ class WebhookWorker:
 
         pubsub_task.cancel()
         livestream_monitor_task.cancel()
-        mpd_user_monitor_task.cancel()
-        mpd_fallback_monitor_task.cancel()
         await asyncio.gather(
             pubsub_task,
             livestream_monitor_task,
-            mpd_user_monitor_task,
-            mpd_fallback_monitor_task,
             return_exceptions=True,
         )
 

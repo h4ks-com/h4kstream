@@ -4,6 +4,7 @@ Public endpoint for current track info and internal endpoints for Liquidsoap int
 """
 
 import logging
+from typing import cast
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -19,10 +20,13 @@ from app.models import MetadataSetRequest
 from app.models import MetadataUpdateRequest
 from app.models import NowPlayingMetadata
 from app.models import NowPlayingResponse
+from app.models import QueueSwitchedEventData
+from app.models import SongChangedEventData
 from app.models import SuccessResponse
 from app.services.event_publisher import EventPublisher
 from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
+from app.types import PlaylistType
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +46,19 @@ async def get_now_playing(
     fallback_mpd: MPDClient = Depends(dep_mpd_fallback),
 ) -> NowPlayingResponse:
     """Get current playing track information using priority-based source detection."""
+    # CRITICAL: Always check livestream flag first to prevent MPD metadata leaking during livestream
+    livestream_active = await redis_client.is_livestream_active()
+    if livestream_active:
+        # Force livestream source when flag is active, regardless of MPD state
+        # TTL is managed by connect/disconnect hooks, not by polling endpoints
+        metadata = await redis_client.get_metadata("livestream") or {}
+        # Provide fallback values if metadata fields are empty
+        if not metadata.get("title"):
+            metadata["title"] = "Live Stream"
+        if not metadata.get("artist"):
+            metadata["artist"] = "Unknown Artist"
+        return NowPlayingResponse(source="livestream", metadata=NowPlayingMetadata(**metadata))
+
     # Use the priority system to determine which source should be active
     active_source = await redis_client.determine_active_source(
         user_mpd_client=user_mpd,
@@ -109,45 +126,57 @@ async def update_metadata(
     redis_client: RedisService = Depends(dep_redis_client),
     event_publisher: EventPublisher = Depends(dep_event_publisher),
     user_mpd: MPDClient = Depends(dep_mpd_user),
+    fallback_mpd: MPDClient = Depends(dep_mpd_fallback),
 ) -> SuccessResponse:
     """Liquidsoap reports current track metadata.
 
     Only publishes song_changed events if this source is actually playing (respecting priority).
     Priority: livestream > user > fallback
+
+    CRITICAL: During active livestream, we reject all metadata updates from MPD sources
+    to prevent metadata pollution when queues are paused.
     """
     new_metadata = request.metadata.model_dump()
 
     # Get old active source to detect queue switches
     old_source = await redis_client.get_active_source()
 
-    # Track livestream activity - keep flag alive with metadata updates
-    if request.source == "livestream":
-        # Check if livestream is currently active (set by connect endpoint)
-        is_active = await redis_client.is_livestream_active()
-        if is_active:
-            # Refresh the TTL to keep stream alive (metadata updates every ~5-10s)
-            await redis_client.set_livestream_active(ttl_seconds=60)
+    # Use shared priority logic to determine active source FIRST
+    active_source = await redis_client.determine_active_source(
+        user_mpd_client=user_mpd,
+        check_user_playing=True  # Only publish webhooks when actually PLAYING, not paused/stopped
+    )
 
+    # CRITICAL: Reject metadata updates from non-active sources when livestream is active
+    # This prevents MPD metadata from overriding livestream metadata when queues are paused
+    if active_source == "livestream" and request.source != "livestream":
+        logger.debug(
+            f"Rejected metadata from '{request.source}' (livestream is active, both queues should be paused)"
+        )
+        return SuccessResponse()
+
+    # Merge metadata for livestream (preserve non-empty fields)
+    # TTL is managed by connect/disconnect hooks, NOT by metadata updates
+    if request.source == "livestream":
         existing = await redis_client.get_metadata(request.source) or {}
         merged = existing.copy()
         for key, value in new_metadata.items():
             if value:
                 merged[key] = value
-        # Provide fallback values if metadata is missing
-        if not merged.get("title"):
-            merged["title"] = "Live Stream"
-        if not merged.get("artist"):
-            merged["artist"] = "Unknown Artist"
     else:
         merged = new_metadata
 
-    await redis_client.set_metadata(request.source, merged)
+    # Provide fallback values if metadata is missing (for all sources)
+    if not merged.get("title"):
+        if request.source == "livestream":
+            merged["title"] = "Live Stream"
+        else:
+            merged["title"] = "Unknown Track"
+    if not merged.get("artist"):
+        merged["artist"] = "Unknown Artist"
 
-    # Use shared priority logic to determine active source
-    active_source = await redis_client.determine_active_source(
-        user_mpd_client=user_mpd,
-        check_user_playing=True  # Only publish webhooks when actually PLAYING, not paused/stopped
-    )
+    # Only store metadata from the active source
+    await redis_client.set_metadata(request.source, merged)
 
     # Only update active source and publish events if this source is actually playing
     should_publish = request.source == active_source
@@ -159,23 +188,71 @@ async def update_metadata(
         # Publish queue_switched event if source changed
         if old_source and old_source != request.source:
             description = f"Switched from {old_source} to {request.source}"
+            queue_switched_data = QueueSwitchedEventData(from_source=old_source, to_source=request.source)
             await event_publisher.publish(
                 event_type="queue_switched",
-                data={"from_source": old_source, "to_source": request.source},
+                data=queue_switched_data.model_dump(),
                 description=description,
             )
             logger.info(f"Published queue_switched event: {description}")
 
-        # Publish song_changed event
+        # Publish song_changed event with enriched metadata from MPD + overrides
+        # This ensures webhooks get the same metadata as the UI (per-song overrides applied)
         title = merged.get("title", "Unknown")
         artist = merged.get("artist", "Unknown")
+        genre = merged.get("genre")
+
+        # For user/fallback sources, fetch fresh MPD metadata and apply per-song overrides
+        if request.source in ("user", "fallback"):
+            mpd_client = user_mpd if request.source == "user" else fallback_mpd
+            try:
+                await mpd_client.connect()
+                current_song = await mpd_client.get_current_song()
+                await mpd_client.disconnect()
+
+                if current_song and current_song.get("file"):
+                    # Start with MPD metadata (may be empty for files without ID3 tags)
+                    mpd_title = current_song.get("title")
+                    mpd_artist = current_song.get("artist")
+                    mpd_genre = current_song.get("genre")
+
+                    # Check for per-song metadata overrides in Redis
+                    if current_song.get("id"):
+                        playlist_type = cast(PlaylistType, request.source)
+                        overrides = await redis_client.get_song_metadata(playlist_type, str(current_song["id"]))
+                        if overrides:
+                            # Apply overrides - Redis takes precedence
+                            if "title" in overrides:
+                                mpd_title = overrides["title"]
+                            if "artist" in overrides:
+                                mpd_artist = overrides["artist"]
+
+                    # Use enriched metadata if available, otherwise fall back to Liquidsoap metadata
+                    if mpd_title:
+                        title = mpd_title
+                    if mpd_artist:
+                        artist = mpd_artist
+                    if mpd_genre:
+                        genre = mpd_genre
+
+                    logger.debug(f"Enriched webhook metadata from MPD: title={title}, artist={artist}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch MPD metadata for webhook enrichment: {e}")
+                # Continue with Liquidsoap metadata as fallback
+
         description = f"Playing next: {title}"
         if artist and artist != "Unknown":
             description += f" by {artist}"
 
+        event_data = SongChangedEventData(
+            playlist=request.source,
+            title=title,
+            artist=artist,
+            genre=genre,
+        )
         await event_publisher.publish(
             event_type="song_changed",
-            data={"source": request.source, "metadata": merged},
+            data=event_data.model_dump(),
             description=description,
         )
         logger.debug(f"Published song_changed event for {request.source}")

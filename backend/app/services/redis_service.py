@@ -204,10 +204,7 @@ class RedisService:
 
     async def set_livestream_active(self, ttl_seconds: int = 10) -> None:
         """Mark livestream as active with TTL."""
-        result = await self.redis.setex("livestream:active_flag", ttl_seconds, "1")
-        # Verify it was set
-        check = await self.redis.get("livestream:active_flag")
-        logger.info(f"Set livestream:active_flag with TTL {ttl_seconds}, result={result}, check={check}")
+        await self.redis.setex("livestream:active_flag", ttl_seconds, "1")
 
     async def is_livestream_active(self) -> bool:
         """Check if livestream is currently active."""

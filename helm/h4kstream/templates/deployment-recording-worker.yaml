@@ -36,6 +36,10 @@ spec:
               value: {{ include "h4kstream.fullname" . }}-liquidsoap
             - name: LIQUIDSOAP_RECORDING_PORT
               value: "8004"
+            - name: JANUS_HOST
+              value: {{ include "h4kstream.fullname" . }}-janus
+            - name: JANUS_HTTP_PORT
+              value: "8088"
             - name: DATA_PATH
               value: "/app/data"
             - name: RECORDINGS_PATH

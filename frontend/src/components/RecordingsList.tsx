@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { OpenInNewTabButton } from './OpenInNewTabButton';
 
 interface Recording {
   id: number;
@@ -94,9 +95,15 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ showName }) => {
           <div
             key={recording.id}
             ref={isLast ? lastRecordingRef : null}
-            className="h4ks-card"
+            className="h4ks-card relative"
           >
-            <div className="flex items-start justify-between mb-2">
+            <div className="absolute top-0 right-0">
+              <OpenInNewTabButton
+                tooltip="Open audio in new tab"
+                url={recording.stream_url}
+              />
+            </div>
+            <div className="flex items-start justify-between mb-2 pr-8">
               <div className="flex-1">
                 <div className="text-h4ks-green-400 font-mono">
                   {recording.title || 'Untitled Recording'}

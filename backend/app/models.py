@@ -311,3 +311,67 @@ class ClientCountsResponse(BaseModel):
     icecast: int = Field(..., description="Current Icecast (harbor output) listener count")
     webrtc: int = Field(..., description="Current WebRTC (Janus) viewer count")
     total: int = Field(..., description="Combined total listener count")
+
+
+# =============================================================================
+# Webhook Event Payload Models
+# =============================================================================
+
+
+class SongChangedEventData(BaseModel):
+    """Data payload for song_changed webhook events."""
+
+    playlist: SourceType = Field(..., description="Source playlist: user, fallback, or livestream")
+    title: str = Field(..., description="Song title (fallback: 'Unknown Track' or 'Live Stream')")
+    artist: str = Field(..., description="Artist name (fallback: 'Unknown Artist')")
+    genre: str | None = Field(None, description="Music genre (optional)")
+
+
+class SongAddedEventData(BaseModel):
+    """Data payload for song_added webhook events."""
+
+    song_id: str = Field(..., description="Prefixed song ID (u-{id} or f-{id})")
+    playlist: PlaylistType = Field(..., description="Target playlist: user or fallback")
+    title: str | None = Field(None, description="Song title (may be None)")
+    artist: str | None = Field(None, description="Artist name (may be None)")
+
+
+class LivestreamStartedEventData(BaseModel):
+    """Data payload for livestream_started webhook events."""
+
+    user_id: str = Field(..., description="User ID who started the stream")
+    show_name: str = Field(..., description="Show name identifier")
+    min_recording_duration: int = Field(..., description="Minimum recording duration in seconds")
+
+
+class LivestreamEndedEventData(BaseModel):
+    """Data payload for livestream_ended webhook events."""
+
+    user_id: str = Field(..., description="User ID who was streaming")
+    duration_seconds: int = Field(..., description="Total stream duration in seconds")
+    reason: str = Field(..., description="Disconnect reason (e.g., 'disconnect', 'time_limit')")
+
+
+class QueueSwitchedEventData(BaseModel):
+    """Data payload for queue_switched webhook events."""
+
+    from_source: SourceType = Field(..., description="Previous active source")
+    to_source: SourceType = Field(..., description="New active source")
+
+
+class WebhookEventPayload(BaseModel):
+    """Complete webhook event payload structure sent to webhook URLs."""
+
+    event_type: str = Field(
+        ...,
+        description="Event type: song_changed, song_added, livestream_started, livestream_ended, queue_switched"
+    )
+    timestamp: str = Field(..., description="ISO format event timestamp")
+    data: (
+        SongChangedEventData
+        | SongAddedEventData
+        | LivestreamStartedEventData
+        | LivestreamEndedEventData
+        | QueueSwitchedEventData
+    ) = Field(..., description="Event-specific data payload")
+    description: str = Field(..., description="Human-readable event description")

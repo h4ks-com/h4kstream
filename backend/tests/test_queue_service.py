@@ -70,8 +70,8 @@ class TestAddSong:
             mock_mpd_client.add_local_song.assert_called_once()
             mock_mpd_client.set_consume.assert_called_once_with(True)
 
-            # Verify livestream check was performed
-            mock_redis_client.is_livestream_active.assert_called_once()
+            # Verify livestream check was performed (called 3 times: metadata, playback, webhook)
+            assert mock_redis_client.is_livestream_active.call_count == 3
             # Verify play was called (no livestream active)
             mock_mpd_client.play.assert_called_once()
 

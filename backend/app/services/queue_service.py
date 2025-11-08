@@ -13,6 +13,7 @@ from fastapi import UploadFile
 from sqlmodel import Session
 from yt_dlp.utils import sanitize_filename
 
+from app.models import SongAddedEventData
 from app.models import SongItem
 from app.services import cache_service
 from app.services.event_publisher import EventPublisher
@@ -292,13 +293,17 @@ async def add_song(
         if song_name or artist_name:
             await redis_client.set_song_metadata(playlist, str(mpd_song_id), final_title, final_artist)
 
-        metadata = {
-            "title": final_title,
-            "artist": final_artist,
-            "genre": None,
-            "description": None,
-        }
-        await redis_client.set_metadata(playlist, metadata)
+        # Only set metadata if livestream is not active
+        # Liquidsoap will handle all metadata updates via /internal/metadata/update
+        livestream_active = await redis_client.is_livestream_active()
+        if not livestream_active:
+            metadata = {
+                "title": final_title,
+                "artist": final_artist,
+                "genre": None,
+                "description": None,
+            }
+            await redis_client.set_metadata(playlist, metadata)
 
     if playlist == "user":
         await mpd_client.set_consume(True)
@@ -322,21 +327,28 @@ async def add_song(
     prefixed_id = format_song_id(mpd_song_id, playlist)
     logger.info(f"Added song to {playlist} playlist: {target_path.name} (ID: {prefixed_id})")
 
+    # Only publish song_added webhook if no active livestream
+    # During livestream, queue additions are silent (no playback, no webhooks)
     if redis_client:
-        try:
-            event_publisher = EventPublisher(redis_client.redis)
-            await event_publisher.publish(
-                event_type="song_added",
-                data={
-                    "song_id": prefixed_id,
-                    "playlist": playlist,
-                    "title": final_title,
-                    "artist": final_artist,
-                },
-                description=f"Song added to {playlist} queue: {final_title or target_path.name}",
-            )
-        except Exception as e:
-            logger.error(f"Failed to publish song_added event: {e}")
+        livestream_active = await redis_client.is_livestream_active()
+        if not livestream_active:
+            try:
+                event_publisher = EventPublisher(redis_client.redis)
+                event_data = SongAddedEventData(
+                    song_id=prefixed_id,
+                    playlist=playlist,
+                    title=final_title,
+                    artist=final_artist,
+                )
+                await event_publisher.publish(
+                    event_type="song_added",
+                    data=event_data.model_dump(),
+                    description=f"Song added to {playlist} queue: {final_title or target_path.name}",
+                )
+            except Exception as e:
+                logger.error(f"Failed to publish song_added event: {e}")
+        else:
+            logger.info(f"Skipped song_added webhook for {playlist} (livestream active)")
 
     return prefixed_id
 

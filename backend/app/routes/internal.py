@@ -19,6 +19,8 @@ from app.models import LivestreamAuthResponse
 from app.models import LivestreamConnectRequest
 from app.models import LivestreamConnectResponse
 from app.models import LivestreamDisconnectRequest
+from app.models import LivestreamEndedEventData
+from app.models import LivestreamStartedEventData
 from app.models import SuccessResponse
 from app.services.event_publisher import EventPublisher
 from app.services.livestream_service import LivestreamService
@@ -66,17 +68,19 @@ async def livestream_connect(
     event_publisher: EventPublisher = Depends(dep_event_publisher),
 ) -> LivestreamConnectResponse:
     """Track livestream connection start time."""
-    logger.info(f"Livestream connect endpoint called with token: {request.token[:20]}...")
     result = await service.track_connection_start(request.token)
-    logger.info(f"track_connection_start returned: {result}")
-    await redis_client.set_livestream_active(ttl_seconds=3600)
-    logger.info("Set livestream active flag with 3600s TTL")
+    # Set flag with 24-hour TTL as safety mechanism (disconnect hook will clear it explicitly)
+    await redis_client.set_livestream_active(ttl_seconds=86400)
 
-    user_id = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
-    show_name = result.get("show_name", "unknown") if isinstance(result, dict) else "unknown"
-    min_recording_duration = result.get("min_recording_duration", 60) if isinstance(result, dict) else 60
+    user_id_raw = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
+    show_name_raw = result.get("show_name", "unknown") if isinstance(result, dict) else "unknown"
+    min_recording_duration_raw = result.get("min_recording_duration", 60) if isinstance(result, dict) else 60
     intro_filename_raw = result.get("intro_filename") if isinstance(result, dict) else None
     intro_filename: str | None = intro_filename_raw if isinstance(intro_filename_raw, str) else None
+
+    user_id = str(user_id_raw)
+    show_name = str(show_name_raw)
+    min_recording_duration = int(min_recording_duration_raw) if isinstance(min_recording_duration_raw, int) else 60
 
     # Store show information in livestream metadata for retrieval
     metadata = await redis_client.get_metadata("livestream") or {}
@@ -86,13 +90,14 @@ async def livestream_connect(
     logger.info(f"Updated livestream metadata with show_name={show_name}, show_user={user_id}")
 
     description = "A livestream was started"
+    event_data = LivestreamStartedEventData(
+        user_id=user_id,
+        show_name=show_name,
+        min_recording_duration=min_recording_duration,
+    )
     await event_publisher.publish(
         event_type="livestream_started",
-        data={
-            "user_id": user_id,
-            "show_name": show_name,
-            "min_recording_duration": min_recording_duration,
-        },
+        data=event_data.model_dump(),
         description=description,
     )
     logger.info(f"Published livestream_started event for user {user_id}")
@@ -122,14 +127,22 @@ async def livestream_disconnect(
     logger.info("Cleaned up livestream metadata from Redis")
 
     # Extract user_id and duration from result
-    user_id = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
-    duration_seconds = result.get("elapsed_seconds", 0) if isinstance(result, dict) else 0
+    user_id_raw = result.get("user_id", "unknown") if isinstance(result, dict) else "unknown"
+    duration_seconds_raw = result.get("elapsed_seconds", 0) if isinstance(result, dict) else 0
+
+    user_id = str(user_id_raw)
+    duration_seconds = int(duration_seconds_raw)
 
     # Publish livestream_ended event
     description = f"Livestream ended after {duration_seconds} seconds"
+    event_data = LivestreamEndedEventData(
+        user_id=user_id,
+        duration_seconds=duration_seconds,
+        reason="disconnect",
+    )
     await event_publisher.publish(
         event_type="livestream_ended",
-        data={"user_id": user_id, "duration_seconds": duration_seconds, "reason": "disconnect"},
+        data=event_data.model_dump(),
         description=description,
     )
     logger.info(f"Published livestream_ended event for user {user_id} (duration: {duration_seconds}s)")
