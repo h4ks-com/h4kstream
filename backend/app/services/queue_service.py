@@ -306,7 +306,18 @@ async def add_song(
         await mpd_client.set_repeat(True)
         await mpd_client.set_random(True)
 
-    await mpd_client.play()
+    # Only start playback if there's no active livestream
+    # to avoid disrupting the live stream
+    if redis_client:
+        livestream_active = await redis_client.is_livestream_active()
+        if not livestream_active:
+            await mpd_client.play()
+            logger.info(f"Started playback for {playlist} playlist (no livestream active)")
+        else:
+            logger.info(f"Skipped playback for {playlist} playlist (livestream active)")
+    else:
+        # Fallback: play if no redis_client available (shouldn't happen in practice)
+        await mpd_client.play()
 
     prefixed_id = format_song_id(mpd_song_id, playlist)
     logger.info(f"Added song to {playlist} playlist: {target_path.name} (ID: {prefixed_id})")

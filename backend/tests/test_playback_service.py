@@ -68,6 +68,56 @@ class TestPlaybackControl:
             mock_mpd_client.resume.assert_called_once()
             mock_mpd_client.disconnect.assert_called_once()
 
+    async def test_resume_when_paused(self):
+        """Test MPDClient.resume() unpauses when MPD is paused."""
+        from unittest.mock import MagicMock
+
+        from app.services.mpd_service import MPDClient
+
+        client = MPDClient("localhost", 6600)
+        client.client = MagicMock()
+        client.client.status = MagicMock(return_value={"state": "pause"})
+        client.client.pause = MagicMock()
+
+        await client.resume()
+
+        # Should call pause(0) to unpause
+        client.client.pause.assert_called_once_with(0)
+
+    async def test_resume_when_stopped(self):
+        """Test MPDClient.resume() calls play when MPD is stopped."""
+        from unittest.mock import MagicMock
+
+        from app.services.mpd_service import MPDClient
+
+        client = MPDClient("localhost", 6600)
+        client.client = MagicMock()
+        client.client.status = MagicMock(return_value={"state": "stop"})
+        client.client.play = MagicMock()
+
+        await client.resume()
+
+        # Should call play() to start playback
+        client.client.play.assert_called_once()
+
+    async def test_resume_when_playing(self):
+        """Test MPDClient.resume() does nothing when already playing."""
+        from unittest.mock import MagicMock
+
+        from app.services.mpd_service import MPDClient
+
+        client = MPDClient("localhost", 6600)
+        client.client = MagicMock()
+        client.client.status = MagicMock(return_value={"state": "play"})
+        client.client.pause = MagicMock()
+        client.client.play = MagicMock()
+
+        await client.resume()
+
+        # Should not call pause or play
+        client.client.pause.assert_not_called()
+        client.client.play.assert_not_called()
+
     async def test_disconnect_called_on_exception(self, mock_mpd_client):
         """Test that disconnect is always called even on exception."""
         mock_mpd_client.play.side_effect = Exception("MPD error")

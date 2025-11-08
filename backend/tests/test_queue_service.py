@@ -53,6 +53,9 @@ class TestAddSong:
              patch("app.services.queue_service.shutil.move"):
             mock_download.return_value = MagicMock(path="/tmp/downloaded.mp3")
 
+            # Mock is_livestream_active to return False (no active livestream)
+            mock_redis_client.is_livestream_active = AsyncMock(return_value=False)
+
             await queue_service.add_song(
                 playlist="user",
                 mpd_client=mock_mpd_client,
@@ -66,6 +69,10 @@ class TestAddSong:
             mock_mpd_client.update_database.assert_called_once()
             mock_mpd_client.add_local_song.assert_called_once()
             mock_mpd_client.set_consume.assert_called_once_with(True)
+
+            # Verify livestream check was performed
+            mock_redis_client.is_livestream_active.assert_called_once()
+            # Verify play was called (no livestream active)
             mock_mpd_client.play.assert_called_once()
 
             # Verify Redis tracking
