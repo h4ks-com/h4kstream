@@ -370,6 +370,7 @@ const LivestreamSection: React.FC = () => {
                 token={token}
                 maxStreamingSeconds={maxStreamingSeconds}
                 showName={shows.find((s) => s.id === selectedShowId)?.show_name}
+                hideTimeRemaining={true}
               />
             )}
           </div>

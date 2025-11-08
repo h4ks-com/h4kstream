@@ -5,6 +5,7 @@ interface LivestreamTokenDisplayProps {
   token: string;
   maxStreamingSeconds: number;
   showName?: string;
+  hideTimeRemaining?: boolean;
 }
 
 const formatTimeRemaining = (seconds: number): string => {
@@ -38,12 +39,18 @@ export const LivestreamTokenDisplay: React.FC<LivestreamTokenDisplayProps> = ({
   token,
   maxStreamingSeconds,
   showName,
+  hideTimeRemaining = false,
 }) => {
   const [copied, setCopied] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (hideTimeRemaining) {
+      setLoading(false);
+      return;
+    }
+
     const fetchTimeRemaining = async () => {
       try {
         const response = await UsersService().checkLivestreamTimeRemainingUsersLivestreamTimeRemainingPost(
@@ -58,7 +65,7 @@ export const LivestreamTokenDisplay: React.FC<LivestreamTokenDisplayProps> = ({
     };
 
     fetchTimeRemaining();
-  }, [token]);
+  }, [token, hideTimeRemaining]);
 
   const copyToClipboard = async () => {
     try {
@@ -101,10 +108,10 @@ export const LivestreamTokenDisplay: React.FC<LivestreamTokenDisplayProps> = ({
       <div className="mt-3 text-gray-500 text-xs space-y-1">
         <p>• Max duration: {maxStreamingSeconds}s ({Math.floor(maxStreamingSeconds / 60)} min)</p>
         {showName && <p>• Show: {showName}</p>}
-        {!loading && timeRemaining && (
+        {!hideTimeRemaining && !loading && timeRemaining && (
           <p className="text-h4ks-green-400 font-medium">• Time remaining: {timeRemaining}</p>
         )}
-        {loading && <p>• Loading time remaining...</p>}
+        {!hideTimeRemaining && loading && <p>• Loading time remaining...</p>}
         <p>• Use this token for streaming via OBS, ffmpeg, or browser client</p>
       </div>
     </div>
