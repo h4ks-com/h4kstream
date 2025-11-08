@@ -10,8 +10,8 @@ keywords:
   - radio
   - webrtc
   - liquidsoap
-home: https://github.com/yourusername/h4kstream
+home: https://github.com/h4ks-com/h4kstream
 maintainers:
-  - name: H4kstream Team
+  - name: matheusfillipe
 sources:
-  - https://github.com/yourusername/h4kstream
+  - https://github.com/h4ks-com/h4kstream

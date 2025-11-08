@@ -11,4 +11,6 @@ data:
 {{ .Files.Get "configs/janus/janus.k8s.jcfg" | indent 4 }}
   janus.plugin.streaming.jcfg: |
 {{ .Files.Get "configs/janus/janus.plugin.streaming.jcfg" | indent 4 }}
+  janus.transport.http.jcfg: |
+{{ .Files.Get "configs/janus/janus.transport.http.jcfg" | indent 4 }}
 {{- end }}

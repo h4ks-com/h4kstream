@@ -46,6 +46,8 @@ spec:
               {{- end }}
             - name: JANUS_HTTP_PORT
               value: "8088"
+            - name: JANUS_ADMIN_PORT
+              value: "8089"
             - name: JANUS_WS_PORT
               value: "8188"
             - name: MPD_USER_HOST
@@ -56,6 +58,10 @@ spec:
               value: {{ include "h4kstream.fullname" . }}-mpd-fallback
             - name: MPD_FALLBACK_PORT
               value: "6601"
+            - name: LIQUIDSOAP_TELNET_HOST
+              value: {{ include "h4kstream.fullname" . }}-liquidsoap
+            - name: LIQUIDSOAP_TELNET_PORT
+              value: "1234"
             - name: DATA_PATH
               value: "/app/data"
             - name: RECORDINGS_PATH

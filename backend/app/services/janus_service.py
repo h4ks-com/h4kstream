@@ -16,8 +16,9 @@ class JanusService:
     def __init__(self) -> None:
         self.host = settings.JANUS_HOST
         self.http_port = settings.JANUS_HTTP_PORT
+        self.admin_port = settings.JANUS_ADMIN_PORT
         self.base_url = f"http://{self.host}:{self.http_port}/janus"
-        self.admin_url = f"http://{self.host}:{self.http_port}/admin"
+        self.admin_url = f"http://{self.host}:{self.admin_port}/admin"
         self.admin_secret = ""
         self.mountpoint_id = 1
 

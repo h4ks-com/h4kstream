@@ -2,15 +2,18 @@ general: {
 	json = "indented"
 	base_path = "/janus"
 	http = true
-	port = 8100
+	port = 8088
 	https = false
 }
 
 admin: {
 	admin_http = true
-	admin_port = 7088
+	admin_port = 8089
 	admin_base_path = "/admin"
 }
+
+# Bind to all interfaces for both HTTP and admin API
+ip = "0.0.0.0"
 
 cors: {
 	allow_origin = "*"

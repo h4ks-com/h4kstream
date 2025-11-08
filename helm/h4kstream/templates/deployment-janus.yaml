@@ -34,7 +34,7 @@ spec:
               containerPort: 8088
               protocol: TCP
             - name: admin
-              containerPort: 8089
+              containerPort: 7088
               protocol: TCP
           volumeMounts:
             - name: config-janus
@@ -43,6 +43,9 @@ spec:
             - name: config-streaming
               mountPath: /usr/local/etc/janus/janus.plugin.streaming.jcfg
               subPath: janus.plugin.streaming.jcfg
+            - name: config-http-transport
+              mountPath: /usr/local/etc/janus/janus.transport.http.jcfg
+              subPath: janus.transport.http.jcfg
           resources:
             {{- toYaml .Values.janus.resources | nindent 12 }}
       volumes:
@@ -50,6 +53,9 @@ spec:
           configMap:
             name: {{ include "h4kstream.fullname" . }}-janus
         - name: config-streaming
+          configMap:
+            name: {{ include "h4kstream.fullname" . }}-janus
+        - name: config-http-transport
           configMap:
             name: {{ include "h4kstream.fullname" . }}-janus
 {{- end }}

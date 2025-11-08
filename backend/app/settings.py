@@ -60,6 +60,7 @@ class Settings(BaseSettings):
 
     JANUS_HOST: str = "host.docker.internal"
     JANUS_HTTP_PORT: int = 8100
+    JANUS_ADMIN_PORT: int = 8089
 
     DEFAULT_MAX_QUEUE_SONGS: int = 3
     DEFAULT_MAX_ADD_REQUESTS: int = 10
