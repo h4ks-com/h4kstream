@@ -19,7 +19,7 @@ backend:
 
   image:
     repository: mattfly/h4kstream-backend
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
     tag: "latest"
 
   # Keel annotations for automatic updates from DockerHub
@@ -68,7 +68,7 @@ frontend:
 
   image:
     repository: mattfly/h4kstream-frontend
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
     tag: "latest"
 
   # Keel annotations for automatic updates from DockerHub
@@ -91,7 +91,7 @@ webhookWorker:
 
   image:
     repository: mattfly/h4kstream-backend
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
     tag: "latest"
 
   # Keel annotations for automatic updates from DockerHub
@@ -117,7 +117,7 @@ recordingWorker:
 
   image:
     repository: mattfly/h4kstream-backend
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
     tag: "latest"
 
   # Keel annotations for automatic updates from DockerHub
