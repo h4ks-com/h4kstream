@@ -302,24 +302,9 @@ class RecordingWorker:
             logger.info(f"Deleted {session.filename}: too short ({duration:.1f}s < {session.min_duration}s)")
             return
 
-        try:
-            await ffmpeg.trim_silence(
-                session.filepath,
-                output_codec="libvorbis",
-                codec_quality="5",
-                output_format="ogg",
-            )
-            duration = await ffmpeg.get_duration(session.filepath)
-
-            if duration < session.min_duration:
-                os.remove(session.filepath)
-                logger.info(
-                    f"Deleted {session.filename} after trimming: too short "
-                    f"({duration:.1f}s < {session.min_duration}s)"
-                )
-                return
-        except (TimeoutError, RuntimeError, OSError) as e:
-            logger.warning(f"Skipping silence trimming for {session.filename}: {e}")
+        # Livestream recordings: preserve the full recording without trimming
+        # (silence trimming is only applied to downloaded songs via youtube_dl.py)
+        logger.info(f"Preserving full livestream recording: {session.filename} ({duration:.1f}s)")
 
         metadata = session.metadata
         logger.info(
