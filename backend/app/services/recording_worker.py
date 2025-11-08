@@ -8,7 +8,11 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from mutagen.oggvorbis import OggVorbis
+from mutagen.id3 import ID3
+from mutagen.id3 import TALB
+from mutagen.id3 import TIT2
+from mutagen.id3 import TPE1
+from mutagen.mp3 import MP3
 from redis import asyncio as aioredis
 from sqlmodel import Session
 from sqlmodel import select
@@ -130,9 +134,7 @@ class RecordingWorker:
                 "-i",
                 settings.LIQUIDSOAP_RECORDING_URL,
                 "-c:a",
-                "libmp3lame",
-                "-b:a",
-                "128k",
+                "copy",  # Copy stream directly without re-encoding (Liquidsoap already outputs 320kbps MP3)
                 "-f",
                 "mp3",
                 str(filepath),
@@ -271,24 +273,25 @@ class RecordingWorker:
                 f"description={session.metadata.get('description')}"
             )
 
-    def _write_ogg_metadata(self, filepath: Path, metadata: dict[str, str | None]) -> None:
-        """Write metadata to OGG Vorbis file using mutagen."""
+    def _write_mp3_metadata(self, filepath: Path, metadata: dict[str, str | None]) -> None:
+        """Write metadata to MP3 file using mutagen ID3 tags."""
         try:
-            audio = OggVorbis(str(filepath))
+            audio = MP3(str(filepath), ID3=ID3)
+
+            if audio.tags is None:
+                audio.add_tags()
 
             if metadata.get("title"):
-                audio["TITLE"] = metadata["title"]
+                audio.tags.add(TIT2(encoding=3, text=metadata["title"]))
             if metadata.get("artist"):
-                audio["ARTIST"] = metadata["artist"]
+                audio.tags.add(TPE1(encoding=3, text=metadata["artist"]))
             if metadata.get("genre"):
-                audio["GENRE"] = metadata["genre"]
-            if metadata.get("description"):
-                audio["DESCRIPTION"] = metadata["description"]
+                audio.tags.add(TALB(encoding=3, text=metadata["genre"]))
 
             audio.save()
-            logger.info(f"Wrote OGG metadata tags to {filepath.name}")
+            logger.info(f"Wrote ID3 metadata tags to {filepath.name}")
         except Exception as e:
-            logger.warning(f"Failed to write OGG metadata to {filepath.name}: {e}")
+            logger.warning(f"Failed to write ID3 metadata to {filepath.name}: {e}")
 
     async def _process_recording(self, session: RecordingSession) -> None:
         if not session.filepath.exists():
@@ -313,8 +316,8 @@ class RecordingWorker:
             f"description={metadata.get('description')}"
         )
 
-        # Write metadata to OGG file tags
-        await asyncio.to_thread(self._write_ogg_metadata, session.filepath, metadata)
+        # Write metadata to MP3 file tags
+        await asyncio.to_thread(self._write_mp3_metadata, session.filepath, metadata)
 
         with Session(engine) as db:
             # Find or create show by show_name
