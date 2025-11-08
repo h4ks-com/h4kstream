@@ -14,6 +14,7 @@ from mutagen.id3 import TIT2
 from mutagen.id3 import TPE1
 from mutagen.mp3 import MP3
 from redis import asyncio as aioredis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlmodel import Session
 from sqlmodel import select
 
@@ -54,20 +55,44 @@ class RecordingWorker:
         self.redis = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         assert self.redis is not None, "Redis connection failed"
 
-        pubsub = self.redis.pubsub()
-        await pubsub.subscribe(
+        event_channels = [
             "events:livestream_started",
             "events:livestream_ended",
             "events:metadata_updated"
-        )
+        ]
 
         logger.info("Recording worker started, listening for livestream events and metadata updates")
 
         self.listener_poll_task = asyncio.create_task(self._poll_listener_counts())
 
-        async for message in pubsub.listen():
-            if message["type"] == "message":
-                await self._handle_event(message["data"])
+        # Main pubsub loop with reconnection handling
+        while True:
+            try:
+                pubsub = self.redis.pubsub()
+                await pubsub.subscribe(*event_channels)
+                logger.info(f"Subscribed to Redis channels: {', '.join(event_channels)}")
+
+                async for message in pubsub.listen():
+                    if message["type"] == "message":
+                        await self._handle_event(message["data"])
+
+            except (RedisConnectionError, ConnectionError, OSError) as e:
+                logger.error(f"Redis connection error in recording worker: {e}")
+                await asyncio.sleep(5)
+
+                try:
+                    # Recreate Redis connection
+                    self.redis = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+                    logger.info("Successfully reconnected to Redis")
+                except Exception as reconnect_error:
+                    logger.error(f"Failed to reconnect to Redis: {reconnect_error}")
+
+                continue
+
+            except Exception as e:
+                logger.exception(f"Unexpected error in recording worker pubsub loop: {e}")
+                await asyncio.sleep(5)
+                continue
 
     async def _handle_event(self, data: str) -> None:
         try:

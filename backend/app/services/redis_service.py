@@ -5,8 +5,6 @@ import logging
 from datetime import UTC
 from datetime import datetime
 
-import redis.asyncio as redis
-
 from app.types import PlaylistType
 from app.types import SourceType
 
@@ -43,9 +41,8 @@ def parse_song_id(song_id: str) -> tuple[int, PlaylistType]:
 
 
 class RedisService:
-    def __init__(self, redis_url: str):
-        self.redis_url = redis_url
-        self.redis = redis.from_url(self.redis_url)
+    def __init__(self, redis_client):
+        self.redis = redis_client
 
     async def close(self):
         """Close the Redis connection."""

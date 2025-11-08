@@ -2,9 +2,9 @@ import secrets
 from collections.abc import AsyncGenerator
 
 import jwt
-import redis.asyncio as redis
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Request
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.security import HTTPBearer
 from sqlmodel import Session
@@ -80,24 +80,18 @@ async def dep_mpd_client() -> AsyncGenerator[MPDClient, None]:
         yield client
 
 
-async def dep_redis_client() -> AsyncGenerator[RedisService, None]:
-    redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
-    client = RedisService(redis_url)
-    try:
-        yield client
-    finally:
-        await client.close()
+async def dep_redis_client(request: Request) -> AsyncGenerator[RedisService, None]:
+    client = RedisService(request.app.state.redis_pool)
+    yield client
 
 
-async def dep_livestream_service() -> AsyncGenerator[LivestreamService, None]:
+async def dep_livestream_service(request: Request) -> AsyncGenerator[LivestreamService, None]:
     """Livestream service with Redis and DB backend."""
-    redis_client = redis.from_url(f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}")
     db_session = Session(engine)
-    service = LivestreamService(redis_client, db_session)
+    service = LivestreamService(request.app.state.redis_pool, db_session)
     try:
         yield service
     finally:
-        await redis_client.close()
         db_session.close()
 
 
@@ -142,14 +136,10 @@ def dep_liquidsoap_token(credentials: HTTPAuthorizationCredentials = Depends(sec
     return True
 
 
-async def dep_event_publisher() -> AsyncGenerator[EventPublisher, None]:
+async def dep_event_publisher(request: Request) -> AsyncGenerator[EventPublisher, None]:
     """Event publisher for webhook notifications."""
-    redis_client = redis.from_url(f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}")
-    publisher = EventPublisher(redis_client)
-    try:
-        yield publisher
-    finally:
-        await redis_client.close()
+    publisher = EventPublisher(request.app.state.redis_pool)
+    yield publisher
 
 
 def dep_client_count_service() -> ClientCountService:

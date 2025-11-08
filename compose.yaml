@@ -205,6 +205,7 @@ services:
     - BACKEND_BASE_PATH=/api
     - LIQUIDSOAP_TOKEN=${LIQUIDSOAP_TOKEN}
     ports:
+    - '8000:8000'  # Telnet interface
     - '8004:8004'  # HTTP stream for recording worker
     - '8003:8003'  # HTTP stream for recording worker
     depends_on:

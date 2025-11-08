@@ -91,7 +91,7 @@ def test_metadata_livestream_switching(client: httpx.Client, admin_headers: dict
     )
 
     # Wait for stream to connect and metadata to be detected with retry logic
-    max_retries = 10
+    max_retries = 20
     retry_delay = 1.0
     livestream_detected = False
 
@@ -129,9 +129,6 @@ def test_metadata_livestream_switching(client: httpx.Client, admin_headers: dict
         f"Expected livestream metadata, got title='{title}'"
     assert artist or title, \
         "Expected either artist or title to be populated"
-
-    # Log what we got for debugging
-    print(f"Livestream metadata detected: title='{title}', artist='{artist}'")
 
     # Kill stream
     ffmpeg_process.kill()

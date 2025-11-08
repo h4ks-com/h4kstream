@@ -60,7 +60,7 @@ class WebhookWorker:
         logger.info("Database initialized")
 
         self.redis_client = redis.from_url(self.redis_url)
-        self.redis_service = RedisService(self.redis_url)
+        self.redis_service = RedisService(self.redis_client)
         self.livestream_service = LivestreamService(self.redis_client)
         self.event_publisher = EventPublisher(self.redis_client)
 

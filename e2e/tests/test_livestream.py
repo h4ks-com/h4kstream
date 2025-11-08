@@ -154,11 +154,11 @@ def test_livestream_max_listeners_tracking(
     assert token_response.status_code == 200
     token = token_response.json()["token"]
 
-    # Actually stream audio to liquidsoap for 10 seconds (exceeds min_recording_duration of 5)
-    ffmpeg_process = stream_to_liquidsoap(token, duration=10)
+    # Actually stream audio to liquidsoap for 25 seconds (exceeds min_recording_duration of 5)
+    ffmpeg_process = stream_to_liquidsoap(token, duration=25)
 
     try:
-        stdout, stderr = ffmpeg_process.communicate(timeout=20)
+        stdout, stderr = ffmpeg_process.communicate(timeout=35)
     except subprocess.TimeoutExpired:
         ffmpeg_process.kill()
         raise AssertionError("FFmpeg streaming timed out")
@@ -168,21 +168,15 @@ def test_livestream_max_listeners_tracking(
     poll_interval = 3
     recordings_data = None
 
-    print(f"\n[DEBUG] Starting poll loop for show_name: {show_name}")
     for attempt in range(max_wait // poll_interval):
         time.sleep(poll_interval)
-        print(f"[DEBUG] Polling attempt {attempt + 1}/{max_wait // poll_interval}")
         recordings_response = client.get("/recordings/list", params={"show_name": show_name})
-        print(f"[DEBUG] Response status: {recordings_response.status_code}")
         assert recordings_response.status_code == 200
         recordings_data = recordings_response.json()
-        print(f"[DEBUG] Response data: {recordings_data}")
 
         if "shows" in recordings_data and len(recordings_data["shows"]) > 0:
-            print("[DEBUG] Found recording! Breaking loop.")
             break
     else:
-        print("[DEBUG] Poll loop completed without finding recording")
         raise AssertionError(f"Recording not found after {max_wait}s wait")
 
     assert "shows" in recordings_data

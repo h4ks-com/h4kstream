@@ -146,30 +146,41 @@ External Access (Port 80)
 │ - JWT Auth    │  - Connect      │  HTTP :8004 (recording) │
 │ - yt-dlp      │  - Disconnect   │                         │
 │ - MPD Control │  - Metadata     └────┬───────────┬────────┘
-└───┬───────────┘                      │           │
-    │                                  │ RTP       │ HTTP
-    ↓                                  │ :5002/UDP │ :8004
-┌─────────────────────────────┐        │           │
-│         REDIS               │        ↓           ↓
-│  - Pub/Sub (events)         │   ┌────────┐  ┌─────────────┐
-│  - State (livestream)       │   │ Janus  │  │  Recording  │
-│  - Queue (webhooks)         │   │ WebRTC │  │   Worker    │
-└──┬──────────────────────┬───┘   │ :8088  │  └─────────────┘
-   │                      │        │ :8188  │
-   ↓                      ↓        └───┬────┘
-                                      │ WebRTC
-                                      ↓
-┌──────────────┐   ┌─────────────┐  ┌────────────┐
-│ Webhook      │   │ Recording   │  │ MPD User & │
-│ Worker       │   │ Worker      │  │ Fallback   │
-│              │   │             │  │            │
-│ - Delivers   │   │ - Captures  │  │ - Playlists│
-│   webhooks   │   │   streams   │  │ - Playback │
-│ - Monitors   │   │ - Processes │  │            │
-│   livestream │   │   audio     │  │            │
-│ - Song       │   │ - Archives  │  │            │
-│   changes    │   │             │  │            │
-└──────────────┘   └─────────────┘  └────────────┘
+│ - Client Peak │                      │           │
+└───┬─────┬─────┘                      │ RTP       │ HTTP
+    │     │                            │ :5002/UDP │ :8004
+    │     │                            │           │
+    │     └─────────────┐              ↓           ↓
+    ↓                   │         ┌────────┐  ┌─────────────┐
+┌──────────────┐        │         │ Janus  │  │  Recording  │
+│    REDIS     │        │         │ WebRTC │  │   Worker    │
+│  - Pub/Sub   │        │         │ :8088  │  │             │
+│  - State     │        │         │ :8188  │  │ - Captures  │
+│  - Queue     │        │         └───┬────┘  │ - Processes │
+└──┬────────┬──┘        │             │       │ - Stores    │
+   │        │           │         WebRTC      └──────┬──────┘
+   │        │           │         Stream             │
+   ↓        ↓           ↓                            │
+┌──────────────┐   ┌────────────┐              ┌────┴───────┐
+│ Webhook      │   │ Database   │              │ Database   │
+│ Worker       │   │ (SQLite)   │              │ (SQLite)   │
+│              │   │            │              │            │
+│ - Delivers   │   │ - Songs    │◄─────────────┤ - Streams  │
+│   webhooks   │   │ - Queues   │              │ - Archives │
+│ - Monitors   │   │ - Tokens   │              │ - Metadata │
+│   livestream │   │ - Webhooks │              │            │
+│ - Song       │   │ - Clients  │              └────────────┘
+│   changes    │   │            │
+└───────┬──────┘   └─────┬──────┘
+        │                │
+        │                │
+        ↓                ↓
+   ┌────────────────────────┐
+   │   MPD User & Fallback  │
+   │                        │
+   │   - Playlists          │
+   │   - Playback           │
+   └────────────────────────┘
 ```
 
 ## Architecture Diagrams
@@ -185,9 +196,10 @@ graph TB
     BE3[Backend 3<br/>:8000]
 
     LS[Liquidsoap<br/>Audio Mixer<br/>:8003]
-    IC[Icecast<br/>Stream Output<br/>:8000]
+    Janus[Janus WebRTC<br/>:8088/:8188<br/>Ultra-low latency]
 
     Redis[(Redis<br/>State & Events)]
+    DB[(Database<br/>SQLite)]
 
     WW[Webhook Worker<br/>Event Processor]
     RW[Recording Worker<br/>Stream Capture]
@@ -199,15 +211,19 @@ graph TB
     Caddy -->|/api<br/>Load Balanced| BE1
     Caddy -->|/api<br/>Load Balanced| BE2
     Caddy -->|/api<br/>Load Balanced| BE3
+    Caddy -->|/janus<br/>/janusws| Janus
     Caddy -->|/stream| LS
-    Caddy -->|/radio| IC
 
     BE1 --> Redis
     BE2 --> Redis
     BE3 --> Redis
+    BE1 --> DB
+    BE2 --> DB
+    BE3 --> DB
 
     LS -->|Internal Callbacks| Caddy
-    LS --> IC
+    LS -->|RTP :5002/UDP| Janus
+    LS -->|HTTP :8004| RW
     LS -->|Pull Stream| MPD_U
     LS -->|Pull Stream| MPD_F
 
@@ -216,12 +232,15 @@ graph TB
 
     WW --> MPD_U
     WW --> MPD_F
+    WW --> DB
 
-    RW -->|Capture| IC
+    RW --> DB
 
     style Caddy fill:#f9f,stroke:#333,stroke-width:4px
     style Redis fill:#faa,stroke:#333,stroke-width:2px
     style LS fill:#aff,stroke:#333,stroke-width:2px
+    style Janus fill:#afa,stroke:#333,stroke-width:2px
+    style DB fill:#ffa,stroke:#333,stroke-width:2px
 ```
 
 ### Request Flow - User Adding Song

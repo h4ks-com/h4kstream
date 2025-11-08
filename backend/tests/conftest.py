@@ -2,8 +2,10 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
+import redis.asyncio as redis
 
 # Set environment variables BEFORE any imports to ensure Settings picks them up
 temp_dir = tempfile.mkdtemp(prefix="h4kstream_test_")
@@ -38,3 +40,19 @@ def cleanup_test_directories():
         shutil.rmtree(temp_dir)
     except Exception:
         pass  # Best effort cleanup
+
+
+@pytest.fixture(scope="function", autouse=True)
+def setup_redis_pool():
+    """Set up mock Redis pool for unit tests."""
+    from app.main import app
+
+    # Create a mock Redis client for unit tests
+    mock_redis = AsyncMock(spec=redis.Redis)
+    app.state.redis_pool = mock_redis
+
+    yield mock_redis
+
+    # Cleanup
+    if hasattr(app.state, "redis_pool"):
+        delattr(app.state, "redis_pool")

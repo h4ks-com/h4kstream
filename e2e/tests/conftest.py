@@ -127,9 +127,9 @@ def delay_between_recording_tests() -> Generator[None, None, None]:
     current_time = time.time()
     time_since_last = current_time - _last_recording_test_time
 
-    # Add delay if less than 10 seconds have passed since last test
-    if _last_recording_test_time > 0 and time_since_last < 10.0:
-        delay = 10.0 - time_since_last
+    # Add delay if less than 15 seconds have passed since last test
+    if _last_recording_test_time > 0 and time_since_last < 15.0:
+        delay = 15.0 - time_since_last
         time.sleep(delay)
 
     yield

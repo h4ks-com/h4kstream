@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
+import redis.asyncio as redis
 from fastapi import FastAPI
 
 from app.db import init_db
@@ -35,7 +36,15 @@ async def lifespan(app: FastAPI):
     logger.info("FastAPI application starting (MPD setup handled by webhook_worker)")
     init_db()
     logger.info("Database initialized")
+
+    redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
+    app.state.redis_pool = redis.from_url(redis_url)
+    logger.info("Redis connection pool created")
+
     yield
+
+    await app.state.redis_pool.aclose()
+    logger.info("Redis connection pool closed")
     logger.info("FastAPI application shutting down")
 
 
