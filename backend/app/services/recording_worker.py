@@ -8,11 +8,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from mutagen.id3 import ID3
-from mutagen.id3 import TALB
-from mutagen.id3 import TIT2
-from mutagen.id3 import TPE1
-from mutagen.mp3 import MP3
 from redis import asyncio as aioredis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlmodel import Session
@@ -24,6 +19,7 @@ from app.db.models import LivestreamRecording
 from app.db.models import Show
 from app.services import ffmpeg
 from app.services.client_count_service import ClientCountService
+from app.services.metadata_editor import _update_id3_tags_sync
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -328,19 +324,13 @@ class RecordingWorker:
     def _write_mp3_metadata(self, filepath: Path, metadata: dict[str, str | None]) -> None:
         """Write metadata to MP3 file using mutagen ID3 tags."""
         try:
-            audio = MP3(str(filepath), ID3=ID3)
-
-            if audio.tags is None:
-                audio.add_tags()
-
-            if metadata.get("title"):
-                audio.tags.add(TIT2(encoding=3, text=metadata["title"]))
-            if metadata.get("artist"):
-                audio.tags.add(TPE1(encoding=3, text=metadata["artist"]))
-            if metadata.get("genre"):
-                audio.tags.add(TALB(encoding=3, text=metadata["genre"]))
-
-            audio.save()
+            _update_id3_tags_sync(
+                filepath,
+                title=metadata.get("title"),
+                artist=metadata.get("artist"),
+                album=None,  # Recording worker doesn't set album
+                genre=metadata.get("genre"),
+            )
             logger.info(f"Wrote ID3 metadata tags to {filepath.name}")
         except Exception as e:
             logger.warning(f"Failed to write ID3 metadata to {filepath.name}: {e}")

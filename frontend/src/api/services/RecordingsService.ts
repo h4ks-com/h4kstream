@@ -48,7 +48,7 @@ export class RecordingsService {
     }
     /**
      * Stream Recording
-     * Stream a livestream recording file
+     * Stream a livestream recording file with seeking support
      * @param recordingId
      * @returns any Successful Response
      * @throws ApiError

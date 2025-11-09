@@ -5,17 +5,20 @@ import { AdminService, WebhooksService, ShowsService } from '../utils/apiClient'
 import type { UserPublic, ShowPublic, WebhookSubscription, SongItem, WebhookDelivery } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
 import { LivestreamTokenDisplay } from '../components/LivestreamTokenDisplay';
+import { SongEditDialog } from '../components/SongEditDialog';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import RadioIcon from '@mui/icons-material/Radio';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import Tooltip from '@mui/material/Tooltip';
+import IconButton from '@mui/material/IconButton';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
 
 type Section = 'users' | 'shows' | 'queue' | 'livestream' | 'webhooks' | 'transitions';
 
@@ -771,6 +774,7 @@ const QueueSection: React.FC = () => {
   const [userSongs, setUserSongs] = useState<SongItem[]>([]);
   const [fallbackSongs, setFallbackSongs] = useState<SongItem[]>([]);
   const [error, setError] = useState('');
+  const [editingSong, setEditingSong] = useState<{ song: SongItem; playlist: 'user' | 'fallback' } | null>(null);
 
   const fetchQueue = async () => {
     try {
@@ -792,6 +796,22 @@ const QueueSection: React.FC = () => {
     } catch (err: any) {
       setError(err.body?.detail || 'Failed to delete song');
     }
+  };
+
+  const handleSaveEdit = async (metadata: {
+    title?: string;
+    artist?: string;
+    album?: string;
+    genre?: string;
+  }) => {
+    if (!editingSong) return;
+
+    await AdminService().adminEditSongMetadataAdminQueuePlaylistSongIdMetadataPatch(
+      editingSong.playlist,
+      editingSong.song.id,
+      metadata
+    );
+    fetchQueue();
   };
 
   useEffect(() => {
@@ -844,12 +864,23 @@ const QueueSection: React.FC = () => {
                     <div className="font-mono">{song.title}</div>
                     <div className="text-sm text-gray-500">{song.artist || 'Unknown artist'}</div>
                   </div>
-                  <button
-                    onClick={() => deleteSong(song.id, 'user')}
-                    className="text-red-400 hover:text-red-300 font-mono text-sm"
-                  >
-                    [DELETE]
-                  </button>
+                  <div className="flex gap-2">
+                    <Tooltip title="Edit metadata">
+                      <IconButton
+                        size="small"
+                        onClick={() => setEditingSong({ song, playlist: 'user' })}
+                        sx={{ color: '#22c55e', '&:hover': { color: '#16a34a' } }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <button
+                      onClick={() => deleteSong(song.id, 'user')}
+                      className="text-red-400 hover:text-red-300 font-mono text-sm"
+                    >
+                      [DELETE]
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -873,18 +904,35 @@ const QueueSection: React.FC = () => {
                     <div className="font-mono">{song.title}</div>
                     <div className="text-sm text-gray-500">{song.artist || 'Unknown artist'}</div>
                   </div>
-                  <button
-                    onClick={() => deleteSong(song.id, 'fallback')}
-                    className="text-red-400 hover:text-red-300 font-mono text-sm"
-                  >
-                    [DELETE]
-                  </button>
+                  <div className="flex gap-2">
+                    <Tooltip title="Edit metadata">
+                      <IconButton
+                        size="small"
+                        onClick={() => setEditingSong({ song, playlist: 'fallback' })}
+                        sx={{ color: '#22c55e', '&:hover': { color: '#16a34a' } }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <button
+                      onClick={() => deleteSong(song.id, 'fallback')}
+                      className="text-red-400 hover:text-red-300 font-mono text-sm"
+                    >
+                      [DELETE]
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
+
+      <SongEditDialog
+        song={editingSong?.song || null}
+        onClose={() => setEditingSong(null)}
+        onSave={handleSaveEdit}
+      />
     </div>
   );
 };

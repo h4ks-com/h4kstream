@@ -33,6 +33,7 @@ export type { ShowRecordings } from './models/ShowRecordings';
 export type { ShowUpdate } from './models/ShowUpdate';
 export type { SongAddedResponse } from './models/SongAddedResponse';
 export { SongItem } from './models/SongItem';
+export type { SongMetadataEditRequest } from './models/SongMetadataEditRequest';
 export type { SuccessResponse } from './models/SuccessResponse';
 export type { TokenCreateRequest } from './models/TokenCreateRequest';
 export type { TokenCreateResponse } from './models/TokenCreateResponse';

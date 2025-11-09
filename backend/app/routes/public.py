@@ -25,7 +25,9 @@ from app.models import ClientCountsResponse
 from app.models import ErrorResponse
 from app.models import SongAddedResponse
 from app.models import SongItem
+from app.models import SongMetadataEditRequest
 from app.models import SuccessResponse
+from app.services import metadata_editor
 from app.services import playback_service
 from app.services import queue_service
 from app.services.client_count_service import ClientCountService
@@ -227,6 +229,70 @@ async def delete_song(
         raise HTTPException(status_code=400, detail=str(e))
     except SongNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+    return SuccessResponse()
+
+
+@router.patch(
+    "/{song_id}/metadata",
+    response_model=SuccessResponse,
+    summary="Edit Song Metadata",
+    description=(
+        "Edit metadata of your own uploaded song. "
+        "Updates both ID3 tags in the audio file and Redis cache. "
+        "Users can only edit their own songs. Only MP3 files supported."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid request or file format"},
+        403: {"model": ErrorResponse, "description": "Not authorized to edit this song"},
+        404: {"model": ErrorResponse, "description": "Song not found"},
+    },
+)
+async def edit_song_metadata(
+    song_id: str,
+    request: SongMetadataEditRequest,
+    token: str = Depends(get_jwt_token),
+    mpd_client: MPDClient = Depends(dep_mpd_user),
+    redis_client: RedisService = Depends(dep_redis_client),
+) -> SuccessResponse:
+    """Edit metadata for user's own uploaded song."""
+    user_id = get_user_id(token)
+
+    # Parse song ID to get MPD ID and playlist type
+    try:
+        mpd_song_id, playlist_type = parse_song_id(song_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid song ID format")
+
+    # Verify this is a user song (not fallback)
+    if playlist_type != "user":
+        raise HTTPException(status_code=403, detail="You can only edit user-uploaded songs")
+
+    # Verify user owns this song
+    song_owner = await redis_client.get_song_user(str(mpd_song_id))
+    if not song_owner or song_owner != user_id:
+        raise HTTPException(status_code=403, detail="You can only edit your own songs")
+
+    # Get song file path from MPD
+    file_path = await metadata_editor.get_song_file_path("user", str(mpd_song_id), mpd_client)
+
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Song not found in queue")
+
+    # Update metadata (ID3 + Redis)
+    try:
+        await metadata_editor.update_song_metadata(
+            redis_client=redis_client,
+            playlist="user",
+            mpd_song_id=str(mpd_song_id),
+            file_path=file_path,
+            title=request.title,
+            artist=request.artist,
+            album=request.album,
+            genre=request.genre,
+        )
+    except metadata_editor.MetadataEditException as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     return SuccessResponse()
 

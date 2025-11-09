@@ -13,6 +13,7 @@ import type { ShowCreate } from '../models/ShowCreate';
 import type { ShowPublic } from '../models/ShowPublic';
 import type { SongAddedResponse } from '../models/SongAddedResponse';
 import type { SongItem } from '../models/SongItem';
+import type { SongMetadataEditRequest } from '../models/SongMetadataEditRequest';
 import type { SuccessResponse } from '../models/SuccessResponse';
 import type { TokenCreateRequest } from '../models/TokenCreateRequest';
 import type { TokenCreateResponse } from '../models/TokenCreateResponse';
@@ -287,6 +288,37 @@ export class AdminService {
             errors: {
                 401: `Unauthorized`,
                 404: `Cache entry not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Admin Edit Song Metadata
+     * Edit metadata of any song in user queue or fallback playlist. Updates both ID3 tags in the audio file and Redis cache. Admins can edit any song. Only MP3 files supported.
+     * @param playlist
+     * @param songId
+     * @param requestBody
+     * @returns SuccessResponse Successful Response
+     * @throws ApiError
+     */
+    public adminEditSongMetadataAdminQueuePlaylistSongIdMetadataPatch(
+        playlist: 'user' | 'fallback',
+        songId: string,
+        requestBody: SongMetadataEditRequest,
+    ): CancelablePromise<SuccessResponse> {
+        return this.httpRequest.request({
+            method: 'PATCH',
+            url: '/admin/queue/{playlist}/{song_id}/metadata',
+            path: {
+                'playlist': playlist,
+                'song_id': songId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                400: `Invalid request or file format`,
+                401: `Unauthorized`,
+                404: `Song not found`,
                 422: `Validation Error`,
             },
         });

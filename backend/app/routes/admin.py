@@ -26,10 +26,12 @@ from app.models import LivestreamTokenCreateRequest
 from app.models import LivestreamTokenResponse
 from app.models import SongAddedResponse
 from app.models import SongItem
+from app.models import SongMetadataEditRequest
 from app.models import SuccessResponse
 from app.models import TokenCreateRequest
 from app.models import TokenCreateResponse
 from app.services import cache_service
+from app.services import metadata_editor
 from app.services import playback_service
 from app.services import queue_service
 from app.services.jwt_service import generate_livestream_token
@@ -328,6 +330,65 @@ async def delete_cache(
         return SuccessResponse()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.patch(
+    "/queue/{playlist}/{song_id}/metadata",
+    response_model=SuccessResponse,
+    summary="Admin Edit Song Metadata",
+    description=(
+        "Edit metadata of any song in user queue or fallback playlist. "
+        "Updates both ID3 tags in the audio file and Redis cache. "
+        "Admins can edit any song. Only MP3 files supported."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid request or file format"},
+        404: {"model": ErrorResponse, "description": "Song not found"},
+    },
+)
+async def admin_edit_song_metadata(
+    playlist: PlaylistType,
+    song_id: str,
+    request: SongMetadataEditRequest,
+    redis_client: RedisService = Depends(dep_redis_client),
+) -> SuccessResponse:
+    """Edit metadata for any song (admin only)."""
+    # Parse song ID to get MPD ID
+    try:
+        mpd_song_id, _ = parse_song_id(song_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid song ID format")
+
+    # Get MPD client for the specified playlist
+    mpd_client = get_mpd_client(playlist)
+
+    try:
+        await mpd_client.connect()
+
+        # Get song file path from MPD
+        file_path = await metadata_editor.get_song_file_path(playlist, str(mpd_song_id), mpd_client)
+
+        if not file_path:
+            raise HTTPException(status_code=404, detail="Song not found in queue")
+
+        # Update metadata (ID3 + Redis)
+        try:
+            await metadata_editor.update_song_metadata(
+                redis_client=redis_client,
+                playlist=playlist,
+                mpd_song_id=str(mpd_song_id),
+                file_path=file_path,
+                title=request.title,
+                artist=request.artist,
+                album=request.album,
+                genre=request.genre,
+            )
+        except metadata_editor.MetadataEditException as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        await mpd_client.disconnect()
+
+    return SuccessResponse()
 
 
 @router.get(

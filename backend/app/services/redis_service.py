@@ -143,15 +143,18 @@ class RedisService:
         key = f"metadata:{source}"
         await self.redis.delete(key)
 
-    async def set_song_metadata(self, playlist: PlaylistType, song_id: str, title: str | None, artist: str | None) -> None:
+    async def set_song_metadata(
+        self, playlist: PlaylistType, song_id: str, title: str | None, artist: str | None, genre: str | None = None
+    ) -> None:
         """Store metadata overrides for a specific song.
 
         :param playlist: Playlist type (user or fallback)
         :param song_id: MPD song ID
         :param title: Custom song title (override)
         :param artist: Custom artist name (override)
+        :param genre: Custom genre (override)
         """
-        if not title and not artist:
+        if not title and not artist and not genre:
             return
 
         key = f"song:{playlist}:{song_id}:metadata"
@@ -160,6 +163,8 @@ class RedisService:
             metadata["title"] = title
         if artist:
             metadata["artist"] = artist
+        if genre:
+            metadata["genre"] = genre
 
         await self.redis.set(key, json.dumps(metadata))
         await self.redis.expire(key, 86400)  # 24 hour TTL

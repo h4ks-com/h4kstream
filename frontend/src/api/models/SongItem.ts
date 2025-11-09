@@ -27,6 +27,10 @@ export type SongItem = {
      */
     album?: (string | null);
     /**
+     * Song genre
+     */
+    genre?: (string | null);
+    /**
      * Song duration
      */
     time?: (string | null);

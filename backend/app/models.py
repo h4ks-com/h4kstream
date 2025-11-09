@@ -78,6 +78,7 @@ class SongItem(BaseModel):
     title: str | None = Field(None, description="Song title")
     artist: str | None = Field(None, description="Song artist")
     album: str | None = Field(None, description="Song album")
+    genre: str | None = Field(None, description="Song genre")
     time: str | None = Field(None, description="Song duration")
     pos: str | None = Field(None, description="Position in queue")
     playlist: PlaylistType = Field(..., description="Playlist source: user, fallback, or live")
@@ -177,6 +178,15 @@ class MetadataSetRequest(BaseModel):
     artist: str | None = Field(None, description="Artist/streamer name")
     genre: str | None = Field(None, description="Music genre")
     description: str | None = Field(None, description="Stream description")
+
+
+class SongMetadataEditRequest(BaseModel):
+    """Request for editing song metadata (ID3 tags and Redis cache)."""
+
+    title: str | None = Field(None, description="Song title")
+    artist: str | None = Field(None, description="Artist name")
+    album: str | None = Field(None, description="Album name")
+    genre: str | None = Field(None, description="Music genre")
 
 
 class NowPlayingResponse(BaseModel):

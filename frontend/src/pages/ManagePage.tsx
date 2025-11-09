@@ -6,6 +6,10 @@ import { QueueService, ShowsService } from '../utils/apiClient';
 import type { SongItem, ShowPublic } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
 import { LivestreamTokenDisplay } from '../components/LivestreamTokenDisplay';
+import { SongEditDialog } from '../components/SongEditDialog';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import EditIcon from '@mui/icons-material/Edit';
 
 type Section = 'queue' | 'livestream';
 
@@ -119,6 +123,7 @@ const QueueSection: React.FC = () => {
     maxQueueSongs: null,
     maxAddRequests: null,
   });
+  const [editingSong, setEditingSong] = useState<SongItem | null>(null);
 
   // Extract limits from JWT token on mount
   useEffect(() => {
@@ -150,6 +155,18 @@ const QueueSection: React.FC = () => {
     } catch (err: any) {
       setError(err.body?.detail || 'Failed to delete song');
     }
+  };
+
+  const handleSaveEdit = async (metadata: {
+    title?: string;
+    artist?: string;
+    album?: string;
+    genre?: string;
+  }) => {
+    if (!editingSong) return;
+
+    await QueueService().editSongMetadataQueueSongIdMetadataPatch(editingSong.id, metadata);
+    fetchQueue();
   };
 
   useEffect(() => {
@@ -212,18 +229,31 @@ const QueueSection: React.FC = () => {
                     <div className="font-mono">{song.title}</div>
                     <div className="text-sm text-gray-500">{song.artist || 'Unknown artist'}</div>
                   </div>
-                  <button
-                    onClick={() => deleteSong(song.id)}
-                    className="text-red-400 hover:text-red-300 font-mono text-sm"
-                  >
-                    [DELETE]
-                  </button>
+                  <div className="flex gap-2">
+                    <Tooltip title="Edit metadata">
+                      <IconButton
+                        size="small"
+                        onClick={() => setEditingSong(song)}
+                        sx={{ color: '#22c55e', '&:hover': { color: '#16a34a' } }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <button
+                      onClick={() => deleteSong(song.id)}
+                      className="text-red-400 hover:text-red-300 font-mono text-sm"
+                    >
+                      [DELETE]
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
+
+      <SongEditDialog song={editingSong} onClose={() => setEditingSong(null)} onSave={handleSaveEdit} />
     </div>
   );
 };

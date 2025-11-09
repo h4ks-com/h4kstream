@@ -5,6 +5,7 @@
 import type { Body_add_song_queue_add_post } from '../models/Body_add_song_queue_add_post';
 import type { SongAddedResponse } from '../models/SongAddedResponse';
 import type { SongItem } from '../models/SongItem';
+import type { SongMetadataEditRequest } from '../models/SongMetadataEditRequest';
 import type { SuccessResponse } from '../models/SuccessResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import type { BaseHttpRequest } from '../core/BaseHttpRequest';
@@ -79,6 +80,35 @@ export class QueueService {
             errors: {
                 401: `Unauthorized`,
                 403: `Forbidden`,
+                404: `Song not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Edit Song Metadata
+     * Edit metadata of your own uploaded song. Updates both ID3 tags in the audio file and Redis cache. Users can only edit their own songs. Only MP3 files supported.
+     * @param songId
+     * @param requestBody
+     * @returns SuccessResponse Successful Response
+     * @throws ApiError
+     */
+    public editSongMetadataQueueSongIdMetadataPatch(
+        songId: string,
+        requestBody: SongMetadataEditRequest,
+    ): CancelablePromise<SuccessResponse> {
+        return this.httpRequest.request({
+            method: 'PATCH',
+            url: '/queue/{song_id}/metadata',
+            path: {
+                'song_id': songId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                400: `Invalid request or file format`,
+                401: `Unauthorized`,
+                403: `Not authorized to edit this song`,
                 404: `Song not found`,
                 422: `Validation Error`,
             },
