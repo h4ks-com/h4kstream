@@ -133,6 +133,7 @@ class WebhookWorker:
             "events:livestream_started",
             "events:livestream_ended",
             "events:queue_switched",
+            "events:livestream_recording_done",
         ]
         await self.pubsub.subscribe(*event_channels)
         logger.info(f"Subscribed to event channels: {event_channels}")

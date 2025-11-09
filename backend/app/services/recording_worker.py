@@ -19,6 +19,7 @@ from app.db.models import LivestreamRecording
 from app.db.models import Show
 from app.services import ffmpeg
 from app.services.client_count_service import ClientCountService
+from app.services.event_publisher import EventPublisher
 from app.services.metadata_editor import _update_id3_tags_sync
 from app.settings import settings
 
@@ -44,12 +45,15 @@ class RecordingWorker:
         self.redis: aioredis.Redis | None = None
         self.client_count_service = ClientCountService()
         self.listener_poll_task: asyncio.Task | None = None
+        self.event_publisher: EventPublisher | None = None
 
     async def start(self) -> None:
         init_db()
 
         self.redis = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         assert self.redis is not None, "Redis connection failed"
+
+        self.event_publisher = EventPublisher(self.redis)
 
         event_channels = [
             "events:livestream_started",
@@ -391,6 +395,27 @@ class RecordingWorker:
                 f"(ID: {recording.id}, show: {show.show_name}, title: {recording.title or 'Untitled'}, "
                 f"max_listeners: {recording.max_listeners or 0})"
             )
+
+            # Store recording data for webhook event (must be done before session closes)
+            recording_id = recording.id
+            recording_title = recording.title
+            recording_artist = recording.artist
+            recording_duration = recording.duration_seconds
+
+        # Publish webhook event for recording completion (after DB session closes)
+        if self.event_publisher and recording_id is not None:
+            recording_url = f"/recordings/stream/{recording_id}"
+            event_data = {
+                "recording_id": recording_id,
+                "show_name": session.show_name,
+                "title": recording_title,
+                "artist": recording_artist,
+                "duration_seconds": recording_duration,
+                "recording_url": recording_url,
+            }
+            description = f"Recording completed: {recording_title or 'Untitled'} by {recording_artist or 'Unknown'}"
+            await self.event_publisher.publish("livestream_recording_done", event_data, description)
+            logger.info(f"Published livestream_recording_done event for recording {recording_id}")
 
 
 async def main() -> None:

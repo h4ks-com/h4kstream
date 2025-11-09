@@ -11,7 +11,7 @@ export type WebhookSubscriptionRequest = {
      */
     url: string;
     /**
-     * Event types to subscribe to: song_changed, song_added, livestream_started, livestream_ended, queue_switched
+     * Event types to subscribe to: song_changed, song_added, livestream_started, livestream_ended, queue_switched, livestream_recording_done
      */
     events: Array<string>;
     /**

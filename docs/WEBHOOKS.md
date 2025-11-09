@@ -26,9 +26,11 @@ The webhook system allows administrators to subscribe HTTP endpoints to receive 
 | Event | Trigger | Payload Data |
 |-------|---------|--------------|
 | `song_changed` | Song starts playing | `{source, metadata: {title, artist, ...}}` |
-| `livestream_started` | User connects to livestream | `{user_id}` |
+| `song_added` | Song added to queue | `{song_id, playlist, title, artist}` |
+| `livestream_started` | User connects to livestream | `{user_id, show_name, min_recording_duration}` |
 | `livestream_ended` | Livestream disconnects | `{user_id, duration_seconds, reason}` |
 | `queue_switched` | Active source changes | `{from_source, to_source}` |
+| `livestream_recording_done` | Recording saved after livestream | `{recording_id, show_name, title, artist, duration_seconds, recording_url}` |
 
 ## API Endpoints
 
@@ -317,6 +319,37 @@ func verifyWebhookSignature(payload map[string]interface{}, signature, signingKe
   "timestamp": "2025-10-29T16:30:00.000Z"
 }
 ```
+
+### livestream_recording_done
+
+```json
+{
+  "event_type": "livestream_recording_done",
+  "description": "Recording completed: My Awesome Show by DJ Cool",
+  "data": {
+    "recording_id": 21,
+    "show_name": "my_show",
+    "title": "My Awesome Show",
+    "artist": "DJ Cool",
+    "duration_seconds": 3600.5,
+    "recording_url": "/recordings/stream/21"
+  },
+  "timestamp": "2025-10-29T20:00:00.000Z"
+}
+```
+
+**Note**: `recording_url` is a relative API path. To construct the full URL:
+```python
+full_url = f"{radio_api_base_url}{data['recording_url']}"
+# Example: https://radio.h4ks.com/api/recordings/stream/21
+```
+
+This event fires after a livestream ends and the recording has been:
+- Validated (meets minimum duration requirement)
+- Saved to disk with ID3 metadata tags
+- Stored in the database with a valid recording ID
+
+The recording is immediately accessible via the API at the provided URL.
 
 ## Deployment
 

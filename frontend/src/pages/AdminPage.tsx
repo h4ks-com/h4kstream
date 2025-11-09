@@ -11,6 +11,7 @@ import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import RadioIcon from '@mui/icons-material/Radio';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
+import AlbumIcon from '@mui/icons-material/Album';
 import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
 import EditIcon from '@mui/icons-material/Edit';
@@ -1026,6 +1027,8 @@ const getEventIcon = (eventType: string) => {
       return <StopCircleIcon {...iconProps} />;
     case 'queue_switched':
       return <ShuffleIcon {...iconProps} />;
+    case 'livestream_recording_done':
+      return <AlbumIcon {...iconProps} />;
     default:
       return null;
   }
@@ -1047,7 +1050,7 @@ const WebhooksSection: React.FC = () => {
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
   const [loadingDeliveries, setLoadingDeliveries] = useState(false);
 
-  const availableEvents = ['song_changed', 'song_added', 'livestream_started', 'livestream_ended', 'queue_switched'];
+  const availableEvents = ['song_changed', 'song_added', 'livestream_started', 'livestream_ended', 'queue_switched', 'livestream_recording_done'];
 
   const fetchWebhooks = async () => {
     try {

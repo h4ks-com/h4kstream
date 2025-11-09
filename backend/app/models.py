@@ -208,7 +208,7 @@ class WebhookSubscriptionRequest(BaseModel):
     events: list[str] = Field(
         ...,
         min_length=1,
-        description="Event types to subscribe to: song_changed, song_added, livestream_started, livestream_ended, queue_switched",
+        description="Event types to subscribe to: song_changed, song_added, livestream_started, livestream_ended, queue_switched, livestream_recording_done",
     )
     signing_key: str = Field(
         ..., min_length=16, description="Secret key for HMAC signature verification (min 16 chars)"
@@ -217,7 +217,7 @@ class WebhookSubscriptionRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_events(self) -> "WebhookSubscriptionRequest":
-        valid_events = {"song_changed", "song_added", "livestream_started", "livestream_ended", "queue_switched"}
+        valid_events = {"song_changed", "song_added", "livestream_started", "livestream_ended", "queue_switched", "livestream_recording_done"}
         for event in self.events:
             if event not in valid_events:
                 raise ValueError(f"Invalid event type: {event}. Must be one of {valid_events}")
@@ -369,12 +369,23 @@ class QueueSwitchedEventData(BaseModel):
     to_source: SourceType = Field(..., description="New active source")
 
 
+class LivestreamRecordingDoneEventData(BaseModel):
+    """Data payload for livestream_recording_done webhook events."""
+
+    recording_id: int = Field(..., description="Database recording ID")
+    show_name: str = Field(..., description="Show name identifier")
+    title: str | None = Field(None, description="Recording title")
+    artist: str | None = Field(None, description="Artist/streamer name")
+    duration_seconds: float = Field(..., description="Recording duration in seconds")
+    recording_url: str = Field(..., description="Relative API path to recording (e.g., '/recordings/stream/21')")
+
+
 class WebhookEventPayload(BaseModel):
     """Complete webhook event payload structure sent to webhook URLs."""
 
     event_type: str = Field(
         ...,
-        description="Event type: song_changed, song_added, livestream_started, livestream_ended, queue_switched"
+        description="Event type: song_changed, song_added, livestream_started, livestream_ended, queue_switched, livestream_recording_done"
     )
     timestamp: str = Field(..., description="ISO format event timestamp")
     data: (
@@ -383,5 +394,6 @@ class WebhookEventPayload(BaseModel):
         | LivestreamStartedEventData
         | LivestreamEndedEventData
         | QueueSwitchedEventData
+        | LivestreamRecordingDoneEventData
     ) = Field(..., description="Event-specific data payload")
     description: str = Field(..., description="Human-readable event description")
