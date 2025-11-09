@@ -8,7 +8,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 from sqlmodel import Session
 
 from app.db import get_session
@@ -110,11 +110,11 @@ async def list_recordings(
 @router.get(
     "/stream/{recording_id}",
     summary="Stream Recording",
-    description="Stream a livestream recording file",
+    description="Stream a livestream recording file with seeking support",
     responses={404: {"model": ErrorResponse, "description": "Recording not found"}},
 )
 async def stream_recording(recording_id: int, db: Session = Depends(get_session)):
-    """Stream a recording file."""
+    """Stream a recording file with HTTP range request support for seeking."""
     recording = recordings_db.get_recording(db, recording_id)
 
     if not recording:
@@ -126,16 +126,10 @@ async def stream_recording(recording_id: int, db: Session = Depends(get_session)
         logger.error(f"Recording file not found: {file_path}")
         raise HTTPException(status_code=404, detail="Recording file not found")
 
-    def iterfile():
-        with open(file_path, "rb") as f:
-            while chunk := f.read(64 * 1024):
-                yield chunk
-
-    return StreamingResponse(
-        iterfile(),
+    return FileResponse(
+        path=file_path,
         media_type="audio/ogg",
         headers={
-            "Accept-Ranges": "bytes",
             "Cache-Control": "no-cache",
         },
     )
