@@ -10,6 +10,7 @@ interface SongUploadFormProps {
     file?: File;
     song_name?: string;
     artist?: string;
+    reference_url?: string;
   }) => Promise<any>;
 }
 
@@ -30,6 +31,7 @@ export const SongUploadForm: React.FC<SongUploadFormProps> = ({
   const [file, setFile] = useState<File | null>(null);
   const [songName, setSongName] = useState('');
   const [artist, setArtist] = useState('');
+  const [referenceUrl, setReferenceUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
 
@@ -41,6 +43,7 @@ export const SongUploadForm: React.FC<SongUploadFormProps> = ({
     setFile(null);
     setSongName('');
     setArtist('');
+    setReferenceUrl('');
     setError('');
     // Reset the file input element
     if (fileInputRef.current) {
@@ -58,12 +61,14 @@ export const SongUploadForm: React.FC<SongUploadFormProps> = ({
           url,
           song_name: songName || undefined,
           artist: artist || undefined,
+          reference_url: referenceUrl || undefined,
         });
       } else if (file) {
         await uploadFunction({
           file,
           song_name: songName || undefined,
           artist: artist || undefined,
+          reference_url: referenceUrl || undefined,
         });
       }
 
@@ -136,6 +141,18 @@ export const SongUploadForm: React.FC<SongUploadFormProps> = ({
             value={artist}
             onChange={(e) => setArtist(e.target.value)}
             placeholder="Artist name..."
+            className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
+            disabled={uploading}
+          />
+        </div>
+
+        <div>
+          <label className="block text-gray-400 text-sm mb-2">Reference URL (optional)</label>
+          <input
+            type="text"
+            value={referenceUrl}
+            onChange={(e) => setReferenceUrl(e.target.value)}
+            placeholder="https://example.com/song-link"
             className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
             disabled={uploading}
           />

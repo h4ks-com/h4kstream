@@ -105,6 +105,7 @@ async def create_cache_entry(
     md5_hash: str,
     playlist_type: PlaylistType,
     origin_url: str | None = None,
+    reference_url: str | None = None,
 ) -> FileCache:
     """Create new cache entry for a file.
 
@@ -113,6 +114,7 @@ async def create_cache_entry(
     :param md5_hash: MD5 hash of file (before trimming)
     :param playlist_type: Playlist type (user or fallback)
     :param origin_url: Optional origin URL
+    :param reference_url: Optional reference URL for user-facing links
     :return: Created FileCache entry
     """
     file_size = filepath.stat().st_size
@@ -121,6 +123,7 @@ async def create_cache_entry(
         filename=filepath.name,
         filepath=str(filepath),
         origin_url=origin_url,
+        reference_url=reference_url,
         md5_hash=md5_hash,
         file_size=file_size,
         playlist_type=playlist_type,

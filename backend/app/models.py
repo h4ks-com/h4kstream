@@ -82,6 +82,7 @@ class SongItem(BaseModel):
     time: str | None = Field(None, description="Song duration")
     pos: str | None = Field(None, description="Position in queue")
     playlist: PlaylistType = Field(..., description="Playlist source: user, fallback, or live")
+    reference_url: str | None = Field(None, description="User-facing reference URL for clickable links")
 
 
 class SongListResponse(BaseModel):
@@ -160,6 +161,7 @@ class NowPlayingMetadata(BaseModel):
     artist: str | None = Field(None, description="Track artist")
     genre: str | None = Field(None, description="Track genre")
     description: str | None = Field(None, description="Track description")
+    reference_url: str | None = Field(None, description="Reference URL for clickable track link")
     show_name: str | None = Field(None, description="Show name (livestream only)")
     show_user: str | None = Field(None, description="Show user ID (livestream only)")
 
@@ -181,12 +183,13 @@ class MetadataSetRequest(BaseModel):
 
 
 class SongMetadataEditRequest(BaseModel):
-    """Request for editing song metadata (ID3 tags and Redis cache)."""
+    """Request for editing song metadata (ID3 tags, Redis cache, and FileCache)."""
 
     title: str | None = Field(None, description="Song title")
     artist: str | None = Field(None, description="Artist name")
     album: str | None = Field(None, description="Album name")
     genre: str | None = Field(None, description="Music genre")
+    reference_url: str | None = Field(None, description="Reference URL for user-facing link")
 
 
 class NowPlayingResponse(BaseModel):

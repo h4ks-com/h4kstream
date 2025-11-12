@@ -46,6 +46,7 @@ export const QueueList: React.FC<QueueListProps> = ({ isAdminMode = false }) => 
     artist?: string;
     album?: string;
     genre?: string;
+    reference_url?: string;
   }) => {
     if (!editingSong) return;
 
@@ -75,6 +76,18 @@ export const QueueList: React.FC<QueueListProps> = ({ isAdminMode = false }) => 
 
     // Only allow editing user playlist songs (not fallback)
     return song.playlist === 'user';
+  };
+
+  const getSongUrl = (song: SongItem): string | null => {
+    // Prefer reference_url if available
+    if (song.reference_url) {
+      return song.reference_url;
+    }
+
+    // Parse cache_id from song.id if available (format: "cache_123")
+    // For now, return null since we don't have cache_id in the song object
+    // The backend would need to expose cache_id in SongItem for fallback
+    return null;
   };
 
   if (loading) {
@@ -125,7 +138,18 @@ export const QueueList: React.FC<QueueListProps> = ({ isAdminMode = false }) => 
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="text-gray-100 truncate">
-                    {song.title || 'Unknown Title'}
+                    {getSongUrl(song) ? (
+                      <a
+                        href={getSongUrl(song)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-h4ks-green-400 hover:text-h4ks-green-300 underline"
+                      >
+                        {song.title || 'Unknown Title'}
+                      </a>
+                    ) : (
+                      song.title || 'Unknown Title'
+                    )}
                   </div>
                   {song.artist && (
                     <div className="text-gray-500 text-sm truncate">

@@ -3,7 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Request for editing song metadata (ID3 tags and Redis cache).
+ * Request for editing song metadata (ID3 tags, Redis cache, and FileCache).
  */
 export type SongMetadataEditRequest = {
     /**
@@ -22,5 +22,9 @@ export type SongMetadataEditRequest = {
      * Music genre
      */
     genre?: (string | null);
+    /**
+     * Reference URL for user-facing link
+     */
+    reference_url?: (string | null);
 };
 

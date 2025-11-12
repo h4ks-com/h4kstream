@@ -5,6 +5,7 @@ interface Metadata {
   artist: string | null;
   genre: string | null;
   description: string | null;
+  reference_url?: string | null;
   show_name?: string | null;
   username?: string | null;
 }
@@ -105,7 +106,18 @@ export const MetadataDisplay: React.FC = () => {
         {metadata.title && (
           <div>
             <span className="text-gray-500 text-sm">TITLE: </span>
-            <span className="text-gray-100">{metadata.title}</span>
+            {metadata.reference_url ? (
+              <a
+                href={metadata.reference_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-h4ks-green-400 hover:text-h4ks-green-300 underline"
+              >
+                {metadata.title}
+              </a>
+            ) : (
+              <span className="text-gray-100">{metadata.title}</span>
+            )}
           </div>
         )}
 

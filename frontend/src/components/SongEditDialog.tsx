@@ -15,6 +15,7 @@ interface SongEditDialogProps {
     artist?: string;
     album?: string;
     genre?: string;
+    reference_url?: string;
   }) => Promise<void>;
 }
 
@@ -23,6 +24,7 @@ export const SongEditDialog: React.FC<SongEditDialogProps> = ({ song, onClose, o
   const [artist, setArtist] = useState('');
   const [album, setAlbum] = useState('');
   const [genre, setGenre] = useState('');
+  const [referenceUrl, setReferenceUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +34,7 @@ export const SongEditDialog: React.FC<SongEditDialogProps> = ({ song, onClose, o
       setArtist(song.artist || '');
       setAlbum(song.album || '');
       setGenre(song.genre || '');
+      setReferenceUrl(song.reference_url || '');
       setError(null);
     }
   }, [song]);
@@ -46,6 +49,7 @@ export const SongEditDialog: React.FC<SongEditDialogProps> = ({ song, onClose, o
         artist: artist || undefined,
         album: album || undefined,
         genre: genre || undefined,
+        reference_url: referenceUrl || undefined,
       });
       onClose();
     } catch (err: any) {
@@ -124,6 +128,24 @@ export const SongEditDialog: React.FC<SongEditDialogProps> = ({ song, onClose, o
             label="Genre"
             value={genre}
             onChange={(e) => setGenre(e.target.value)}
+            variant="outlined"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                color: '#e5e7eb',
+                '& fieldset': { borderColor: '#374151' },
+                '&:hover fieldset': { borderColor: '#22c55e' },
+                '&.Mui-focused fieldset': { borderColor: '#22c55e' },
+              },
+              '& .MuiInputLabel-root': { color: '#9ca3af' },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#22c55e' },
+            }}
+          />
+          <TextField
+            fullWidth
+            label="Reference URL"
+            value={referenceUrl}
+            onChange={(e) => setReferenceUrl(e.target.value)}
+            placeholder="https://example.com/song-link"
             variant="outlined"
             sx={{
               '& .MuiOutlinedInput-root': {

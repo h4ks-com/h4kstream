@@ -11,8 +11,10 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 from sqlmodel import Session
+from sqlmodel import select
 from yt_dlp.utils import sanitize_filename
 
+from app.db.models import FileCache
 from app.models import SongAddedEventData
 from app.models import SongItem
 from app.services import cache_service
@@ -119,6 +121,7 @@ async def add_song(
     file: UploadFile | None = None,
     song_name: str | None = None,
     artist_name: str | None = None,
+    reference_url: str | None = None,
     redis_client: RedisService | None = None,
     user_id: str | None = None,
     skip_validation: bool = False,
@@ -138,6 +141,7 @@ async def add_song(
     :param file: Optional uploaded file
     :param song_name: Optional song name/title (used with file upload or to override metadata)
     :param artist_name: Optional artist name (used with file upload or to override metadata)
+    :param reference_url: Optional user-facing reference URL for clickable links
     :param redis_client: Optional Redis client (required for user queue with tracking)
     :param user_id: Optional user ID (required for user queue with tracking)
     :param skip_validation: If True, skip duration, file size, and duplicate validation (admin uploads)
@@ -267,7 +271,12 @@ async def add_song(
             if db_session and md5_hash:
                 try:
                     await cache_service.create_cache_entry(
-                        db_session, target_path, md5_hash, playlist, origin_url=url if url else None
+                        db_session,
+                        target_path,
+                        md5_hash,
+                        playlist,
+                        origin_url=url if url else None,
+                        reference_url=reference_url,
                     )
                 except Exception as e:
                     logger.warning(f"Failed to create cache entry: {e}")
@@ -379,13 +388,17 @@ async def delete_song(
 
 
 async def list_songs(
-    mpd_client: MPDClient, playlist: PlaylistType | None = None, redis_client: RedisService | None = None
+    mpd_client: MPDClient,
+    playlist: PlaylistType | None = None,
+    redis_client: RedisService | None = None,
+    db_session: Session | None = None,
 ) -> list[SongItem]:
     """List all songs in the queue.
 
     :param mpd_client: MPD client for the target playlist
     :param playlist: Playlist type for ID prefixing (optional, defaults to no prefix)
     :param redis_client: Optional Redis client for fetching metadata overrides
+    :param db_session: Optional database session for fetching cache metadata (reference_url)
     :return: List of songs in the queue
     """
     queue = await mpd_client.get_queue()
@@ -402,6 +415,18 @@ async def list_songs(
                     song["title"] = overrides["title"]
                 if "artist" in overrides:
                     song["artist"] = overrides["artist"]
+
+        # Look up reference_url from FileCache if available
+        song["reference_url"] = None
+        if db_session and playlist:
+            music_root = Path(get_music_user_dir() if playlist == "user" else get_music_fallback_dir())
+            file_path = song.get("file", "")
+            if file_path:
+                full_path = str(music_root / file_path)
+                statement = select(FileCache).where(FileCache.filepath == full_path)
+                cache_entry = db_session.exec(statement).first()
+                if cache_entry and cache_entry.reference_url:
+                    song["reference_url"] = cache_entry.reference_url
 
         if playlist:
             song["id"] = format_song_id(mpd_song_id, playlist)
@@ -423,7 +448,11 @@ async def clear_queue(mpd_client: MPDClient, playlist: PlaylistType) -> None:
 
 
 async def get_next_songs(
-    user_mpd_client: MPDClient, radio_mpd_client: MPDClient, limit: int, redis_client: RedisService | None = None
+    user_mpd_client: MPDClient,
+    radio_mpd_client: MPDClient,
+    limit: int,
+    redis_client: RedisService | None = None,
+    db_session: Session | None = None,
 ) -> list[SongItem]:
     """Get the next N songs from queues, prioritizing user queue and falling back to radio.
 
@@ -431,15 +460,16 @@ async def get_next_songs(
     :param radio_mpd_client: MPD client for radio playlist
     :param limit: Maximum number of songs to return (1-20)
     :param redis_client: Optional Redis client for fetching metadata overrides
+    :param db_session: Optional database session for fetching cache metadata (reference_url)
     :return: List of upcoming songs (user queue first, then radio if needed)
     """
-    user_songs = await list_songs(user_mpd_client, "user", redis_client)
+    user_songs = await list_songs(user_mpd_client, "user", redis_client, db_session)
 
     if len(user_songs) >= limit:
         return user_songs[:limit]
 
     remaining = limit - len(user_songs)
-    radio_songs = await list_songs(radio_mpd_client, "fallback", redis_client)
+    radio_songs = await list_songs(radio_mpd_client, "fallback", redis_client, db_session)
 
     combined = user_songs + radio_songs[:remaining]
 

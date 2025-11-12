@@ -157,11 +157,24 @@ const QueueSection: React.FC = () => {
     }
   };
 
+  const getSongUrl = (song: SongItem): string | null => {
+    // Prefer reference_url if available
+    if (song.reference_url) {
+      return song.reference_url;
+    }
+
+    // Parse cache_id from song.id if available (format: "cache_123")
+    // For now, return null since we don't have cache_id in the song object
+    // The backend would need to expose cache_id in SongItem for fallback
+    return null;
+  };
+
   const handleSaveEdit = async (metadata: {
     title?: string;
     artist?: string;
     album?: string;
     genre?: string;
+    reference_url?: string;
   }) => {
     if (!editingSong) return;
 
@@ -226,7 +239,20 @@ const QueueSection: React.FC = () => {
                   className="p-3 flex justify-between items-center hover:bg-h4ks-dark-800"
                 >
                   <div className="text-gray-300">
-                    <div className="font-mono">{song.title}</div>
+                    <div className="font-mono">
+                      {getSongUrl(song) ? (
+                        <a
+                          href={getSongUrl(song)!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-h4ks-green-400 hover:text-h4ks-green-300 underline"
+                        >
+                          {song.title}
+                        </a>
+                      ) : (
+                        song.title
+                      )}
+                    </div>
                     <div className="text-sm text-gray-500">{song.artist || 'Unknown artist'}</div>
                   </div>
                   <div className="flex gap-2">

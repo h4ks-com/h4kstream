@@ -4,11 +4,16 @@ Public endpoint for current track info and internal endpoints for Liquidsoap int
 """
 
 import logging
+from pathlib import Path
 from typing import cast
 
 from fastapi import APIRouter
 from fastapi import Depends
+from sqlmodel import Session
+from sqlmodel import select
 
+from app.db import get_session
+from app.db.models import FileCache
 from app.dependencies import admin_auth
 from app.dependencies import dep_event_publisher
 from app.dependencies import dep_liquidsoap_token
@@ -26,6 +31,8 @@ from app.models import SuccessResponse
 from app.services.event_publisher import EventPublisher
 from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
+from app.settings import get_music_fallback_dir
+from app.settings import get_music_user_dir
 from app.types import PlaylistType
 
 logger = logging.getLogger(__name__)
@@ -44,6 +51,7 @@ async def get_now_playing(
     redis_client: RedisService = Depends(dep_redis_client),
     user_mpd: MPDClient = Depends(dep_mpd_user),
     fallback_mpd: MPDClient = Depends(dep_mpd_fallback),
+    db_session: Session = Depends(get_session),
 ) -> NowPlayingResponse:
     """Get current playing track information using priority-based source detection."""
     # CRITICAL: Always check livestream flag first to prevent MPD metadata leaking during livestream
@@ -91,6 +99,7 @@ async def get_now_playing(
                 "artist": current_song.get("artist"),
                 "genre": current_song.get("genre"),
                 "description": None,
+                "reference_url": None,
             }
 
             # Check for per-song metadata overrides
@@ -102,6 +111,16 @@ async def get_now_playing(
                         metadata["title"] = overrides["title"]
                     if "artist" in overrides:
                         metadata["artist"] = overrides["artist"]
+
+            # Look up reference_url from FileCache
+            file_path = current_song.get("file", "")
+            if file_path:
+                music_root = Path(get_music_user_dir() if active_source == "user" else get_music_fallback_dir())
+                full_path = str(music_root / file_path)
+                statement = select(FileCache).where(FileCache.filepath == full_path)
+                cache_entry = db_session.exec(statement).first()
+                if cache_entry and cache_entry.reference_url:
+                    metadata["reference_url"] = cache_entry.reference_url
 
             return NowPlayingResponse(source=active_source, metadata=NowPlayingMetadata(**metadata))
     except Exception as e:

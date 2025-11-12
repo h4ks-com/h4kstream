@@ -127,6 +127,7 @@ async def admin_add_song(
     url: str | None = Form(None),
     song_name: str | None = Form(None),
     artist: str | None = Form(None),
+    reference_url: str | None = Form(None),
     file: UploadFile | None = None,
     playlist: PlaylistType = Query("user", description="Target playlist (user or fallback)"),
     redis_client: RedisService = Depends(dep_redis_client),
@@ -145,6 +146,7 @@ async def admin_add_song(
             file=file,
             song_name=song_name,
             artist_name=artist,
+            reference_url=reference_url,
             redis_client=redis_client,
             skip_validation=True,
         )
@@ -169,13 +171,14 @@ async def admin_add_song(
 async def admin_list_songs(
     playlist: PlaylistType = Query("user", description="Target playlist (user or fallback)"),
     redis_client: RedisService = Depends(dep_redis_client),
+    db_session: Session = Depends(get_session),
 ) -> list[SongItem]:
     """List all songs in the specified playlist."""
     mpd_client = get_mpd_client(playlist)
 
     try:
         await mpd_client.connect()
-        return await queue_service.list_songs(mpd_client, playlist, redis_client)
+        return await queue_service.list_songs(mpd_client, playlist, redis_client, db_session)
     finally:
         await mpd_client.disconnect()
 

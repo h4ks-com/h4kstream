@@ -57,5 +57,6 @@ export { PublicService } from './services/PublicService';
 export { QueueService } from './services/QueueService';
 export { RecordingsService } from './services/RecordingsService';
 export { ShowsService } from './services/ShowsService';
+export { SongsService } from './services/SongsService';
 export { UsersService } from './services/UsersService';
 export { WebhooksService } from './services/WebhooksService';

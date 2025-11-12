@@ -4,6 +4,7 @@ User-facing endpoints that require JWT tokens. Users can only access their own u
 """
 
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -12,8 +13,10 @@ from fastapi import HTTPException
 from fastapi import Query
 from fastapi import UploadFile
 from sqlmodel import Session
+from sqlmodel import select
 
 from app.db import get_session
+from app.db.models import FileCache
 from app.dependencies import dep_client_count_service
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
@@ -38,6 +41,7 @@ from app.services.mpd_service import MPDClient
 from app.services.redis_service import RedisService
 from app.services.redis_service import parse_song_id
 from app.services.youtube_dl import YoutubeDownloadException
+from app.settings import get_music_user_dir
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +81,7 @@ async def add_song(
     url: str | None = Form(None),
     song_name: str | None = Form(None),
     artist: str | None = Form(None),
+    reference_url: str | None = Form(None),
     file: UploadFile | None = None,
     mpd_client: MPDClient = Depends(dep_mpd_user),
     redis_client: RedisService = Depends(dep_redis_client),
@@ -118,6 +123,7 @@ async def add_song(
             file=file,
             song_name=song_name,
             artist_name=artist,
+            reference_url=reference_url,
             redis_client=redis_client,
             user_id=user_id,
             skip_validation=False,
@@ -157,6 +163,7 @@ async def list_songs(
     user_only: bool = Query(False, description="Filter to show only user's own songs (requires authentication)"),
     redis_client: RedisService = Depends(dep_redis_client),
     token: str | None = Depends(get_jwt_token_optional),
+    db_session: Session = Depends(get_session),
 ) -> list[SongItem]:
     """Get songs from user queue and fallback playlist."""
     # If user_only requested, require token
@@ -171,7 +178,7 @@ async def list_songs(
     try:
         await user_mpd.connect()
         await fallback_mpd.connect()
-        all_songs = await queue_service.get_next_songs(user_mpd, fallback_mpd, limit, redis_client)
+        all_songs = await queue_service.get_next_songs(user_mpd, fallback_mpd, limit, redis_client, db_session)
 
         # Filter for user's songs if requested
         if user_only and user_id:
@@ -254,6 +261,7 @@ async def edit_song_metadata(
     token: str = Depends(get_jwt_token),
     mpd_client: MPDClient = Depends(dep_mpd_user),
     redis_client: RedisService = Depends(dep_redis_client),
+    db: Session = Depends(get_session),
 ) -> SuccessResponse:
     """Edit metadata for user's own uploaded song."""
     user_id = get_user_id(token)
@@ -293,6 +301,23 @@ async def edit_song_metadata(
         )
     except metadata_editor.MetadataEditException as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Update FileCache reference_url if provided
+    if request.reference_url is not None:
+        # Get full file path to look up cache entry
+        music_root = Path(get_music_user_dir())
+        full_path = music_root / file_path
+        filepath_str = str(full_path)
+
+        # Find cache entry by filepath
+        statement = select(FileCache).where(FileCache.filepath == filepath_str)
+        cache_entry = db.exec(statement).first()
+
+        if cache_entry:
+            cache_entry.reference_url = request.reference_url
+            db.add(cache_entry)
+            db.commit()
+            logger.info(f"Updated reference_url for cache entry {cache_entry.id}")
 
     return SuccessResponse()
 

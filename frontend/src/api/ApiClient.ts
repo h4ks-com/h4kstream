@@ -12,6 +12,7 @@ import { PublicService } from './services/PublicService';
 import { QueueService } from './services/QueueService';
 import { RecordingsService } from './services/RecordingsService';
 import { ShowsService } from './services/ShowsService';
+import { SongsService } from './services/SongsService';
 import { UsersService } from './services/UsersService';
 import { WebhooksService } from './services/WebhooksService';
 type HttpRequestConstructor = new (config: OpenAPIConfig) => BaseHttpRequest;
@@ -23,6 +24,7 @@ export class ApiClient {
     public readonly queue: QueueService;
     public readonly recordings: RecordingsService;
     public readonly shows: ShowsService;
+    public readonly songs: SongsService;
     public readonly users: UsersService;
     public readonly webhooks: WebhooksService;
     public readonly request: BaseHttpRequest;
@@ -45,6 +47,7 @@ export class ApiClient {
         this.queue = new QueueService(this.request);
         this.recordings = new RecordingsService(this.request);
         this.shows = new ShowsService(this.request);
+        this.songs = new SongsService(this.request);
         this.users = new UsersService(this.request);
         this.webhooks = new WebhooksService(this.request);
     }

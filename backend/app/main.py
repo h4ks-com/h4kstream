@@ -8,6 +8,7 @@ from app.db import init_db
 from app.routes import admin
 from app.routes import internal
 from app.routes import public
+from app.routes import songs
 from app.routes import webhooks
 from app.routes.metadata import internal_router as metadata_internal_router
 from app.routes.metadata import metadata_router
@@ -80,3 +81,4 @@ app.include_router(users_admin_router)
 app.include_router(shows_router)
 app.include_router(shows_admin_router)
 app.include_router(transitions_router)
+app.include_router(songs.router)

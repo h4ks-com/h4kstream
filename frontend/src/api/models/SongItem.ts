@@ -42,6 +42,10 @@ export type SongItem = {
      * Playlist source: user, fallback, or live
      */
     playlist: SongItem.playlist;
+    /**
+     * User-facing reference URL for clickable links
+     */
+    reference_url?: (string | null);
 };
 export namespace SongItem {
     /**

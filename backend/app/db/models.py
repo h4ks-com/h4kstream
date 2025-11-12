@@ -153,6 +153,7 @@ class FileCache(SQLModel, table=True):  # type: ignore[call-arg]
     filename: str = Field(index=True)
     filepath: str
     origin_url: str | None = Field(default=None, index=True)
+    reference_url: str | None = Field(default=None)
     md5_hash: str = Field(index=True)
     file_size: int
     playlist_type: str = Field(index=True)
@@ -167,6 +168,7 @@ class FileCachePublic(SQLModel):
     id: int
     filename: str
     origin_url: str | None
+    reference_url: str | None
     file_size: int
     playlist_type: str
     created_at: datetime

@@ -6,6 +6,7 @@ export type Body_add_song_queue_add_post = {
     url?: (string | null);
     song_name?: (string | null);
     artist?: (string | null);
+    reference_url?: (string | null);
     file?: (Blob | null);
 };
 
