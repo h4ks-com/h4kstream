@@ -13,6 +13,9 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# Time tracking TTL: 24 hours for daily reset
+LIVESTREAM_TIME_TRACKING_TTL_SECONDS = 86400
+
 
 class LivestreamService:
     def __init__(self, redis_client: redis.Redis, db_session: Session | None = None):
@@ -139,7 +142,7 @@ class LivestreamService:
             current_total_seconds = int(current_total) if current_total else 0
             new_total = current_total_seconds + elapsed_seconds
 
-            await self.redis.setex(total_used_key, 86400 * 30, str(new_total))
+            await self.redis.setex(total_used_key, LIVESTREAM_TIME_TRACKING_TTL_SECONDS, str(new_total))
             await self.redis.delete(session_start_key)
 
             logger.info(f"Livestream session ended for user {user_id}: {elapsed_seconds}s (total: {new_total}s)")
@@ -242,6 +245,6 @@ class LivestreamService:
             self.send_disconnect_via_telnet("live")
 
             new_total = previous_total_seconds + elapsed_seconds
-            await self.redis.setex(total_used_key, 86400 * 30, str(new_total))
+            await self.redis.setex(total_used_key, LIVESTREAM_TIME_TRACKING_TTL_SECONDS, str(new_total))
             await self.redis.delete(f"livestream:session:{user_id}:start")
             await self.redis.delete("livestream:active")
