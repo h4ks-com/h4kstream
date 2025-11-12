@@ -46,6 +46,10 @@ export type SongItem = {
      * User-facing reference URL for clickable links
      */
     reference_url?: (string | null);
+    /**
+     * Direct stream URL for this cached song
+     */
+    direct_url?: (string | null);
 };
 export namespace SongItem {
     /**

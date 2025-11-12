@@ -83,6 +83,7 @@ class SongItem(BaseModel):
     pos: str | None = Field(None, description="Position in queue")
     playlist: PlaylistType = Field(..., description="Playlist source: user, fallback, or live")
     reference_url: str | None = Field(None, description="User-facing reference URL for clickable links")
+    direct_url: str | None = Field(None, description="Direct stream URL for this cached song")
 
 
 class SongListResponse(BaseModel):
@@ -162,6 +163,7 @@ class NowPlayingMetadata(BaseModel):
     genre: str | None = Field(None, description="Track genre")
     description: str | None = Field(None, description="Track description")
     reference_url: str | None = Field(None, description="Reference URL for clickable track link")
+    direct_url: str | None = Field(None, description="Direct stream URL for this cached song")
     show_name: str | None = Field(None, description="Show name (livestream only)")
     show_user: str | None = Field(None, description="Show user ID (livestream only)")
 

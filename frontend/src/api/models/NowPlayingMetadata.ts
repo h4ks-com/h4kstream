@@ -23,6 +23,14 @@ export type NowPlayingMetadata = {
      */
     description?: (string | null);
     /**
+     * Reference URL for clickable track link
+     */
+    reference_url?: (string | null);
+    /**
+     * Direct stream URL for this cached song
+     */
+    direct_url?: (string | null);
+    /**
      * Show name (livestream only)
      */
     show_name?: (string | null);

@@ -66,5 +66,7 @@ async def stream_song(
     return FileResponse(
         path=str(file_path),
         media_type=media_type,
-        filename=cache_entry.filename,
+        headers={
+            "Content-Disposition": f'inline; filename="{cache_entry.filename}"'
+        },
     )

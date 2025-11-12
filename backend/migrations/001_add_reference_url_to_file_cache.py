@@ -1,7 +1,6 @@
 """Add reference_url column to file_cache table.
 
-This migration adds the reference_url column to the file_cache table
-to support clickable song links in the frontend.
+This migration adds the reference_url column to the file_cache table to support clickable song links in the frontend.
 """
 
 import sqlite3

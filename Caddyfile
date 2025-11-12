@@ -108,6 +108,9 @@
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
 			header_up X-Real-IP {remote_host}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
 		}
 	}
 

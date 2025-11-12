@@ -169,6 +169,28 @@ class RedisService:
         await self.redis.set(key, json.dumps(metadata))
         await self.redis.expire(key, 86400)  # 24 hour TTL
 
+    async def set_song_cache_id(self, playlist: PlaylistType, song_id: str, cache_id: int) -> None:
+        """Store cache_id for a specific song.
+
+        :param playlist: Playlist type (user or fallback)
+        :param song_id: MPD song ID
+        :param cache_id: FileCache ID
+        """
+        key = f"song:{playlist}:{song_id}:cache_id"
+        await self.redis.set(key, str(cache_id))
+        await self.redis.expire(key, 86400)  # 24 hour TTL
+
+    async def get_song_cache_id(self, playlist: PlaylistType, song_id: str) -> int | None:
+        """Get cache_id for a specific song.
+
+        :param playlist: Playlist type (user or fallback)
+        :param song_id: MPD song ID
+        :return: FileCache ID or None
+        """
+        key = f"song:{playlist}:{song_id}:cache_id"
+        cache_id = await self.redis.get(key)
+        return int(cache_id) if cache_id else None
+
     async def get_song_metadata(self, playlist: PlaylistType, song_id: str) -> dict | None:
         """Get metadata overrides for a specific song.
 

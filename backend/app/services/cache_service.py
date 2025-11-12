@@ -119,6 +119,21 @@ async def create_cache_entry(
     """
     file_size = filepath.stat().st_size
 
+    # Trim whitespace from URLs
+    if origin_url is not None:
+        origin_url = origin_url.strip()
+        if not origin_url:
+            origin_url = None
+
+    if reference_url is not None:
+        reference_url = reference_url.strip()
+        if not reference_url:
+            reference_url = None
+
+    # Default reference_url to origin_url if not explicitly provided
+    if reference_url is None and origin_url is not None:
+        reference_url = origin_url
+
     cache_entry = FileCache(
         filename=filepath.name,
         filepath=str(filepath),

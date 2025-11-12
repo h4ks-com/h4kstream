@@ -168,6 +168,7 @@ async def add_song(
     temp_path: Path | None = None
     md5_hash: str | None = None
     cache_hit = False
+    cache_id: int | None = None
 
     try:
         if url:
@@ -182,6 +183,7 @@ async def add_song(
                     temp_path = target_path
 
                     md5_hash = cached_entry.md5_hash
+                    cache_id = cached_entry.id
 
             if not cache_hit:
                 # Check video info before downloading to fail early
@@ -230,6 +232,7 @@ async def add_song(
                     shutil.copy2(str(cached_path), str(target_path))
                     cache_hit = True
                     temp_path = target_path
+                    cache_id = cached_entry.id
 
         # Validation checks (skip for admin uploads)
         if not skip_validation:
@@ -270,7 +273,7 @@ async def add_song(
             # Create cache entry for newly processed file
             if db_session and md5_hash:
                 try:
-                    await cache_service.create_cache_entry(
+                    new_cache_entry = await cache_service.create_cache_entry(
                         db_session,
                         target_path,
                         md5_hash,
@@ -278,6 +281,7 @@ async def add_song(
                         origin_url=url if url else None,
                         reference_url=reference_url,
                     )
+                    cache_id = new_cache_entry.id
                 except Exception as e:
                     logger.warning(f"Failed to create cache entry: {e}")
     except Exception:
@@ -298,6 +302,10 @@ async def add_song(
         await redis_client.increment_user_add_count(user_id)
 
     if redis_client:
+        # Store cache_id association for direct URL generation
+        if cache_id is not None:
+            await redis_client.set_song_cache_id(playlist, str(mpd_song_id), cache_id)
+
         # Store per-song metadata overrides if provided
         if song_name or artist_name:
             await redis_client.set_song_metadata(playlist, str(mpd_song_id), final_title, final_artist)
@@ -416,17 +424,20 @@ async def list_songs(
                 if "artist" in overrides:
                     song["artist"] = overrides["artist"]
 
-        # Look up reference_url from FileCache if available
+        # Look up cache_id from Redis and build URLs
         song["reference_url"] = None
-        if db_session and playlist:
-            music_root = Path(get_music_user_dir() if playlist == "user" else get_music_fallback_dir())
-            file_path = song.get("file", "")
-            if file_path:
-                full_path = str(music_root / file_path)
-                statement = select(FileCache).where(FileCache.filepath == full_path)
+        song["direct_url"] = None
+        if redis_client and playlist and db_session:
+            cache_id = await redis_client.get_song_cache_id(playlist, str(mpd_song_id))
+            if cache_id:
+                # Look up reference_url from FileCache
+                statement = select(FileCache).where(FileCache.id == cache_id)
                 cache_entry = db_session.exec(statement).first()
-                if cache_entry and cache_entry.reference_url:
-                    song["reference_url"] = cache_entry.reference_url
+                if cache_entry:
+                    if cache_entry.reference_url:
+                        song["reference_url"] = cache_entry.reference_url
+                    # Always provide direct stream URL as fallback
+                    song["direct_url"] = f"/api/songs/stream/{cache_id}"
 
         if playlist:
             song["id"] = format_song_id(mpd_song_id, playlist)
