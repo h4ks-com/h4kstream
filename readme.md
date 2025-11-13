@@ -38,5 +38,7 @@ make test-all
 
 # TODO
 
+- [ ] Websockets instead of http polling for live updates (reuse webhook system internally?)
 - [ ] The worker for recording livestreams is probably not necessary as liquidsoap can do it
 - [ ] Get rid of 2 mpd containers. Liquidsoap could do that. (?)
+- [ ] Play m3u ?

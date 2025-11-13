@@ -8,7 +8,11 @@ from tests.conftest import stream_to_liquidsoap
 
 def test_create_livestream_token(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test livestream token creation endpoint."""
-    response = client.post("/admin/livestream/token", json={"max_streaming_seconds": 3600}, headers=admin_headers)
+    response = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 3600, "show_name": "test-create-token"},
+        headers=admin_headers,
+    )
     assert response.status_code == 200
     data = response.json()
     assert "token" in data
@@ -20,16 +24,32 @@ def test_create_livestream_token(client: httpx.Client, admin_headers: dict[str, 
 
 def test_livestream_token_validation_enforcement(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that livestream token validation enforces min/max limits."""
-    too_short = client.post("/admin/livestream/token", json={"max_streaming_seconds": 30}, headers=admin_headers)
+    too_short = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 30, "show_name": "test-validation-short"},
+        headers=admin_headers,
+    )
     assert too_short.status_code == 422
 
-    too_long = client.post("/admin/livestream/token", json={"max_streaming_seconds": 100000}, headers=admin_headers)
+    too_long = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 100000, "show_name": "test-validation-long"},
+        headers=admin_headers,
+    )
     assert too_long.status_code == 422
 
-    valid_min = client.post("/admin/livestream/token", json={"max_streaming_seconds": 60}, headers=admin_headers)
+    valid_min = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 60, "show_name": "test-validation-min"},
+        headers=admin_headers,
+    )
     assert valid_min.status_code == 200
 
-    valid_max = client.post("/admin/livestream/token", json={"max_streaming_seconds": 86400}, headers=admin_headers)
+    valid_max = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 86400, "show_name": "test-validation-max"},
+        headers=admin_headers,
+    )
     assert valid_max.status_code == 200
 
 
@@ -41,7 +61,11 @@ def test_livestream_auth_endpoint_requires_admin(client: httpx.Client) -> None:
 
 def test_livestream_auth_with_valid_token(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test livestream authentication with valid token."""
-    token_response = client.post("/admin/livestream/token", json={"max_streaming_seconds": 3600}, headers=admin_headers)
+    token_response = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 3600, "show_name": "test-auth-valid"},
+        headers=admin_headers,
+    )
     assert token_response.status_code == 200
     livestream_token = token_response.json()["token"]
 
@@ -70,10 +94,14 @@ def test_livestream_auth_with_invalid_token(client: httpx.Client, admin_headers:
 def test_livestream_slot_first_come_first_served(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that only first user can reserve the streaming slot."""
     token1_response = client.post(
-        "/admin/livestream/token", json={"max_streaming_seconds": 3600}, headers=admin_headers
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 3600, "show_name": "test-show"},
+        headers=admin_headers,
     )
     token2_response = client.post(
-        "/admin/livestream/token", json={"max_streaming_seconds": 3600}, headers=admin_headers
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 3600, "show_name": "test-show-2"},
+        headers=admin_headers,
     )
 
     token1 = token1_response.json()["token"]
@@ -108,7 +136,11 @@ def test_livestream_slot_first_come_first_served(client: httpx.Client, admin_hea
 
 def test_livestream_connect_and_disconnect_flow(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test full connect and disconnect flow."""
-    token_response = client.post("/admin/livestream/token", json={"max_streaming_seconds": 3600}, headers=admin_headers)
+    token_response = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 3600, "show_name": "test-connect-disconnect"},
+        headers=admin_headers,
+    )
     token = token_response.json()["token"]
 
     auth_response = client.post(
@@ -129,14 +161,21 @@ def test_livestream_connect_and_disconnect_flow(client: httpx.Client, admin_head
 
 def test_livestream_token_requires_admin_auth(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that livestream token creation requires admin authentication."""
-    response = client.post("/admin/livestream/token", json={"max_streaming_seconds": 3600})
+    response = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 3600, "show_name": "test-admin-auth-1"},
+    )
     assert response.status_code == 403
 
     token_response = client.post("/admin/token", json={"duration_seconds": 3600}, headers=admin_headers)
     jwt_token = token_response.json()["token"]
     jwt_headers = {"Authorization": f"Bearer {jwt_token}"}
 
-    jwt_response = client.post("/admin/livestream/token", json={"max_streaming_seconds": 3600}, headers=jwt_headers)
+    jwt_response = client.post(
+        "/admin/livestream/token",
+        json={"max_streaming_seconds": 3600, "show_name": "test-admin-auth-2"},
+        headers=jwt_headers,
+    )
     assert jwt_response.status_code == 401
 
 

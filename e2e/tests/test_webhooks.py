@@ -262,7 +262,7 @@ def test_webhook_livestream_started_event(
     token_response = client.post(
         "/admin/livestream/token",
         headers=admin_headers,
-        json={"max_streaming_seconds": 60},
+        json={"max_streaming_seconds": 60, "show_name": "test-webhook-show"},
     )
     assert token_response.status_code == 200
     token = token_response.json()["token"]

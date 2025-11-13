@@ -45,9 +45,6 @@ export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '
   const [genre, setGenre] = useState('');
   const [description, setDescription] = useState('');
   const [showDesktopAudioDialog, setShowDesktopAudioDialog] = useState(false);
-  const [showCountdown, setShowCountdown] = useState(false);
-  const [countdownValue, setCountdownValue] = useState(3);
-  const [countdownType, setCountdownType] = useState<'start' | 'stop'>('start');
 
   // Time remaining state
   const [timeRemaining, setTimeRemaining] = useState<string>('');
@@ -118,28 +115,15 @@ export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '
 
   const handleStartStop = async () => {
     if (state.status === 'streaming') {
-      // Start countdown before stopping
-      setCountdownType('stop');
-      setCountdownValue(3);
-      setShowCountdown(true);
+      stopStream();
     } else {
       // Show desktop audio dialog if desktop source is selected
       if (source === 'desktop') {
         setShowDesktopAudioDialog(true);
       } else {
-        await startStreamWithCountdown();
+        await startStreamWithMetadata();
       }
     }
-  };
-
-  const startStreamWithCountdown = async () => {
-    // Start the stream first
-    await startStreamWithMetadata();
-
-    // Then show countdown to give buffer at the start
-    setCountdownType('start');
-    setCountdownValue(3);
-    setShowCountdown(true);
   };
 
   const startStreamWithMetadata = async () => {
@@ -164,28 +148,8 @@ export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '
 
   const handleDesktopAudioConfirm = async () => {
     setShowDesktopAudioDialog(false);
-    await startStreamWithCountdown();
+    await startStreamWithMetadata();
   };
-
-  // Countdown timer effect
-  useEffect(() => {
-    if (!showCountdown) return;
-
-    if (countdownValue > 0) {
-      const timer = setTimeout(() => {
-        setCountdownValue(countdownValue - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else {
-      // Countdown finished
-      setShowCountdown(false);
-      if (countdownType === 'stop') {
-        // Now actually stop the stream
-        stopStream();
-      }
-      // For 'start' type, stream is already running, just hide countdown
-    }
-  }, [showCountdown, countdownValue, countdownType, stopStream]);
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -417,25 +381,6 @@ export const StreamControls: React.FC<StreamControlsProps> = ({ initialToken = '
             <div>Duration: <span className="text-gray-300">{formatDuration(state.duration)}</span></div>
             <div>Data Sent: <span className="text-gray-300">{formatBytes(state.bytesSent)}</span></div>
             <div>Bitrate: <span className="text-gray-300">~128 kbps (Opus)</span></div>
-          </div>
-        </div>
-      )}
-
-      {/* Countdown Modal */}
-      {showCountdown && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
-          <div className="text-center">
-            <div className="font-mono text-h4ks-green-400 text-2xl mb-8">
-              {countdownType === 'start' ? '[STREAM STARTING...]' : '[STREAM ENDING...]'}
-            </div>
-            <div className="text-[200px] font-bold text-h4ks-green-400 font-mono leading-none animate-pulse">
-              {countdownValue}
-            </div>
-            <div className="font-mono text-gray-400 mt-8 text-lg">
-              {countdownType === 'start'
-                ? 'Get ready to speak...'
-                : 'Wrapping up your stream...'}
-            </div>
           </div>
         </div>
       )}

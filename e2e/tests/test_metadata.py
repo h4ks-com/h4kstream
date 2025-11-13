@@ -36,7 +36,7 @@ def test_metadata_livestream_switching(client: httpx.Client, admin_headers: dict
     token_response = client.post(
         "/admin/livestream/token",
         headers=admin_headers,
-        json={"max_streaming_seconds": 60},
+        json={"max_streaming_seconds": 60, "show_name": "test-metadata-show"},
     )
     assert token_response.status_code == 200
     token = token_response.json()["token"]

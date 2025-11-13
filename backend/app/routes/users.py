@@ -21,6 +21,7 @@ from app.db import get_session
 from app.db.models import PendingUser
 from app.db.models import PendingUserCreate
 from app.db.models import PendingUserPublic
+from app.db.models import Show
 from app.db.models import User
 from app.db.models import UserCreate
 from app.db.models import UserLogin
@@ -467,8 +468,9 @@ async def logout_user(
 async def check_livestream_time_remaining(
     request: LivestreamTimeRemainingRequest = Body(...),
     redis_client: RedisService = Depends(dep_redis_client),
+    db_session: Session = Depends(get_session),
 ) -> LivestreamTimeRemainingResponse:
-    """Check remaining streaming time for a livestream token."""
+    """Check remaining streaming time for a livestream token (per show)."""
     try:
         payload = decode_livestream_token(request.token)
     except jwt.ExpiredSignatureError:
@@ -477,9 +479,22 @@ async def check_livestream_time_remaining(
         raise HTTPException(status_code=400, detail=f"Invalid livestream token: {str(e)}")
 
     user_id = payload["user_id"]
+    show_name = payload.get("show_name")
     max_streaming_seconds = payload["max_streaming_seconds"]
 
-    total_used_key = f"livestream:user:{user_id}:total"
+    # Lookup show_id from database for per-show time tracking
+    show_id = None
+    if show_name:
+        show = db_session.exec(select(Show).where(Show.show_name == show_name)).first()
+        if show:
+            show_id = show.id
+
+    # Use show_id for time tracking if available, fallback to user_id
+    if show_id:
+        total_used_key = f"livestream:show:{show_id}:total"
+    else:
+        total_used_key = f"livestream:user:{user_id}:total"
+
     total_used = await redis_client.redis.get(total_used_key)
     total_used_seconds = int(total_used) if total_used else 0
 

@@ -4,7 +4,11 @@ from datetime import datetime
 
 import jwt
 import pytest
+from sqlmodel import Session
+from sqlmodel import SQLModel
+from sqlmodel import create_engine
 
+from app.db.models import Show
 from app.services.jwt_service import generate_livestream_token
 from app.services.livestream_service import LivestreamService
 
@@ -57,6 +61,23 @@ class MockRedisClient:
 
 
 @pytest.fixture
+def db_session():
+    """Create an in-memory SQLite database for testing."""
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        # Create test shows
+        test_show_1 = Show(show_name="test-show", description="Test Show")
+        test_show_2 = Show(show_name="test-show-1", description="Test Show 1")
+        test_show_3 = Show(show_name="test-show-2", description="Test Show 2")
+        session.add(test_show_1)
+        session.add(test_show_2)
+        session.add(test_show_3)
+        session.commit()
+        yield session
+
+
+@pytest.fixture
 async def redis_client():
     """Create mock Redis client for testing."""
     client = MockRedisClient()
@@ -65,9 +86,9 @@ async def redis_client():
 
 
 @pytest.fixture
-async def livestream_service(redis_client):
-    """Create LivestreamService instance with mock Redis."""
-    return LivestreamService(redis_client)
+async def livestream_service(redis_client, db_session):
+    """Create LivestreamService instance with mock Redis and database."""
+    return LivestreamService(redis_client, db_session)
 
 
 async def test_generate_livestream_token():
@@ -146,13 +167,16 @@ async def test_validate_and_reserve_slot_already_occupied(livestream_service, re
     await redis_client.delete("livestream:active")
 
 
-async def test_validate_and_reserve_slot_time_limit_exceeded(livestream_service, redis_client):
-    """Test slot reservation when user has exceeded time limit."""
+async def test_validate_and_reserve_slot_time_limit_exceeded(livestream_service, redis_client, db_session):
+    """Test slot reservation when show has exceeded time limit."""
     token, _ = generate_livestream_token(100, "test-show")
-    payload = jwt.decode(token, options={"verify_signature": False})
-    user_id = payload["user_id"]
 
-    await redis_client.setex(f"livestream:user:{user_id}:total", 3600, "150")
+    # Get show_id from database
+    from sqlmodel import select
+    show = db_session.exec(select(Show).where(Show.show_name == "test-show")).first()
+    show_id = show.id
+
+    await redis_client.setex(f"livestream:show:{show_id}:total", 3600, "150")
 
     success, reason, _, _ = await livestream_service.validate_and_reserve_slot(token, "192.168.1.1")
 
@@ -160,27 +184,33 @@ async def test_validate_and_reserve_slot_time_limit_exceeded(livestream_service,
     assert "limit exceeded" in reason.lower()
 
 
-async def test_track_connection_start(livestream_service, redis_client):
+async def test_track_connection_start(livestream_service, redis_client, db_session):
     """Test connection start tracking."""
     token, _ = generate_livestream_token(3600, "test-show")
-    payload = jwt.decode(token, options={"verify_signature": False})
-    user_id = payload["user_id"]
+
+    # Get show_id from database
+    from sqlmodel import select
+    show = db_session.exec(select(Show).where(Show.show_name == "test-show")).first()
+    show_id = show.id
 
     result = await livestream_service.track_connection_start(token)
     assert result is not None
 
-    session_start = await redis_client.get(f"livestream:session:{user_id}:start")
+    session_start = await redis_client.get(f"livestream:session:show:{show_id}:start")
     assert session_start is not None
 
     start_time = datetime.fromisoformat(session_start.decode())
     assert (datetime.now(UTC) - start_time).total_seconds() < 2
 
 
-async def test_handle_disconnect_updates_total_time(livestream_service, redis_client):
+async def test_handle_disconnect_updates_total_time(livestream_service, redis_client, db_session):
     """Test that disconnect properly updates total streaming time."""
     token, _ = generate_livestream_token(3600, "test-show")
-    payload = jwt.decode(token, options={"verify_signature": False})
-    user_id = payload["user_id"]
+
+    # Get show_id from database
+    from sqlmodel import select
+    show = db_session.exec(select(Show).where(Show.show_name == "test-show")).first()
+    show_id = show.id
 
     await livestream_service.validate_and_reserve_slot(token, "192.168.1.1")
     await livestream_service.track_connection_start(token)
@@ -192,7 +222,7 @@ async def test_handle_disconnect_updates_total_time(livestream_service, redis_cl
     assert "elapsed_seconds" in result
     assert 1 <= result["elapsed_seconds"] <= 3
 
-    total_time = await redis_client.get(f"livestream:user:{user_id}:total")
+    total_time = await redis_client.get(f"livestream:show:{show_id}:total")
     assert total_time is not None
 
     total_seconds = int(total_time.decode())
@@ -202,20 +232,23 @@ async def test_handle_disconnect_updates_total_time(livestream_service, redis_cl
     assert active_slot is None
 
 
-async def test_handle_disconnect_accumulates_time(livestream_service, redis_client):
+async def test_handle_disconnect_accumulates_time(livestream_service, redis_client, db_session):
     """Test that multiple sessions accumulate time correctly."""
     token, _ = generate_livestream_token(3600, "test-show")
-    payload = jwt.decode(token, options={"verify_signature": False})
-    user_id = payload["user_id"]
 
-    await redis_client.setex(f"livestream:user:{user_id}:total", 3600, "50")
+    # Get show_id from database
+    from sqlmodel import select
+    show = db_session.exec(select(Show).where(Show.show_name == "test-show")).first()
+    show_id = show.id
+
+    await redis_client.setex(f"livestream:show:{show_id}:total", 3600, "50")
 
     await livestream_service.validate_and_reserve_slot(token, "192.168.1.1")
     await livestream_service.track_connection_start(token)
     await asyncio.sleep(2)
     await livestream_service.handle_disconnect(token)
 
-    total_time = await redis_client.get(f"livestream:user:{user_id}:total")
+    total_time = await redis_client.get(f"livestream:show:{show_id}:total")
     total_seconds = int(total_time.decode())
 
     assert total_seconds >= 50
@@ -244,13 +277,16 @@ async def test_check_and_enforce_time_limit_no_active_session(livestream_service
     await livestream_service.check_and_enforce_time_limit()
 
 
-async def test_time_limit_enforcement_logic(livestream_service, redis_client):
+async def test_time_limit_enforcement_logic(livestream_service, redis_client, db_session):
     """Test that time limit logic correctly identifies when to disconnect."""
     token, _ = generate_livestream_token(5, "test-show")
-    payload = jwt.decode(token, options={"verify_signature": False})
-    user_id = payload["user_id"]
 
-    await redis_client.setex(f"livestream:user:{user_id}:total", 3600, "3")
+    # Get show_id from database
+    from sqlmodel import select
+    show = db_session.exec(select(Show).where(Show.show_name == "test-show")).first()
+    show_id = show.id
+
+    await redis_client.setex(f"livestream:show:{show_id}:total", 3600, "3")
 
     await livestream_service.validate_and_reserve_slot(token, "192.168.1.1")
     await livestream_service.track_connection_start(token)
@@ -262,6 +298,6 @@ async def test_time_limit_enforcement_logic(livestream_service, redis_client):
     active_slot = await redis_client.get("livestream:active")
     assert active_slot is None
 
-    total_time = await redis_client.get(f"livestream:user:{user_id}:total")
+    total_time = await redis_client.get(f"livestream:show:{show_id}:total")
     total_seconds = int(total_time.decode())
     assert total_seconds >= 5

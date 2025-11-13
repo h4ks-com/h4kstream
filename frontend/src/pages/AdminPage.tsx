@@ -979,18 +979,25 @@ const QueueSection: React.FC = () => {
 
 // Livestream Section Component
 const LivestreamSection: React.FC = () => {
+  const [showName, setShowName] = useState('');
   const [maxStreamingSeconds, setMaxStreamingSeconds] = useState(3600);
   const [minRecordingDuration, setMinRecordingDuration] = useState(5);
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
 
   const createToken = async () => {
+    if (!showName.trim()) {
+      setError('Show name is required');
+      return;
+    }
+
     try {
       setError('');
       setToken('');
       const response = await AdminService().createLivestreamTokenAdminLivestreamTokenPost({
         max_streaming_seconds: maxStreamingSeconds,
         min_recording_duration: minRecordingDuration,
+        show_name: showName.trim(),
       });
       setToken(response.token);
     } catch (err: any) {
@@ -1009,6 +1016,19 @@ const LivestreamSection: React.FC = () => {
           [CREATE TEMPORARY TOKEN]
         </h3>
         <div className="space-y-4">
+          <div>
+            <label className="block text-gray-400 text-sm mb-2">Show Name *</label>
+            <input
+              type="text"
+              value={showName}
+              onChange={(e) => setShowName(e.target.value)}
+              placeholder="e.g., my-show"
+              className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Required for time tracking. Show will be auto-created if it doesn't exist.
+            </p>
+          </div>
           <div>
             <label className="block text-gray-400 text-sm mb-2">Max Streaming Duration (seconds)</label>
             <input

@@ -7,7 +7,9 @@ from datetime import datetime
 import jwt
 import redis.asyncio as redis
 from sqlmodel import Session
+from sqlmodel import select
 
+from app.db.models import Show
 from app.services.jwt_service import decode_livestream_token
 from app.settings import settings
 
@@ -21,6 +23,18 @@ class LivestreamService:
     def __init__(self, redis_client: redis.Redis, db_session: Session | None = None):
         self.redis = redis_client
         self.db_session = db_session
+
+    def _get_show_id_from_name(self, show_name: str | None) -> int | None:
+        """Lookup show_id from database by show_name.
+
+        :param show_name: Show name to lookup
+        :return: Show ID or None if not found or no database session
+        """
+        if not self.db_session or not show_name:
+            return None
+
+        show = self.db_session.exec(select(Show).where(Show.show_name == show_name)).first()
+        return show.id if show else None
 
     async def validate_and_reserve_slot(
         self, token: str, address: str
@@ -43,12 +57,24 @@ class LivestreamService:
         show_name = payload.get("show_name")
         min_recording_duration = payload.get("min_recording_duration", 60)
 
-        total_used_key = f"livestream:user:{user_id}:total"
+        # Lookup show_id from database for per-show time tracking
+        if not self.db_session:
+            return False, "Database session not available", None, None
+
+        if not show_name:
+            return False, "Show name is required in token", None, None
+
+        show_id = self._get_show_id_from_name(show_name)
+        if not show_id:
+            return False, f"Show '{show_name}' not found in database", None, None
+
+        # Check time limit per show (not per user)
+        total_used_key = f"livestream:show:{show_id}:total"
         total_used = await self.redis.get(total_used_key)
         total_used_seconds = int(total_used) if total_used else 0
 
         if total_used_seconds >= max_streaming_seconds:
-            return False, f"Streaming time limit exceeded ({total_used_seconds}/{max_streaming_seconds}s)", None, None
+            return False, f"Show '{show_name}' streaming time limit exceeded ({total_used_seconds}/{max_streaming_seconds}s)", None, None
 
         active_key = "livestream:active"
         slot_reserved = await self.redis.setnx(
@@ -56,6 +82,7 @@ class LivestreamService:
             json.dumps(
                 {
                     "user_id": user_id,
+                    "show_id": show_id,
                     "token": token,
                     "max_streaming_seconds": max_streaming_seconds,
                     "show_name": show_name,
@@ -69,38 +96,42 @@ class LivestreamService:
             existing_data = await self.redis.get(active_key)
             if existing_data:
                 existing = json.loads(existing_data)
-                if existing.get("user_id") == user_id:
+                # Allow reconnection if same show (not just same user)
+                if existing.get("show_id") == show_id:
                     return True, None, show_name, min_recording_duration
-                return False, "Streaming slot is already occupied by another user", None, None
+                return False, "Streaming slot is already occupied by another show", None, None
             return False, "Streaming slot is occupied", None, None
 
         await self.redis.expire(active_key, 120)
-        logger.info(f"Livestream slot reserved for user {user_id} (show: {show_name}) from {address}")
+        logger.info(f"Livestream slot reserved for show '{show_name}' (ID: {show_id}) from {address}")
         return True, None, show_name, min_recording_duration
 
     async def track_connection_start(self, token: str) -> dict[str, str | int | None]:
         """Track livestream connection start time.
 
         :param token: JWT livestream token
-        :return: Dict with user_id, show_name, min_recording_duration, and intro_filename
+        :return: Dict with user_id, show_name, show_id, min_recording_duration, and intro_filename
         """
         logger.info(f"track_connection_start called with token: {token[:20]}...")
         try:
             payload = decode_livestream_token(token)
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
             logger.error(f"Failed to decode token in track_connection_start: {e}")
-            return {"user_id": "unknown", "show_name": "unknown", "min_recording_duration": 60}
+            return {"user_id": "unknown", "show_name": "unknown", "show_id": None, "min_recording_duration": 60}
 
         user_id = payload["user_id"]
         show_name = payload.get("show_name", "unknown")
         min_recording_duration = payload.get("min_recording_duration", 60)
         intro_filename = payload.get("intro_filename")
 
-        session_start_key = f"livestream:session:{user_id}:start"
+        # Lookup show_id from database
+        show_id = self._get_show_id_from_name(show_name)
+
+        session_start_key = f"livestream:session:show:{show_id}:start" if show_id else f"livestream:session:user:{user_id}:start"
         active_key = "livestream:active"
         now = datetime.now(UTC).isoformat()
 
-        logger.info(f"Setting session start for user {user_id}: key={session_start_key}, time={now}")
+        logger.info(f"Setting session start for show '{show_name}' (ID: {show_id}): key={session_start_key}, time={now}")
         await self.redis.setex(session_start_key, 3600, now)
         await self.redis.expire(active_key, 3600)
 
@@ -108,10 +139,11 @@ class LivestreamService:
         verify = await self.redis.get(session_start_key)
         logger.info(f"Verified session start stored: {verify}")
 
-        logger.info(f"Livestream session started for user {user_id} at {now}")
+        logger.info(f"Livestream session started for show '{show_name}' (ID: {show_id}) at {now}")
         return {
             "user_id": user_id,
             "show_name": show_name,
+            "show_id": show_id,
             "min_recording_duration": min_recording_duration,
             "intro_filename": intro_filename,
         }
@@ -128,8 +160,13 @@ class LivestreamService:
             return {"user_id": "unknown", "elapsed_seconds": 0}
 
         user_id = payload["user_id"]
-        session_start_key = f"livestream:session:{user_id}:start"
-        total_used_key = f"livestream:user:{user_id}:total"
+        show_name = payload.get("show_name", "unknown")
+
+        # Lookup show_id from database
+        show_id = self._get_show_id_from_name(show_name)
+
+        session_start_key = f"livestream:session:show:{show_id}:start" if show_id else f"livestream:session:{user_id}:start"
+        total_used_key = f"livestream:show:{show_id}:total" if show_id else f"livestream:user:{user_id}:total"
         active_key = "livestream:active"
 
         elapsed_seconds = 0
@@ -145,12 +182,17 @@ class LivestreamService:
             await self.redis.setex(total_used_key, LIVESTREAM_TIME_TRACKING_TTL_SECONDS, str(new_total))
             await self.redis.delete(session_start_key)
 
-            logger.info(f"Livestream session ended for user {user_id}: {elapsed_seconds}s (total: {new_total}s)")
+            logger.info(f"Livestream session ended for show '{show_name}' (ID: {show_id}): {elapsed_seconds}s (total: {new_total}s)")
 
         active_data = await self.redis.get(active_key)
         if active_data:
             active = json.loads(active_data)
-            if active.get("user_id") == user_id:
+            # Allow cleanup if same show (not just same user)
+            if show_id and active.get("show_id") == show_id:
+                await self.redis.delete(active_key)
+                logger.info(f"Livestream slot released for show '{show_name}' (ID: {show_id})")
+            elif not show_id and active.get("user_id") == user_id:
+                # Fallback for backwards compatibility
                 await self.redis.delete(active_key)
                 logger.info(f"Livestream slot released for user {user_id}")
 
@@ -166,7 +208,14 @@ class LivestreamService:
         if active_data:
             session = json.loads(active_data)
             user_id = session["user_id"]
-            session_start_key = f"livestream:session:{user_id}:start"
+            show_id = session.get("show_id")
+
+            # Use show_id for session key if available, fallback to user_id
+            if show_id:
+                session_start_key = f"livestream:session:show:{show_id}:start"
+            else:
+                session_start_key = f"livestream:session:{user_id}:start"
+
             session_start_str = await self.redis.get(session_start_key)
 
             if session_start_str:
@@ -215,36 +264,45 @@ class LivestreamService:
             return
 
         user_id = session["user_id"]
+        show_id = session.get("show_id")
+        show_name = session.get("show_name", "unknown")
         max_streaming_seconds = session["max_streaming_seconds"]
         session_start_str = session.get("session_start")
 
-        logger.info(f"Checking time limit for user {user_id}: session_start={session_start_str}")
+        logger.info(f"Checking time limit for show '{show_name}' (ID: {show_id}): session_start={session_start_str}")
 
         if not session_start_str:
-            logger.warning(f"No session_start found for user {user_id} - cannot enforce time limit")
+            logger.warning(f"No session_start found for show '{show_name}' (ID: {show_id}) - cannot enforce time limit")
             return
 
         session_start = datetime.fromisoformat(session_start_str)
         elapsed_seconds = int((datetime.now(UTC) - session_start).total_seconds())
 
-        total_used_key = f"livestream:user:{user_id}:total"
+        # Use show_id for time tracking if available, fallback to user_id
+        if show_id:
+            total_used_key = f"livestream:show:{show_id}:total"
+            session_start_key = f"livestream:session:show:{show_id}:start"
+        else:
+            total_used_key = f"livestream:user:{user_id}:total"
+            session_start_key = f"livestream:session:{user_id}:start"
+
         previous_total = await self.redis.get(total_used_key)
         previous_total_seconds = int(previous_total) if previous_total else 0
 
         total_time = previous_total_seconds + elapsed_seconds
 
         logger.info(
-            f"User {user_id} time check: elapsed={elapsed_seconds}s, previous={previous_total_seconds}s, "
+            f"Show '{show_name}' (ID: {show_id}) time check: elapsed={elapsed_seconds}s, previous={previous_total_seconds}s, "
             f"total={total_time}s, limit={max_streaming_seconds}s"
         )
 
         if total_time >= max_streaming_seconds:
             logger.warning(
-                f"User {user_id} exceeded time limit: {total_time}/{max_streaming_seconds}s. Disconnecting..."
+                f"Show '{show_name}' (ID: {show_id}) exceeded time limit: {total_time}/{max_streaming_seconds}s. Disconnecting..."
             )
             self.send_disconnect_via_telnet("live")
 
             new_total = previous_total_seconds + elapsed_seconds
             await self.redis.setex(total_used_key, LIVESTREAM_TIME_TRACKING_TTL_SECONDS, str(new_total))
-            await self.redis.delete(f"livestream:session:{user_id}:start")
+            await self.redis.delete(session_start_key)
             await self.redis.delete("livestream:active")
