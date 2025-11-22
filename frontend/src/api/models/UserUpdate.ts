@@ -11,5 +11,6 @@ export type UserUpdate = {
     password?: (string | null);
     max_queue_songs?: (number | null);
     max_add_requests?: (number | null);
+    role?: (string | null);
 };
 

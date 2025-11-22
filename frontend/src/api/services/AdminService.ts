@@ -4,6 +4,7 @@
 /* eslint-disable */
 import type { Body_admin_add_song_admin_queue_add_post } from '../models/Body_admin_add_song_admin_queue_add_post';
 import type { Body_admin_upload_show_intro_admin_shows__show_id__intro_post } from '../models/Body_admin_upload_show_intro_admin_shows__show_id__intro_post';
+import type { Body_update_user_role_admin_users__user_id__role_patch } from '../models/Body_update_user_role_admin_users__user_id__role_patch';
 import type { Body_upload_transition_admin_transitions_upload_post } from '../models/Body_upload_transition_admin_transitions_upload_post';
 import type { LivestreamTokenCreateRequest } from '../models/LivestreamTokenCreateRequest';
 import type { LivestreamTokenResponse } from '../models/LivestreamTokenResponse';
@@ -455,7 +456,7 @@ export class AdminService {
     }
     /**
      * Update User Limits
-     * Admin endpoint to update user limits.
+     * Admin endpoint to update user limits (excludes role changes - use /admin/users/{user_id}/role for that).
      * @param userId
      * @param requestBody
      * @returns UserPublic Successful Response
@@ -475,6 +476,35 @@ export class AdminService {
             mediaType: 'application/json',
             errors: {
                 401: `Unauthorized`,
+                403: `Role changes not allowed in this endpoint`,
+                404: `User not found`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update User Role
+     * Update user role (admin TOKEN only - not available to role-based admins).
+     * @param userId
+     * @param requestBody
+     * @returns UserPublic Successful Response
+     * @throws ApiError
+     */
+    public updateUserRoleAdminUsersUserIdRolePatch(
+        userId: string,
+        requestBody: Body_update_user_role_admin_users__user_id__role_patch,
+    ): CancelablePromise<UserPublic> {
+        return this.httpRequest.request({
+            method: 'PATCH',
+            url: '/admin/users/{user_id}/role',
+            path: {
+                'user_id': userId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                401: `Unauthorized`,
+                403: `Only admin tokens can change roles`,
                 404: `User not found`,
                 422: `Validation Error`,
             },

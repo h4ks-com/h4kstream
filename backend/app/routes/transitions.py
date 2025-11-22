@@ -16,7 +16,7 @@ from fastapi import HTTPException
 from fastapi import UploadFile
 from fastapi.responses import StreamingResponse
 
-from app.dependencies import admin_auth
+from app.dependencies import require_admin_role
 from app.models import ErrorResponse
 from app.models import SuccessResponse
 from app.settings import settings
@@ -31,7 +31,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 router = APIRouter(
     prefix="/admin/transitions",
     tags=["admin"],
-    dependencies=[Depends(admin_auth)],
+    dependencies=[Depends(require_admin_role)],
     responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
 )
 

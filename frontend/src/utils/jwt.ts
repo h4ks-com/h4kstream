@@ -6,6 +6,7 @@ interface JWTPayload {
   user_id: string;
   max_queue_songs?: number;
   max_add_requests?: number;
+  role?: string;
   exp?: number;
   [key: string]: any;
 }
@@ -93,4 +94,12 @@ export function formatTimeRemaining(seconds: number): string {
   }
 
   return `${minutes}m ${secs}s`;
+}
+
+/**
+ * Extract role from JWT token
+ */
+export function getUserRole(token: string): string {
+  const payload = decodeJWT(token);
+  return payload?.role ?? '';
 }

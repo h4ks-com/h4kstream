@@ -15,6 +15,7 @@ from sqlmodel import select
 
 from app.db import engine
 from app.db import init_db
+from app.db.migration_runner import run_migrations
 from app.db.models import LivestreamRecording
 from app.db.models import Show
 from app.services import ffmpeg
@@ -423,6 +424,12 @@ async def main() -> None:
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+
+    # Run database migrations first (with automatic backup)
+    logger.info("Running database migrations...")
+    if not run_migrations():
+        logger.error("Failed to run migrations - exiting")
+        return
 
     # Create recordings directory
     Path(settings.RECORDINGS_PATH).mkdir(parents=True, exist_ok=True)

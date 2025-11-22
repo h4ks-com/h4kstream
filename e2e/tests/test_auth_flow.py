@@ -110,10 +110,10 @@ def test_jwt_token_cannot_access_admin_endpoints(client: httpx.Client, admin_hea
     jwt_headers = {"Authorization": f"Bearer {jwt_token}"}
 
     clear_response = client.post(admin_queue_clear(Playlist.USER), headers=jwt_headers)
-    assert clear_response.status_code == 401
+    assert clear_response.status_code == 403
 
     create_token_response = client.post(ADMIN_TOKEN_CREATE, json={"duration_seconds": 1800}, headers=jwt_headers)
-    assert create_token_response.status_code == 401
+    assert create_token_response.status_code == 403
 
 
 def test_admin_token_not_allowed_on_public_endpoints(client: httpx.Client, admin_headers: dict[str, str]) -> None:

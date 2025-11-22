@@ -26,7 +26,7 @@ type Section = 'users' | 'shows' | 'queue' | 'livestream' | 'webhooks' | 'transi
 export const AdminPage: React.FC = () => {
   const { section } = useParams<{ section: Section }>();
   const navigate = useNavigate();
-  const [showPrompt, setShowPrompt] = useState(!authUtils.isAdminAuthenticated());
+  const [showPrompt, setShowPrompt] = useState(!authUtils.hasAdminAccess());
   const [password, setPassword] = useState('');
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState('');
@@ -212,6 +212,7 @@ const UsersSection: React.FC = () => {
   const [editingUser, setEditingUser] = useState<UserPublic | null>(null);
   const [editMaxQueueSongs, setEditMaxQueueSongs] = useState<number | null>(null);
   const [editMaxAddRequests, setEditMaxAddRequests] = useState<number | null>(null);
+  const [editRole, setEditRole] = useState<string>('');
 
   const fetchUsers = async () => {
     try {
@@ -271,6 +272,7 @@ const UsersSection: React.FC = () => {
     setEditingUser(user);
     setEditMaxQueueSongs(user.max_queue_songs ?? null);
     setEditMaxAddRequests(user.max_add_requests ?? null);
+    setEditRole(user.role);
     setError('');
   };
 
@@ -278,6 +280,7 @@ const UsersSection: React.FC = () => {
     setEditingUser(null);
     setEditMaxQueueSongs(null);
     setEditMaxAddRequests(null);
+    setEditRole('');
     setError('');
   };
 
@@ -285,14 +288,31 @@ const UsersSection: React.FC = () => {
     if (!editingUser) return;
 
     try {
+      // Update limits first
       await AdminService().updateUserLimitsAdminUsersUserIdPatch(editingUser.id, {
         max_queue_songs: editMaxQueueSongs,
         max_add_requests: editMaxAddRequests,
       });
+
+      // Update role separately if changed (this requires admin TOKEN)
+      if (editRole !== editingUser.role) {
+        try {
+          await AdminService().updateUserRoleAdminUsersUserIdRolePatch(editingUser.id, {
+            role: editRole,
+          });
+        } catch (roleErr: any) {
+          if (roleErr.status === 403) {
+            setError('Role changes require admin TOKEN (not available to role-based admins)');
+            return;
+          }
+          throw roleErr;
+        }
+      }
+
       closeEditModal();
       fetchUsers();
     } catch (err: any) {
-      setError(err.body?.detail || 'Failed to update user limits');
+      setError(err.body?.detail || 'Failed to update user');
     }
   };
 
@@ -412,6 +432,7 @@ const UsersSection: React.FC = () => {
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Email</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Username</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Full Name</th>
+                <th className="text-left p-3 text-h4ks-green-400 font-mono">Role</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Queue</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Adds</th>
                 <th className="text-left p-3 text-h4ks-green-400 font-mono">Created</th>
@@ -421,13 +442,13 @@ const UsersSection: React.FC = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="p-3 text-gray-400 text-center">
+                  <td colSpan={8} className="p-3 text-gray-400 text-center">
                     Loading...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-3 text-gray-400 text-center">
+                  <td colSpan={8} className="p-3 text-gray-400 text-center">
                     No users found
                   </td>
                 </tr>
@@ -437,6 +458,13 @@ const UsersSection: React.FC = () => {
                     <td className="p-3 text-gray-300">{user.email}</td>
                     <td className="p-3 text-gray-300">{user.username || '-'}</td>
                     <td className="p-3 text-gray-300">{user.full_name || '-'}</td>
+                    <td className="p-3 text-gray-400 text-sm">
+                      {user.role === 'admin' ? (
+                        <span className="text-h4ks-green-400 font-mono">[ADMIN]</span>
+                      ) : (
+                        <span className="text-gray-500">user</span>
+                      )}
+                    </td>
                     <td className="p-3 text-gray-400 text-sm">{user.max_queue_songs ?? 'None'}</td>
                     <td className="p-3 text-gray-400 text-sm">{user.max_add_requests ?? 'None'}</td>
                     <td className="p-3 text-gray-400 text-sm">
@@ -474,6 +502,22 @@ const UsersSection: React.FC = () => {
             <div className="mb-4">
               <div className="text-gray-400 text-sm mb-3">
                 User: {editingUser.email}
+              </div>
+              <div className="mb-3">
+                <label className="block text-gray-400 text-sm mb-2">
+                  Role
+                </label>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value)}
+                  className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 px-3 py-2"
+                >
+                  <option value="">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Note: Changing roles requires admin TOKEN (not available to role-based admins)
+                </p>
               </div>
               <div className="mb-3">
                 <label className="block text-gray-400 text-sm mb-2">

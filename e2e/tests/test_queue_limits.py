@@ -70,7 +70,7 @@ def test_fallback_endpoints_require_admin(client: httpx.Client, jwt_headers: dic
     assert response_no_auth.status_code == 403
 
     response_jwt = client.post(admin_queue_clear(Playlist.FALLBACK), headers=jwt_headers)
-    assert response_jwt.status_code == 401
+    assert response_jwt.status_code == 403
 
 
 def test_fallback_list_endpoint_exists(client: httpx.Client, admin_headers: dict[str, str]) -> None:
@@ -134,10 +134,10 @@ def test_admin_endpoints_reject_jwt_tokens(client: httpx.Client, admin_headers: 
     jwt_headers = {"Authorization": f"Bearer {jwt_token}"}
 
     clear_response = client.post(admin_queue_clear(Playlist.USER), headers=jwt_headers)
-    assert clear_response.status_code == 401
+    assert clear_response.status_code == 403
 
     token_response = client.post(ADMIN_TOKEN_CREATE, json={"duration_seconds": 1800}, headers=jwt_headers)
-    assert token_response.status_code == 401
+    assert token_response.status_code == 403
 
 
 def test_delete_nonexistent_song_from_user_queue(client: httpx.Client, jwt_headers: dict[str, str]) -> None:

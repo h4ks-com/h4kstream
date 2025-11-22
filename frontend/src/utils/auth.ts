@@ -2,6 +2,8 @@
  * Authentication utilities for managing JWT tokens and admin tokens
  */
 
+import { getUserRole } from './jwt';
+
 const USER_TOKEN_KEY = 'userToken';
 const ADMIN_TOKEN_KEY = 'adminToken';
 const USER_REFRESH_TOKEN_KEY = 'userRefreshToken';
@@ -71,5 +73,17 @@ export const authUtils = {
     localStorage.removeItem(USER_TOKEN_KEY);
     localStorage.removeItem(USER_REFRESH_TOKEN_KEY);
     localStorage.removeItem(ADMIN_TOKEN_KEY);
+  },
+
+  // Role-based access control
+  hasAdminRole: (): boolean => {
+    const token = localStorage.getItem(USER_TOKEN_KEY);
+    if (!token) return false;
+    return getUserRole(token) === 'admin';
+  },
+
+  // Check if user has admin access (either admin TOKEN or admin role)
+  hasAdminAccess: (): boolean => {
+    return authUtils.isAdminAuthenticated() || authUtils.hasAdminRole();
   },
 };

@@ -2,23 +2,21 @@
 
 import logging
 from collections.abc import AsyncGenerator
-from pathlib import Path
 
 from sqlalchemy import event
 from sqlmodel import Session
 from sqlmodel import SQLModel
 from sqlmodel import create_engine
 
+from app.db.config import DATABASE_PATH
+from app.db.config import DATABASE_URL
+from app.db.migration_runner import run_migrations
 from app.db.models import LivestreamRecording as LivestreamRecording
 from app.db.models import PendingUser as PendingUser
 from app.db.models import Show as Show
 from app.db.models import User as User
-from app.settings import settings
 
 logger = logging.getLogger(__name__)
-
-DATABASE_PATH = Path(settings.DATA_PATH) / "db" / "app.db"
-DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 
 engine = create_engine(
     DATABASE_URL,
@@ -50,7 +48,18 @@ async def get_session_async() -> AsyncGenerator[Session, None]:
 
 
 def init_db():
-    """Initialize database tables."""
+    """Initialize database with Alembic migrations.
+
+    Runs Alembic migrations to ensure schema is up to date. Falls back to SQLModel.metadata.create_all only if
+    migrations fail.
+    """
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SQLModel.metadata.create_all(engine)
-    logger.info(f"Database initialized at {DATABASE_PATH}")
+
+    # Try to run Alembic migrations first
+    if run_migrations():
+        logger.info(f"Database initialized with migrations at {DATABASE_PATH}")
+    else:
+        # Fallback to basic table creation if migrations fail
+        logger.warning("Migrations failed, falling back to basic table creation")
+        SQLModel.metadata.create_all(engine)
+        logger.info(f"Database initialized at {DATABASE_PATH}")

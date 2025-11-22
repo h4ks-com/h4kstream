@@ -32,6 +32,7 @@ class User(UserBase, table=True):  # type: ignore[call-arg]
     is_active: bool = Field(default=True)
     max_queue_songs: int | None = Field(default=None)
     max_add_requests: int | None = Field(default=None)
+    role: str = Field(default="", sa_column_kwargs={"server_default": ""})  # "admin" or "" (empty for normal users)
 
     shows: list["Show"] = Relationship(back_populates="owner")
 
@@ -50,6 +51,7 @@ class UserPublic(UserBase):
     is_active: bool
     max_queue_songs: int | None
     max_add_requests: int | None
+    role: str
 
 
 class UserUpdate(SQLModel):
@@ -60,6 +62,7 @@ class UserUpdate(SQLModel):
     password: str | None = None
     max_queue_songs: int | None = None
     max_add_requests: int | None = None
+    role: str | None = None
 
 
 class UserLogin(SQLModel):

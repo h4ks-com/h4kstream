@@ -176,7 +176,7 @@ def test_livestream_token_requires_admin_auth(client: httpx.Client, admin_header
         json={"max_streaming_seconds": 3600, "show_name": "test-admin-auth-2"},
         headers=jwt_headers,
     )
-    assert jwt_response.status_code == 401
+    assert jwt_response.status_code == 403
 
 
 def test_livestream_max_listeners_tracking(

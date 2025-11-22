@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     DUPLICATE_CHECK_LIMIT: int = 5  # Number of songs to check for duplicates
 
     model_config = SettingsConfigDict(
-        env_file="../.env",
+        env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )

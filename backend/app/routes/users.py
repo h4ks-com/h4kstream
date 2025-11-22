@@ -27,9 +27,10 @@ from app.db.models import UserCreate
 from app.db.models import UserLogin
 from app.db.models import UserPublic
 from app.db.models import UserUpdate
-from app.dependencies import admin_auth
 from app.dependencies import dep_redis_client
 from app.dependencies import get_jwt_token
+from app.dependencies import require_admin_role
+from app.dependencies import require_admin_token
 from app.models import ErrorResponse
 from app.models import LivestreamTimeRemainingRequest
 from app.models import LivestreamTimeRemainingResponse
@@ -54,7 +55,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 admin_router = APIRouter(
     prefix="/admin/users",
     tags=["admin", "users"],
-    dependencies=[Depends(admin_auth)],
+    dependencies=[Depends(require_admin_role)],
     responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
 )
 
@@ -190,6 +191,7 @@ async def register_user(
         user_id=user.id,
         max_queue_songs=max_queue_songs,
         max_add_requests=max_add_requests,
+        role=user.role,
     )
 
     refresh_token = generate_refresh_token()
@@ -225,6 +227,7 @@ async def login_user(
         user_id=user.id,
         max_queue_songs=user.max_queue_songs,
         max_add_requests=user.max_add_requests,
+        role=user.role,
     )
 
     refresh_token = generate_refresh_token()
@@ -284,6 +287,7 @@ async def refresh_token(
         max_queue_songs=user.max_queue_songs,
         max_add_requests=user.max_add_requests,
         expiry=preserved_expiry,
+        role=user.role,
     )
 
     new_refresh_token = generate_refresh_token()
@@ -411,24 +415,70 @@ def delete_user(
     "/{user_id}",
     response_model=UserPublic,
     summary="Update User Limits",
-    description="Admin endpoint to update user limits.",
-    responses={404: {"model": ErrorResponse, "description": "User not found"}},
+    description="Admin endpoint to update user limits (excludes role changes - use /admin/users/{user_id}/role for that).",
+    responses={
+        404: {"model": ErrorResponse, "description": "User not found"},
+        403: {"model": ErrorResponse, "description": "Role changes not allowed in this endpoint"},
+    },
 )
 def update_user_limits(
     user_id: UUID,
     user_update: UserUpdate,
     session: Session = Depends(get_session),
 ) -> UserPublic:
-    """Update user limits (admin only)."""
+    """Update user limits (admin only).
+
+    This endpoint does NOT allow role changes. Use PATCH /admin/users/{user_id}/role instead. This prevents role-based
+    admin users from promoting themselves or others.
+    """
     user = user_crud.get(session, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     update_data = user_update.model_dump(exclude_unset=True)
+
+    # Block role changes - must use dedicated role endpoint
+    if "role" in update_data:
+        raise HTTPException(
+            status_code=403,
+            detail="Role changes not allowed in this endpoint. Use PATCH /admin/users/{user_id}/role instead."
+        )
+
     if "password" in update_data:
         update_data["password_hash"] = hash_password(update_data.pop("password"))
 
     updated_user = user_crud.update(session, db_obj=user, obj_in=update_data)
+    return updated_user
+
+
+@admin_router.patch(
+    "/{user_id}/role",
+    response_model=UserPublic,
+    summary="Update User Role",
+    description="Update user role (admin TOKEN only - not available to role-based admins).",
+    dependencies=[Depends(require_admin_token)],
+    responses={
+        404: {"model": ErrorResponse, "description": "User not found"},
+        403: {"model": ErrorResponse, "description": "Only admin tokens can change roles"},
+    },
+)
+def update_user_role(
+    user_id: UUID,
+    role: str = Body(..., embed=True, pattern="^(admin|)$"),
+    session: Session = Depends(get_session),
+) -> UserPublic:
+    """Update user role (admin TOKEN only).
+
+    Only admin TOKEN users (ADMIN_API_TOKEN) can change roles.
+    Users with role="admin" in their JWT cannot use this endpoint.
+
+    Valid roles: "admin" or "" (empty string for normal users)
+    """
+    user = user_crud.get(session, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    updated_user = user_crud.update(session, db_obj=user, obj_in={"role": role})
     return updated_user
 
 

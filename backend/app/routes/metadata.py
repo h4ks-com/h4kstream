@@ -13,12 +13,12 @@ from sqlmodel import select
 
 from app.db import get_session
 from app.db.models import FileCache
-from app.dependencies import admin_auth
 from app.dependencies import dep_event_publisher
 from app.dependencies import dep_liquidsoap_token
 from app.dependencies import dep_mpd_fallback
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
+from app.dependencies import require_admin_role
 from app.models import ErrorResponse
 from app.models import MetadataSetRequest
 from app.models import MetadataUpdateRequest
@@ -297,7 +297,7 @@ async def update_metadata(
     response_model=SuccessResponse,
     summary="Set Livestream Metadata",
     description="Set custom livestream metadata (admin only)",
-    dependencies=[Depends(admin_auth)],
+    dependencies=[Depends(require_admin_role)],
     responses={401: {"model": ErrorResponse}},
     include_in_schema=False,
 )

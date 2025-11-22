@@ -14,5 +14,6 @@ export type UserPublic = {
     is_active: boolean;
     max_queue_songs: (number | null);
     max_add_requests: (number | null);
+    role: string;
 };
 

@@ -13,7 +13,7 @@ from sqlmodel import Session
 
 from app.db import get_session
 from app.db import recordings as recordings_db
-from app.dependencies import admin_auth
+from app.dependencies import require_admin_role
 from app.models import ErrorResponse
 from app.models import RecordingMetadata
 from app.models import RecordingsListResponse
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/recordings", tags=["recordings"])
 admin_router = APIRouter(
     prefix="/admin/recordings",
     tags=["admin"],
-    dependencies=[Depends(admin_auth)],
+    dependencies=[Depends(require_admin_role)],
     responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
 )
 

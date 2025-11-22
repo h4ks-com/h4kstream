@@ -19,8 +19,8 @@ from app.db.models import ShowCreate
 from app.db.models import ShowPublic
 from app.db.models import ShowUpdate
 from app.db.models import User
-from app.dependencies import admin_auth
 from app.dependencies import get_jwt_token
+from app.dependencies import require_admin_role
 from app.models import ErrorResponse
 from app.models import LivestreamTokenCreateRequest
 from app.models import LivestreamTokenResponse
@@ -36,7 +36,7 @@ router = APIRouter(prefix="/shows", tags=["shows"], dependencies=[Depends(get_jw
 admin_router = APIRouter(
     prefix="/admin/shows",
     tags=["admin", "shows"],
-    dependencies=[Depends(admin_auth)],
+    dependencies=[Depends(require_admin_role)],
     responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
 )
 

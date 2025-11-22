@@ -17,6 +17,7 @@ def generate_token(
     max_queue_songs: int | None = None,
     max_add_requests: int | None = None,
     expiry: datetime | None = None,
+    role: str = "",
 ) -> str:
     """Generate a JWT token with specified duration and limits.
 
@@ -25,6 +26,7 @@ def generate_token(
     :param max_queue_songs: Maximum songs user can have in queue simultaneously (None = use default)
     :param max_add_requests: Total add requests allowed for lifetime of token (None = use default)
     :param expiry: Explicit expiry datetime (overrides duration_seconds if provided)
+    :param role: User role ("admin" or empty string for normal users)
     :return: Encoded JWT token
     """
     if max_queue_songs is None:
@@ -54,6 +56,7 @@ def generate_token(
         "user_id": user_id_str,
         "max_queue_songs": max_queue_songs,
         "max_add_requests": max_add_requests,
+        "role": role,
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
@@ -97,6 +100,12 @@ def get_max_add_requests(token: str) -> int:
     """Extract max_add_requests from JWT token."""
     payload = decode_token(token)
     return payload.get("max_add_requests", settings.DEFAULT_MAX_ADD_REQUESTS)
+
+
+def get_role(token: str) -> str:
+    """Extract role from JWT token."""
+    payload = decode_token(token)
+    return payload.get("role", "")
 
 
 def generate_livestream_token(

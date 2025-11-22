@@ -12,6 +12,7 @@ from sqlmodel import Session
 from app.db import engine
 from app.services.client_count_service import ClientCountService
 from app.services.event_publisher import EventPublisher
+from app.services.jwt_service import get_role
 from app.services.jwt_service import validate_token
 from app.services.livestream_service import LivestreamService
 from app.services.mpd_service import MPDClient
@@ -145,3 +146,44 @@ async def dep_event_publisher(request: Request) -> AsyncGenerator[EventPublisher
 def dep_client_count_service() -> ClientCountService:
     """Client count service for tracking radio listeners."""
     return ClientCountService()
+
+
+def require_admin_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> bool:
+    """Require admin TOKEN (ADMIN_API_TOKEN only, not role-based admin).
+
+    This dependency ensures only true admin tokens can perform sensitive operations like changing user roles. Users with
+    role="admin" in their JWT are NOT allowed.
+    """
+    token = _extract_token(credentials)
+    if not _is_admin_token(token):
+        raise HTTPException(status_code=403, detail="Admin token required")
+    return True
+
+
+def require_admin_role(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Require admin role (either admin TOKEN or JWT with role="admin").
+
+    This dependency allows both:
+    - Admin tokens (ADMIN_API_TOKEN)
+    - JWT tokens with role="admin"
+
+    Returns the token for further processing.
+    """
+    token = _extract_token(credentials)
+
+    # Admin tokens always allowed
+    if _is_admin_token(token):
+        return token
+
+    # Check JWT token for admin role
+    try:
+        validate_token(token)
+        role = get_role(token)
+        if role == "admin":
+            return token
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    raise HTTPException(status_code=403, detail="Admin access required")

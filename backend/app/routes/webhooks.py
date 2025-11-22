@@ -12,8 +12,8 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 
-from app.dependencies import admin_auth
 from app.dependencies import dep_redis_client
+from app.dependencies import require_admin_role
 from app.models import ErrorResponse
 from app.models import SuccessResponse
 from app.models import WebhookDelivery
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/admin/webhooks",
     tags=["webhooks"],
-    dependencies=[Depends(admin_auth)],
+    dependencies=[Depends(require_admin_role)],
     responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
 )
 

@@ -17,8 +17,8 @@ from sqlmodel import select
 from app.db import get_session
 from app.db.models import FileCachePublic
 from app.db.models import Show
-from app.dependencies import admin_auth
 from app.dependencies import dep_redis_client
+from app.dependencies import require_admin_role
 from app.exceptions import FileNotFoundInMPDError
 from app.exceptions import SongNotFoundError
 from app.models import ErrorResponse
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/admin",
     tags=["admin"],
-    dependencies=[Depends(admin_auth)],
+    dependencies=[Depends(require_admin_role)],
     responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
 )
 
