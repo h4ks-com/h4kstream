@@ -84,7 +84,7 @@ export const ManagePage: React.FC = () => {
             >
               [LIVESTREAM]
             </div>
-            {authUtils.isAdminAuthenticated() && (
+            {authUtils.hasAdminAccess() && (
               <div
                 onClick={() => navigate('/admin')}
                 className="pl-3 cursor-pointer transition-colors border-l-2 text-gray-400 border-transparent hover:text-gray-300"

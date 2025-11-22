@@ -111,14 +111,9 @@ export const initializeApiClient = () => {
       const userToken = authUtils.getUserToken();
       const adminToken = authUtils.getAdminToken();
 
-      // Use admin token only on /admin routes, user token elsewhere
-      const isAdminRoute = window.location.pathname.startsWith('/admin');
-
-      if (isAdminRoute) {
-        return adminToken || userToken || '';
-      } else {
-        return userToken || '';
-      }
+      // Prefer user JWT token (which may have admin role)
+      // Fall back to admin token only if no user token
+      return userToken || adminToken || '';
     },
   });
 

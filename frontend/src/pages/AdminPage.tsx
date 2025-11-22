@@ -1482,10 +1482,11 @@ const TransitionsSection: React.FC = () => {
     try {
       setLoading(true);
       setError('');
+      const token = authUtils.getUserToken() || authUtils.getAdminToken();
       const response = await fetch(
         `/api/admin/transitions/list${type ? `?transition_type=${type}` : ''}`,
         {
-          headers: { Authorization: `Bearer ${authUtils.getAdminToken()}` },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
       if (!response.ok) throw new Error('Failed to fetch transitions');
@@ -1510,9 +1511,10 @@ const TransitionsSection: React.FC = () => {
       formData.append('file', uploadFile);
       formData.append('transition_type', activeTab);
 
+      const token = authUtils.getUserToken() || authUtils.getAdminToken();
       const response = await fetch('/api/admin/transitions/upload', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${authUtils.getAdminToken()}` },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
@@ -1533,9 +1535,10 @@ const TransitionsSection: React.FC = () => {
   const deleteTransition = async (filename: string) => {
     if (!window.confirm(`Delete ${filename}?`)) return;
     try {
+      const token = authUtils.getUserToken() || authUtils.getAdminToken();
       const response = await fetch(`/api/admin/transitions/${activeTab}/${filename}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${authUtils.getAdminToken()}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error('Failed to delete transition');
       fetchTransitions(activeTab);
