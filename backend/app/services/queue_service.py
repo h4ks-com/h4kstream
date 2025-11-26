@@ -302,13 +302,13 @@ async def add_song(
         await redis_client.increment_user_add_count(user_id)
 
     if redis_client:
-        # Store cache_id association for direct URL generation
+        # Store cache_id association for direct URL generation (use filename as stable key)
         if cache_id is not None:
-            await redis_client.set_song_cache_id(playlist, str(mpd_song_id), cache_id)
+            await redis_client.set_song_cache_id(playlist, target_path.name, cache_id)
 
-        # Store per-song metadata overrides if provided
+        # Store per-song metadata overrides if provided (use filename as stable key)
         if song_name or artist_name:
-            await redis_client.set_song_metadata(playlist, str(mpd_song_id), final_title, final_artist)
+            await redis_client.set_song_metadata(playlist, target_path.name, final_title, final_artist)
 
         # Only set metadata if livestream is not active
         # Liquidsoap will handle all metadata updates via /internal/metadata/update
@@ -413,10 +413,11 @@ async def list_songs(
     songs = []
     for song in queue:
         mpd_song_id = int(song["id"])
+        filename = song.get("file", "")
 
-        # Check for Redis metadata overrides if available
-        if redis_client and playlist:
-            overrides = await redis_client.get_song_metadata(playlist, str(mpd_song_id))
+        # Check for Redis metadata overrides if available (use filename as stable key)
+        if redis_client and playlist and filename:
+            overrides = await redis_client.get_song_metadata(playlist, filename)
             if overrides:
                 # Apply overrides - Redis data takes precedence over MPD data
                 if "title" in overrides:
@@ -424,11 +425,11 @@ async def list_songs(
                 if "artist" in overrides:
                     song["artist"] = overrides["artist"]
 
-        # Look up cache_id from Redis and build URLs
+        # Look up cache_id from Redis and build URLs (use filename as stable key)
         song["reference_url"] = None
         song["direct_url"] = None
-        if redis_client and playlist and db_session:
-            cache_id = await redis_client.get_song_cache_id(playlist, str(mpd_song_id))
+        if redis_client and playlist and db_session and filename:
+            cache_id = await redis_client.get_song_cache_id(playlist, filename)
             if cache_id:
                 # Look up reference_url from FileCache
                 statement = select(FileCache).where(FileCache.id == cache_id)

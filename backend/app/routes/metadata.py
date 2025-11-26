@@ -100,9 +100,10 @@ async def get_now_playing(
                 "direct_url": None,
             }
 
-            # Check for per-song metadata overrides
-            if current_song.get("id"):
-                overrides = await redis_client.get_song_metadata(active_source, str(current_song["id"]))
+            # Check for per-song metadata overrides (use filename as stable key)
+            filename = current_song.get("file")
+            if filename:
+                overrides = await redis_client.get_song_metadata(active_source, filename)
                 if overrides:
                     # Apply overrides - Redis takes precedence
                     if "title" in overrides:
@@ -110,10 +111,9 @@ async def get_now_playing(
                     if "artist" in overrides:
                         metadata["artist"] = overrides["artist"]
 
-            # Look up cache_id from Redis and build URLs
-            mpd_song_id = current_song.get("id")
-            if mpd_song_id:
-                cache_id = await redis_client.get_song_cache_id(active_source, str(mpd_song_id))
+            # Look up cache_id from Redis and build URLs (use filename as stable key)
+            if filename:
+                cache_id = await redis_client.get_song_cache_id(active_source, filename)
                 if cache_id:
                     # Look up reference_url from FileCache
                     statement = select(FileCache).where(FileCache.id == cache_id)
@@ -237,10 +237,11 @@ async def update_metadata(
                     mpd_artist = current_song.get("artist")
                     mpd_genre = current_song.get("genre")
 
-                    # Check for per-song metadata overrides in Redis
-                    if current_song.get("id"):
+                    # Check for per-song metadata overrides in Redis (use filename as stable key)
+                    filename = current_song.get("file")
+                    if filename:
                         playlist_type = cast(PlaylistType, request.source)
-                        overrides = await redis_client.get_song_metadata(playlist_type, str(current_song["id"]))
+                        overrides = await redis_client.get_song_metadata(playlist_type, filename)
                         if overrides:
                             # Apply overrides - Redis takes precedence
                             if "title" in overrides:
