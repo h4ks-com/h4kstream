@@ -108,12 +108,12 @@ export const initializeApiClient = () => {
   const baseClient = new ApiClient({
     BASE: window.location.origin + '/api',
     TOKEN: async () => {
-      const userToken = authUtils.getUserToken();
       const adminToken = authUtils.getAdminToken();
+      const userToken = authUtils.getUserToken();
 
-      // Prefer user JWT token (which may have admin role)
-      // Fall back to admin token only if no user token
-      return userToken || adminToken || '';
+      // Prefer admin token if explicitly set (for admin page authentication)
+      // Fall back to user JWT token (which may have admin role)
+      return adminToken || userToken || '';
     },
   });
 

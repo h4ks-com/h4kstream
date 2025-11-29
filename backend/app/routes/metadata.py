@@ -280,7 +280,7 @@ async def update_metadata(
 
         is_duplicate = await redis_client.redis.get(dedup_key)
         if is_duplicate:
-            logger.debug(f"Skipping duplicate song_changed event for {request.source}: {title}")
+            logger.info(f"Skipping duplicate song_changed event for {request.source}: {title}")
         else:
             await redis_client.redis.setex(dedup_key, SONG_CHANGED_DEDUP_TTL, "1")
             await event_publisher.publish(
@@ -288,7 +288,7 @@ async def update_metadata(
                 data=event_data.model_dump(),
                 description=description,
             )
-            logger.debug(f"Published song_changed event for {request.source}")
+            logger.info(f"Published song_changed event for {request.source}: {title}")
 
         # Publish metadata_updated event for recording worker (only for livestream)
         if request.source == "livestream":
@@ -299,7 +299,7 @@ async def update_metadata(
             )
             logger.debug(f"Published metadata_updated event for {request.source}")
     else:
-        logger.debug(f"Ignored metadata from '{request.source}' (active source is '{active_source}')")
+        logger.info(f"Ignored metadata from '{request.source}' (active source is '{active_source}')")
 
     return SuccessResponse()
 

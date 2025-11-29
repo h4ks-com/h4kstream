@@ -7,7 +7,7 @@ import Button from '@mui/material/Button';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useWebSocketContext, useWebSocketEvent } from '../contexts/WebSocketContext';
 import { MetadataService } from '../utils/apiClient';
-import type { NowPlayingEventData, SongChangedEventData, QueueSwitchedEventData, LivestreamStartedEventData, LivestreamEndedEventData } from '../api/ws_types';
+import type { NowPlayingEventData, SongChangedEventData, SongDeletedEventData, QueueSwitchedEventData, LivestreamStartedEventData, LivestreamEndedEventData } from '../api/ws_types';
 
 interface Metadata {
   title: string | null;
@@ -46,22 +46,6 @@ export const MetadataDisplay: React.FC = () => {
     });
   }, []);
 
-  const handleSongChanged = useCallback((eventData: SongChangedEventData) => {
-    setData((prev) => ({
-      source: eventData.playlist,
-      metadata: {
-        title: eventData.title ?? null,
-        artist: eventData.artist ?? null,
-        genre: eventData.genre ?? null,
-        description: prev?.metadata.description ?? null,
-        reference_url: prev?.metadata.reference_url ?? null,
-        direct_url: prev?.metadata.direct_url ?? null,
-        show_name: prev?.metadata.show_name ?? null,
-        username: prev?.metadata.username ?? null,
-      },
-    }));
-  }, []);
-
   const fetchAndUpdateMetadata = useCallback(async () => {
     try {
       const response = await MetadataService().getNowPlayingMetadataNowGet();
@@ -83,6 +67,10 @@ export const MetadataDisplay: React.FC = () => {
     }
   }, []);
 
+  const handleSongChanged = useCallback(async (_eventData: SongChangedEventData) => {
+    await fetchAndUpdateMetadata();
+  }, [fetchAndUpdateMetadata]);
+
   const handleQueueSwitched = useCallback(async (_eventData: QueueSwitchedEventData) => {
     await fetchAndUpdateMetadata();
   }, [fetchAndUpdateMetadata]);
@@ -95,8 +83,13 @@ export const MetadataDisplay: React.FC = () => {
     await fetchAndUpdateMetadata();
   }, [fetchAndUpdateMetadata]);
 
+  const handleSongDeleted = useCallback(async (_eventData: SongDeletedEventData) => {
+    await fetchAndUpdateMetadata();
+  }, [fetchAndUpdateMetadata]);
+
   useWebSocketEvent('now_playing', handleNowPlaying);
   useWebSocketEvent('song_changed', handleSongChanged);
+  useWebSocketEvent('song_deleted', handleSongDeleted);
   useWebSocketEvent('queue_switched', handleQueueSwitched);
   useWebSocketEvent('livestream_started', handleLivestreamStarted);
   useWebSocketEvent('livestream_ended', handleLivestreamEnded);
