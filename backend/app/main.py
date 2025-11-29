@@ -19,6 +19,8 @@ from app.routes.shows import router as shows_router
 from app.routes.transitions import router as transitions_router
 from app.routes.users import admin_router as users_admin_router
 from app.routes.users import router as users_router
+from app.routes.websocket import router as websocket_router
+from app.services.ws_manager import ws_manager
 from app.settings import settings
 
 # Configure global logging
@@ -42,7 +44,13 @@ async def lifespan(app: FastAPI):
     app.state.redis_pool = redis.from_url(redis_url)
     logger.info("Redis connection pool created")
 
+    await ws_manager.start(app.state.redis_pool)
+    logger.info("WebSocket manager started")
+
     yield
+
+    await ws_manager.stop()
+    logger.info("WebSocket manager stopped")
 
     await app.state.redis_pool.aclose()
     logger.info("Redis connection pool closed")
@@ -82,3 +90,4 @@ app.include_router(shows_router)
 app.include_router(shows_admin_router)
 app.include_router(transitions_router)
 app.include_router(songs.router)
+app.include_router(websocket_router)

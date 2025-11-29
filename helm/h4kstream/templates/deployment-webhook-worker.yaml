@@ -44,8 +44,23 @@ spec:
               value: {{ include "h4kstream.fullname" . }}-liquidsoap
             - name: LIQUIDSOAP_TELNET_PORT
               value: "1234"
+            - name: DATA_PATH
+              value: "/app/data"
             - name: LOG_LEVEL
               value: {{ .Values.webhookWorker.env.LOG_LEVEL | quote }}
+          volumeMounts:
+            - name: database
+              mountPath: /app/data/db
           resources:
             {{- toYaml .Values.webhookWorker.resources | nindent 12 }}
+      volumes:
+        - name: database
+          persistentVolumeClaim:
+            {{- if .Values.persistence.database.enabled }}
+            {{- if .Values.persistence.database.existingClaim }}
+            claimName: {{ .Values.persistence.database.existingClaim }}
+            {{- else }}
+            claimName: {{ include "h4kstream.fullname" . }}-database
+            {{- end }}
+            {{- end }}
 {{- end }}

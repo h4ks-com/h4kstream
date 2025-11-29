@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import { useWebSocketContext, useWebSocketEvent } from '../contexts/WebSocketContext';
+import { MetadataService } from '../utils/apiClient';
+import type { NowPlayingEventData, SongChangedEventData, QueueSwitchedEventData, LivestreamStartedEventData, LivestreamEndedEventData } from '../api/ws_types';
 
 interface Metadata {
   title: string | null;
@@ -23,41 +26,90 @@ interface MetadataResponse {
 }
 
 export const MetadataDisplay: React.FC = () => {
+  const { status, nowPlaying } = useWebSocketContext();
   const [data, setData] = useState<MetadataResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [externalLinkWarning, setExternalLinkWarning] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchMetadata = async () => {
-      try {
-        const response = await fetch('/api/metadata/now');
-        if (response.ok) {
-          const json = await response.json();
-          setData(json);
-          setError(null);
-        } else {
-          setError('Failed to fetch metadata');
-        }
-      } catch (err) {
-        console.error('Metadata fetch error:', err);
-        setError('Connection error');
-      }
-    };
-
-    // Initial fetch
-    fetchMetadata();
-
-    // Poll every 5 seconds
-    const interval = setInterval(fetchMetadata, 5000);
-
-    return () => clearInterval(interval);
+  const handleNowPlaying = useCallback((eventData: NowPlayingEventData) => {
+    setData({
+      source: eventData.source,
+      metadata: {
+        title: eventData.metadata.title ?? null,
+        artist: eventData.metadata.artist ?? null,
+        genre: eventData.metadata.genre ?? null,
+        description: eventData.metadata.description ?? null,
+        reference_url: eventData.metadata.reference_url ?? null,
+        direct_url: eventData.metadata.direct_url ?? null,
+        show_name: eventData.metadata.show_name ?? null,
+        username: eventData.metadata.show_user ?? null,
+      },
+    });
   }, []);
 
-  if (error) {
+  const handleSongChanged = useCallback((eventData: SongChangedEventData) => {
+    setData((prev) => ({
+      source: eventData.playlist,
+      metadata: {
+        title: eventData.title ?? null,
+        artist: eventData.artist ?? null,
+        genre: eventData.genre ?? null,
+        description: prev?.metadata.description ?? null,
+        reference_url: prev?.metadata.reference_url ?? null,
+        direct_url: prev?.metadata.direct_url ?? null,
+        show_name: prev?.metadata.show_name ?? null,
+        username: prev?.metadata.username ?? null,
+      },
+    }));
+  }, []);
+
+  const fetchAndUpdateMetadata = useCallback(async () => {
+    try {
+      const response = await MetadataService().getNowPlayingMetadataNowGet();
+      setData({
+        source: response.source,
+        metadata: {
+          title: response.metadata.title ?? null,
+          artist: response.metadata.artist ?? null,
+          genre: response.metadata.genre ?? null,
+          description: response.metadata.description ?? null,
+          reference_url: response.metadata.reference_url ?? null,
+          direct_url: response.metadata.direct_url ?? null,
+          show_name: response.metadata.show_name ?? null,
+          username: response.metadata.show_user ?? null,
+        },
+      });
+    } catch (err) {
+      console.error('Failed to fetch metadata:', err);
+    }
+  }, []);
+
+  const handleQueueSwitched = useCallback(async (_eventData: QueueSwitchedEventData) => {
+    await fetchAndUpdateMetadata();
+  }, [fetchAndUpdateMetadata]);
+
+  const handleLivestreamStarted = useCallback(async (_eventData: LivestreamStartedEventData) => {
+    await fetchAndUpdateMetadata();
+  }, [fetchAndUpdateMetadata]);
+
+  const handleLivestreamEnded = useCallback(async (_eventData: LivestreamEndedEventData) => {
+    await fetchAndUpdateMetadata();
+  }, [fetchAndUpdateMetadata]);
+
+  useWebSocketEvent('now_playing', handleNowPlaying);
+  useWebSocketEvent('song_changed', handleSongChanged);
+  useWebSocketEvent('queue_switched', handleQueueSwitched);
+  useWebSocketEvent('livestream_started', handleLivestreamStarted);
+  useWebSocketEvent('livestream_ended', handleLivestreamEnded);
+
+  if (nowPlaying && !data) {
+    handleNowPlaying(nowPlaying);
+  }
+
+  if (status === 'error' || status === 'disconnected') {
     return (
       <div className="h4ks-card">
         <div className="text-orange-400">
-          {error}
+          {status === 'error' ? 'Connection error' : 'Connecting...'}
         </div>
       </div>
     );

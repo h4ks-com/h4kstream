@@ -17,6 +17,7 @@ from sqlmodel import select
 from app.db import get_session
 from app.db.models import FileCachePublic
 from app.db.models import Show
+from app.dependencies import dep_event_publisher
 from app.dependencies import dep_redis_client
 from app.dependencies import require_admin_role
 from app.exceptions import FileNotFoundInMPDError
@@ -25,6 +26,7 @@ from app.models import ErrorResponse
 from app.models import LivestreamTokenCreateRequest
 from app.models import LivestreamTokenResponse
 from app.models import SongAddedResponse
+from app.models import SongDeletedEventData
 from app.models import SongItem
 from app.models import SongMetadataEditRequest
 from app.models import SuccessResponse
@@ -34,6 +36,7 @@ from app.services import cache_service
 from app.services import metadata_editor
 from app.services import playback_service
 from app.services import queue_service
+from app.services.event_publisher import EventPublisher
 from app.services.jwt_service import generate_livestream_token
 from app.services.jwt_service import generate_token
 from app.services.playback_service import get_mpd_client
@@ -193,6 +196,7 @@ async def admin_list_songs(
 async def admin_delete_song(
     song_id: str,
     playlist: PlaylistType = Query("user", description="Target playlist (user or fallback)"),
+    event_publisher: EventPublisher = Depends(dep_event_publisher),
 ) -> SuccessResponse:
     """Delete song from specified playlist."""
     try:
@@ -214,6 +218,13 @@ async def admin_delete_song(
         raise HTTPException(status_code=404, detail=str(e))
     finally:
         await mpd_client.disconnect()
+
+    event_data = SongDeletedEventData(song_id=song_id, playlist=playlist)
+    await event_publisher.publish(
+        event_type="song_deleted",
+        data=event_data.model_dump(),
+        description=f"Song {song_id} deleted from {playlist} queue",
+    )
 
     return SuccessResponse()
 

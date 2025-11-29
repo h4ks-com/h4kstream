@@ -31,6 +31,13 @@ spec:
         - name: {{ include "h4kstream.fullname" . }}-backend
           port: {{ .Values.backend.service.port }}
 
+    # WebSocket endpoint for real-time events
+    - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/api/ws`)
+      kind: Rule
+      services:
+        - name: {{ include "h4kstream.fullname" . }}-backend
+          port: {{ .Values.backend.service.port }}
+
     # API routes (no prefix stripping - backend expects /api/*)
     - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/api`)
       kind: Rule

@@ -97,6 +97,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: ["uv", "run", "python", "-m", "app.services.webhook_worker"]
+    volumes:
+    - ${VOLUME_PATH}:/app/data
     environment:
     - REDIS_HOST=redis
     - REDIS_PORT=6379
@@ -106,6 +108,7 @@ services:
     - MPD_FALLBACK_PORT=6601
     - LIQUIDSOAP_TELNET_HOST=liquidsoap
     - LIQUIDSOAP_TELNET_PORT=1234
+    - DATA_PATH=/app/data
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
     extra_hosts:
     - "host.docker.internal:host-gateway"

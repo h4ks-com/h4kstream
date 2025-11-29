@@ -17,6 +17,19 @@
 		file_server
 	}
 
+	# WebSocket endpoint for real-time events
+	handle /api/ws/* {
+		uri strip_prefix /api
+		reverse_proxy main-1:8000 main-2:8000 main-3:8000 {
+			lb_policy least_conn
+
+			# Health checks
+			health_uri /health
+			health_interval 10s
+			health_timeout 5s
+		}
+	}
+
 	# API endpoints with load balancing (least connections)
 	handle /api/* {
 		# Block external access to internal API endpoints

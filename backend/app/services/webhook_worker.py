@@ -51,8 +51,8 @@ class WebhookWorker:
 
     async def initialize(self) -> None:
         """Initialize Redis connections and services."""
-        init_db()
-        logger.info("Database initialized")
+        init_db(run_migrations_flag=True)
+        logger.info("Database initialized (migrations handled by webhook_worker)")
 
         self.redis_client = redis.from_url(self.redis_url)
         self.redis_service = RedisService(self.redis_client)

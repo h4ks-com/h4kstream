@@ -18,6 +18,7 @@ from sqlmodel import select
 from app.db import get_session
 from app.db.models import FileCache
 from app.dependencies import dep_client_count_service
+from app.dependencies import dep_event_publisher
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
 from app.dependencies import get_jwt_token
@@ -27,6 +28,7 @@ from app.exceptions import SongNotFoundError
 from app.models import ClientCountsResponse
 from app.models import ErrorResponse
 from app.models import SongAddedResponse
+from app.models import SongDeletedEventData
 from app.models import SongItem
 from app.models import SongMetadataEditRequest
 from app.models import SuccessResponse
@@ -34,6 +36,7 @@ from app.services import metadata_editor
 from app.services import playback_service
 from app.services import queue_service
 from app.services.client_count_service import ClientCountService
+from app.services.event_publisher import EventPublisher
 from app.services.jwt_service import get_max_add_requests
 from app.services.jwt_service import get_max_queue_songs
 from app.services.jwt_service import get_user_id
@@ -220,6 +223,7 @@ async def delete_song(
     mpd_client: MPDClient = Depends(dep_mpd_user),
     redis_client: RedisService = Depends(dep_redis_client),
     token: str = Depends(get_jwt_token),
+    event_publisher: EventPublisher = Depends(dep_event_publisher),
 ) -> SuccessResponse:
     """Delete one of your songs from the user queue."""
     user_id = get_user_id(token)
@@ -236,6 +240,13 @@ async def delete_song(
         raise HTTPException(status_code=400, detail=str(e))
     except SongNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+    event_data = SongDeletedEventData(song_id=song_id, playlist="user")
+    await event_publisher.publish(
+        event_type="song_deleted",
+        data=event_data.model_dump(),
+        description=f"Song {song_id} deleted from user queue",
+    )
 
     return SuccessResponse()
 

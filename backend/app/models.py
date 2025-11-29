@@ -351,6 +351,13 @@ class SongAddedEventData(BaseModel):
     artist: str | None = Field(None, description="Artist name (may be None)")
 
 
+class SongDeletedEventData(BaseModel):
+    """Data payload for song_deleted webhook events."""
+
+    song_id: str = Field(..., description="Prefixed song ID (u-{id} or f-{id})")
+    playlist: PlaylistType = Field(..., description="Target playlist: user or fallback")
+
+
 class LivestreamStartedEventData(BaseModel):
     """Data payload for livestream_started webhook events."""
 

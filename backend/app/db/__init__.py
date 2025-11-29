@@ -47,19 +47,23 @@ async def get_session_async() -> AsyncGenerator[Session, None]:
         yield session
 
 
-def init_db():
-    """Initialize database with Alembic migrations.
+def init_db(run_migrations_flag: bool = False):
+    """Initialize database, optionally running Alembic migrations.
 
-    Runs Alembic migrations to ensure schema is up to date. Falls back to SQLModel.metadata.create_all only if
-    migrations fail.
+    Args:
+        run_migrations_flag: If True, run Alembic migrations. Only ONE service (webhook_worker)
+            should set this to True to avoid race conditions with SQLite.
+
+    Runs Alembic migrations to ensure schema is up to date when run_migrations_flag is True.
+    Falls back to SQLModel.metadata.create_all only if migrations fail or are skipped.
     """
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # Try to run Alembic migrations first
-    if run_migrations():
-        logger.info(f"Database initialized with migrations at {DATABASE_PATH}")
-    else:
-        # Fallback to basic table creation if migrations fail
+    if run_migrations_flag:
+        if run_migrations():
+            logger.info(f"Database initialized with migrations at {DATABASE_PATH}")
+            return
         logger.warning("Migrations failed, falling back to basic table creation")
-        SQLModel.metadata.create_all(engine)
-        logger.info(f"Database initialized at {DATABASE_PATH}")
+
+    SQLModel.metadata.create_all(engine)
+    logger.info(f"Database initialized at {DATABASE_PATH}")

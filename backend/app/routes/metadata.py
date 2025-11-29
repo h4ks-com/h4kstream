@@ -3,6 +3,7 @@
 Public endpoint for current track info and internal endpoints for Liquidsoap integration.
 """
 
+import hashlib
 import logging
 from typing import cast
 
@@ -33,6 +34,8 @@ from app.services.redis_service import RedisService
 from app.types import PlaylistType
 
 logger = logging.getLogger(__name__)
+
+SONG_CHANGED_DEDUP_TTL = 3
 
 metadata_router = APIRouter(tags=["metadata"])
 internal_router = APIRouter(prefix="/internal", tags=["internal"])
@@ -196,11 +199,55 @@ async def update_metadata(
     if not merged.get("artist"):
         merged["artist"] = "Unknown Artist"
 
-    # Only store metadata from the active source
-    await redis_client.set_metadata(request.source, merged)
-
     # Only update active source and publish events if this source is actually playing
     should_publish = request.source == active_source
+
+    # For user/fallback sources, enrich metadata from MPD BEFORE storing to Redis
+    # This ensures get_now_playing() returns correct metadata for WebSocket initial state
+    title = merged.get("title", "Unknown")
+    artist = merged.get("artist", "Unknown")
+    genre = merged.get("genre")
+
+    if request.source in ("user", "fallback"):
+        mpd_client = user_mpd if request.source == "user" else fallback_mpd
+        try:
+            await mpd_client.connect()
+            current_song = await mpd_client.get_current_song()
+            await mpd_client.disconnect()
+
+            logger.debug(f"MPD enrichment for {request.source}: current_song={current_song}")
+
+            if current_song and current_song.get("file"):
+                mpd_title = current_song.get("title")
+                mpd_artist = current_song.get("artist")
+                mpd_genre = current_song.get("genre")
+
+                filename = current_song.get("file")
+                if filename:
+                    playlist_type = cast(PlaylistType, request.source)
+                    overrides = await redis_client.get_song_metadata(playlist_type, filename)
+                    if overrides:
+                        if "title" in overrides:
+                            mpd_title = overrides["title"]
+                        if "artist" in overrides:
+                            mpd_artist = overrides["artist"]
+
+                if mpd_title:
+                    title = mpd_title
+                    merged["title"] = title
+                if mpd_artist:
+                    artist = mpd_artist
+                    merged["artist"] = artist
+                if mpd_genre:
+                    genre = mpd_genre
+                    merged["genre"] = genre
+
+                logger.debug(f"Enriched metadata from MPD: title={title}, artist={artist}")
+        except Exception as e:
+            logger.warning(f"Failed to fetch MPD metadata for enrichment: {e}")
+
+    # Store the enriched metadata in Redis
+    await redis_client.set_metadata(request.source, merged)
 
     if should_publish:
         await redis_client.set_active_source(request.source)
@@ -217,51 +264,6 @@ async def update_metadata(
             )
             logger.info(f"Published queue_switched event: {description}")
 
-        # Publish song_changed event with enriched metadata from MPD + overrides
-        # This ensures webhooks get the same metadata as the UI (per-song overrides applied)
-        title = merged.get("title", "Unknown")
-        artist = merged.get("artist", "Unknown")
-        genre = merged.get("genre")
-
-        # For user/fallback sources, fetch fresh MPD metadata and apply per-song overrides
-        if request.source in ("user", "fallback"):
-            mpd_client = user_mpd if request.source == "user" else fallback_mpd
-            try:
-                await mpd_client.connect()
-                current_song = await mpd_client.get_current_song()
-                await mpd_client.disconnect()
-
-                if current_song and current_song.get("file"):
-                    # Start with MPD metadata (may be empty for files without ID3 tags)
-                    mpd_title = current_song.get("title")
-                    mpd_artist = current_song.get("artist")
-                    mpd_genre = current_song.get("genre")
-
-                    # Check for per-song metadata overrides in Redis (use filename as stable key)
-                    filename = current_song.get("file")
-                    if filename:
-                        playlist_type = cast(PlaylistType, request.source)
-                        overrides = await redis_client.get_song_metadata(playlist_type, filename)
-                        if overrides:
-                            # Apply overrides - Redis takes precedence
-                            if "title" in overrides:
-                                mpd_title = overrides["title"]
-                            if "artist" in overrides:
-                                mpd_artist = overrides["artist"]
-
-                    # Use enriched metadata if available, otherwise fall back to Liquidsoap metadata
-                    if mpd_title:
-                        title = mpd_title
-                    if mpd_artist:
-                        artist = mpd_artist
-                    if mpd_genre:
-                        genre = mpd_genre
-
-                    logger.debug(f"Enriched webhook metadata from MPD: title={title}, artist={artist}")
-            except Exception as e:
-                logger.warning(f"Failed to fetch MPD metadata for webhook enrichment: {e}")
-                # Continue with Liquidsoap metadata as fallback
-
         description = f"Playing next: {title}"
         if artist and artist != "Unknown":
             description += f" by {artist}"
@@ -272,12 +274,21 @@ async def update_metadata(
             artist=artist,
             genre=genre,
         )
-        await event_publisher.publish(
-            event_type="song_changed",
-            data=event_data.model_dump(),
-            description=description,
-        )
-        logger.debug(f"Published song_changed event for {request.source}")
+
+        event_hash = hashlib.md5(f"{title}:{artist}:{genre}".encode()).hexdigest()[:16]
+        dedup_key = f"song_changed:dedup:{event_hash}"
+
+        is_duplicate = await redis_client.redis.get(dedup_key)
+        if is_duplicate:
+            logger.debug(f"Skipping duplicate song_changed event for {request.source}: {title}")
+        else:
+            await redis_client.redis.setex(dedup_key, SONG_CHANGED_DEDUP_TTL, "1")
+            await event_publisher.publish(
+                event_type="song_changed",
+                data=event_data.model_dump(),
+                description=description,
+            )
+            logger.debug(f"Published song_changed event for {request.source}")
 
         # Publish metadata_updated event for recording worker (only for livestream)
         if request.source == "livestream":

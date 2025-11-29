@@ -7,9 +7,11 @@ import { AdminPage } from './pages/AdminPage';
 import { ManagePage } from './pages/ManagePage';
 import { ArchiveDetailPage } from './pages/ArchiveDetailPage';
 import { StreamPage } from './pages/StreamPage';
+import { WebSocketProvider } from './contexts/WebSocketContext';
 
 const App: React.FC = () => {
   return (
+    <WebSocketProvider>
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
@@ -22,6 +24,7 @@ const App: React.FC = () => {
       <Route path="/archives/:showName" element={<ArchiveDetailPage />} />
       <Route path="/stream" element={<StreamPage />} />
     </Routes>
+    </WebSocketProvider>
   );
 };
 

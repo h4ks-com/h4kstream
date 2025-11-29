@@ -6,8 +6,10 @@ import type { UserPublic, ShowPublic, WebhookSubscription, SongItem, WebhookDeli
 import { SongUploadForm } from '../components/SongUploadForm';
 import { LivestreamTokenDisplay } from '../components/LivestreamTokenDisplay';
 import { SongEditDialog } from '../components/SongEditDialog';
+import { useWebSocketEvent } from '../contexts/WebSocketContext';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import RadioIcon from '@mui/icons-material/Radio';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
@@ -821,7 +823,7 @@ const QueueSection: React.FC = () => {
   const [error, setError] = useState('');
   const [editingSong, setEditingSong] = useState<{ song: SongItem; playlist: 'user' | 'fallback' } | null>(null);
 
-  const fetchQueue = async () => {
+  const fetchQueue = useCallback(async () => {
     try {
       const [userQueue, fallbackQueue] = await Promise.all([
         AdminService().adminListSongsAdminQueueListGet('user'),
@@ -832,7 +834,12 @@ const QueueSection: React.FC = () => {
     } catch (err: any) {
       setError(err.body?.detail || 'Failed to fetch queue');
     }
-  };
+  }, []);
+
+  useWebSocketEvent('song_added', fetchQueue);
+  useWebSocketEvent('song_deleted', fetchQueue);
+  useWebSocketEvent('song_changed', fetchQueue);
+  useWebSocketEvent('queue_switched', fetchQueue);
 
   const deleteSong = async (songId: string, playlist: 'user' | 'fallback') => {
     try {
@@ -873,15 +880,8 @@ const QueueSection: React.FC = () => {
   };
 
   useEffect(() => {
-    // Initial fetch
     fetchQueue();
-
-    // Poll every 5 seconds for real-time updates
-    const interval = setInterval(fetchQueue, 5000);
-
-    // Cleanup on unmount
-    return () => clearInterval(interval);
-  }, []);
+  }, [fetchQueue]);
 
   return (
     <div>
@@ -1124,6 +1124,8 @@ const getEventIcon = (eventType: string) => {
       return <MusicNoteIcon {...iconProps} />;
     case 'song_added':
       return <PlaylistAddIcon {...iconProps} />;
+    case 'song_deleted':
+      return <PlaylistRemoveIcon {...iconProps} />;
     case 'livestream_started':
       return <RadioIcon {...iconProps} />;
     case 'livestream_ended':
@@ -1153,7 +1155,7 @@ const WebhooksSection: React.FC = () => {
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
   const [loadingDeliveries, setLoadingDeliveries] = useState(false);
 
-  const availableEvents = ['song_changed', 'song_added', 'livestream_started', 'livestream_ended', 'queue_switched', 'livestream_recording_done'];
+  const availableEvents = ['song_changed', 'song_added', 'song_deleted', 'livestream_started', 'livestream_ended', 'queue_switched', 'livestream_recording_done'];
 
   const fetchWebhooks = async () => {
     try {

@@ -5,6 +5,7 @@ import jwt
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Request
+from fastapi import WebSocket
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.security import HTTPBearer
 from sqlmodel import Session
@@ -83,6 +84,12 @@ async def dep_mpd_client() -> AsyncGenerator[MPDClient, None]:
 
 async def dep_redis_client(request: Request) -> AsyncGenerator[RedisService, None]:
     client = RedisService(request.app.state.redis_pool)
+    yield client
+
+
+async def dep_redis_client_ws(websocket: WebSocket) -> AsyncGenerator[RedisService, None]:
+    """Redis service for WebSocket endpoints."""
+    client = RedisService(websocket.app.state.redis_pool)
     yield client
 
 

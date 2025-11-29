@@ -1,4 +1,4 @@
-.PHONY: fix fix-backend fix-e2e check check-backend check-e2e test-all test-backend test-e2e frontend-build run run-dev
+.PHONY: fix fix-backend fix-e2e check check-backend check-e2e test-all test-backend test-e2e frontend-openapi frontend-build run run-dev
 
 fix: fix-backend fix-e2e
 
@@ -22,15 +22,22 @@ test-backend:
 test-e2e:
 	cd e2e && make test
 
-frontend-build:
+frontend-openapi:
 	@echo "Generating OpenAPI spec from backend..."
 	cd backend && uv run python generate_openapi_spec.py
+	@echo "Generating WebSocket schema..."
+	cd backend && uv run python generate_ws_types.py
 	@echo "Generating API client..."
 	cd frontend && npx openapi-typescript-codegen \
 		--input ../backend/openapi.json \
 		--output src/api \
 		--client fetch \
 		--name ApiClient
+	@echo "Generating WebSocket types..."
+	cd frontend && npx json-schema-to-typescript ../backend/ws_schema.json -o src/api/ws_types.ts --bannerComment ""
+	@echo "API client and WebSocket types generated!"
+
+frontend-build: frontend-openapi
 	@echo "Building frontend..."
 	cd frontend && npm run build
 	@echo "Frontend build complete! Build output: frontend/build/"

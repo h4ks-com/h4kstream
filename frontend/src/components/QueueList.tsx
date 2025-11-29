@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { QueueService, AdminService } from '../utils/apiClient';
 import { authUtils } from '../utils/auth';
 import type { SongItem } from '../api';
@@ -12,6 +12,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import { useWebSocketEvent } from '../contexts/WebSocketContext';
 
 interface QueueListProps {
   isAdminMode?: boolean;
@@ -24,29 +25,27 @@ export const QueueList: React.FC<QueueListProps> = ({ isAdminMode = false }) => 
   const [editingSong, setEditingSong] = useState<SongItem | null>(null);
   const [externalLinkWarning, setExternalLinkWarning] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchQueue = async () => {
-      try {
-        const response = await QueueService().listSongsQueueListGet(11);
-        // Skip the first song (currently playing) and show only upcoming songs
-        setSongs(response.slice(1));
-        setError(null);
-      } catch (err) {
-        console.error('Queue fetch error:', err);
-        setError('Connection error');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Initial fetch
-    fetchQueue();
-
-    // Refresh every 10 seconds for better responsiveness
-    const interval = setInterval(fetchQueue, 10000);
-
-    return () => clearInterval(interval);
+  const fetchQueue = useCallback(async () => {
+    try {
+      const response = await QueueService().listSongsQueueListGet(11);
+      setSongs(response.slice(1));
+      setError(null);
+    } catch (err) {
+      console.error('Queue fetch error:', err);
+      setError('Connection error');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchQueue();
+  }, [fetchQueue]);
+
+  useWebSocketEvent('song_added', fetchQueue);
+  useWebSocketEvent('song_deleted', fetchQueue);
+  useWebSocketEvent('song_changed', fetchQueue);
+  useWebSocketEvent('queue_switched', fetchQueue);
 
   const handleSaveEdit = async (metadata: {
     title?: string;
