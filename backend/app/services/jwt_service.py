@@ -84,10 +84,16 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
 
 
-def get_user_id(token: str) -> str:
-    """Extract user_id from JWT token."""
-    payload = decode_token(token)
-    return payload.get("user_id", "unknown")
+def get_user_id(token: str) -> str | None:
+    """Extract user_id from JWT token.
+
+    Returns None for admin tokens (which don't have user_id).
+    """
+    try:
+        payload = decode_token(token)
+        return payload.get("user_id", None)
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
 
 
 def get_max_queue_songs(token: str) -> int:

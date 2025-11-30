@@ -135,6 +135,31 @@ def get_jwt_token_optional(
         return None
 
 
+def get_token_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
+) -> str | None:
+    """Extract any valid token (admin token OR JWT) from request if present.
+
+    Returns the token for further processing, or None if no valid token found. This is useful for endpoints that accept
+    both authentication methods.
+    """
+    if not credentials:
+        return None
+
+    token = _extract_token(credentials)
+
+    # Admin tokens are always valid
+    if _is_admin_token(token):
+        return token
+
+    # Try validating as JWT
+    try:
+        validate_token(token)
+        return token
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+
 def dep_liquidsoap_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> bool:
     """Validate Liquidsoap internal token."""
     token = _extract_token(credentials)

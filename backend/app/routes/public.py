@@ -22,7 +22,7 @@ from app.dependencies import dep_event_publisher
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
 from app.dependencies import get_jwt_token
-from app.dependencies import get_jwt_token_optional
+from app.dependencies import get_token_optional
 from app.exceptions import FileNotFoundInMPDError
 from app.exceptions import SongNotFoundError
 from app.models import ClientCountsResponse
@@ -93,6 +93,9 @@ async def add_song(
 ) -> SongAddedResponse:
     """Add a song to your user queue with validation checks."""
     user_id = get_user_id(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token: no user_id found")
+
     max_songs = get_max_queue_songs(token)
     max_adds = get_max_add_requests(token)
 
@@ -154,7 +157,8 @@ async def add_song(
         "Get songs in the queue (shared by all users). "
         "Returns user queue songs first, then fallback playlist songs. "
         "Optional filter to show only songs belonging to authenticated user. "
-        "No authentication required unless user_only=true."
+        "No authentication required unless user_only=true. "
+        "Accepts both admin tokens and user JWT tokens."
     ),
     responses={
         400: {"model": ErrorResponse, "description": "Invalid limit parameter"},
@@ -165,7 +169,7 @@ async def list_songs(
     limit: int = Query(20, ge=1, le=20, description="Maximum number of songs to return (1-20)"),
     user_only: bool = Query(False, description="Filter to show only user's own songs (requires authentication)"),
     redis_client: RedisService = Depends(dep_redis_client),
-    token: str | None = Depends(get_jwt_token_optional),
+    token: str | None = Depends(get_token_optional),
     db_session: Session = Depends(get_session),
 ) -> list[SongItem]:
     """Get songs from user queue and fallback playlist."""
@@ -173,6 +177,7 @@ async def list_songs(
     if user_only and not token:
         raise HTTPException(status_code=401, detail="Authentication required when user_only=true")
 
+    # Extract user_id if this is a JWT token (admin tokens return None)
     user_id = get_user_id(token) if token else None
 
     user_mpd = playback_service.get_mpd_client("user")
@@ -183,7 +188,8 @@ async def list_songs(
         await fallback_mpd.connect()
         all_songs = await queue_service.get_next_songs(user_mpd, fallback_mpd, limit, redis_client, db_session)
 
-        # Filter for user's songs if requested
+        # Filter for user's songs if requested and we have a user_id
+        # Admin tokens (user_id=None) will see all songs even with user_only=true
         if user_only and user_id:
             filtered_songs = []
             for song in all_songs:
@@ -227,6 +233,8 @@ async def delete_song(
 ) -> SuccessResponse:
     """Delete one of your songs from the user queue."""
     user_id = get_user_id(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token: no user_id found")
 
     try:
         mpd_id, playlist = parse_song_id(song_id)
@@ -276,6 +284,8 @@ async def edit_song_metadata(
 ) -> SuccessResponse:
     """Edit metadata for user's own uploaded song."""
     user_id = get_user_id(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token: no user_id found")
 
     # Parse song ID to get MPD ID and playlist type
     try:
