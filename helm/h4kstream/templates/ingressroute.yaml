@@ -48,6 +48,8 @@ spec:
     # Radio output stream (Liquidsoap HTTP audio stream)
     - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/radio`)
       kind: Rule
+      middlewares:
+        - name: {{ include "h4kstream.fullname" . }}-streaming
       services:
         - name: {{ include "h4kstream.fullname" . }}-liquidsoap
           port: 8001
@@ -58,6 +60,7 @@ spec:
       kind: Rule
       middlewares:
         - name: {{ include "h4kstream.fullname" . }}-strip-stream-prefix
+        - name: {{ include "h4kstream.fullname" . }}-streaming
       services:
         - name: {{ include "h4kstream.fullname" . }}-liquidsoap
           port: 8003
@@ -85,6 +88,8 @@ spec:
     # Janus HTTP API endpoint (WebRTC signaling and long-polling)
     - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/janus`)
       kind: Rule
+      middlewares:
+        - name: {{ include "h4kstream.fullname" . }}-streaming
       services:
         - name: {{ include "h4kstream.fullname" . }}-janus
           port: 8088

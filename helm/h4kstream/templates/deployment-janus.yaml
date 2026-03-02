@@ -33,6 +33,9 @@ spec:
             - name: http
               containerPort: 8088
               protocol: TCP
+            - name: websocket
+              containerPort: 8188
+              protocol: TCP
             - name: admin
               containerPort: 7088
               protocol: TCP
