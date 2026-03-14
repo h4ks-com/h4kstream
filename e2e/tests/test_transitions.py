@@ -204,4 +204,4 @@ def test_transitions_upload_no_auth(client: httpx.Client) -> None:
         "/admin/transitions/upload",
         files=files,
     )
-    assert response.status_code == 403  # Forbidden (no auth token)
+    assert response.status_code == 401  # Unauthorized (no auth token)

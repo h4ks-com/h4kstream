@@ -271,6 +271,7 @@ def test_webhook_livestream_started_event(
     ffmpeg_process = subprocess.Popen(
         [
             "ffmpeg",
+            "-re",
             "-f", "lavfi",
             "-i", "anullsrc=r=48000:cl=stereo",
             "-t", "10",
@@ -286,7 +287,7 @@ def test_webhook_livestream_started_event(
             "-send_expect_100",
             "0",
             "-content_type",
-            "audio/mpeg",
+            "application/ogg",
             f"http://source:{token}@localhost/stream/live",
             "-loglevel", "error",
         ],

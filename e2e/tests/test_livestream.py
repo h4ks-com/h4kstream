@@ -56,7 +56,7 @@ def test_livestream_token_validation_enforcement(client: httpx.Client, admin_hea
 def test_livestream_auth_endpoint_requires_admin(client: httpx.Client) -> None:
     """Test that internal livestream endpoints require admin authentication."""
     response = client.post("/internal/livestream/auth", json={"token": "fake", "address": "127.0.0.1"})
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_livestream_auth_with_valid_token(client: httpx.Client, admin_headers: dict[str, str]) -> None:
@@ -165,7 +165,7 @@ def test_livestream_token_requires_admin_auth(client: httpx.Client, admin_header
         "/admin/livestream/token",
         json={"max_streaming_seconds": 3600, "show_name": "test-admin-auth-1"},
     )
-    assert response.status_code == 403
+    assert response.status_code == 401
 
     token_response = client.post("/admin/token", json={"duration_seconds": 3600}, headers=admin_headers)
     jwt_token = token_response.json()["token"]
@@ -193,11 +193,13 @@ def test_livestream_max_listeners_tracking(
     assert token_response.status_code == 200
     token = token_response.json()["token"]
 
-    # Actually stream audio to liquidsoap for 25 seconds (exceeds min_recording_duration of 5)
-    ffmpeg_process = stream_to_liquidsoap(token, duration=25)
+    # Stream for 45 seconds to ensure recording worker has enough time to connect to
+    # output.harbor (which only opens after Liquidsoap buffers audio from input.harbor)
+    # and still capture enough audio to exceed min_recording_duration of 5 seconds.
+    ffmpeg_process = stream_to_liquidsoap(token, duration=45)
 
     try:
-        stdout, stderr = ffmpeg_process.communicate(timeout=35)
+        stdout, stderr = ffmpeg_process.communicate(timeout=55)
     except subprocess.TimeoutExpired:
         ffmpeg_process.kill()
         raise AssertionError("FFmpeg streaming timed out")

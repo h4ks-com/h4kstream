@@ -57,7 +57,7 @@ def test_token_with_default_max_queue_songs(client: httpx.Client, admin_headers:
 def test_user_queue_endpoints_require_jwt(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that user queue endpoints require JWT tokens, not admin tokens."""
     response_no_auth = client.post(QUEUE_ADD, data={"song_name": "test"})
-    assert response_no_auth.status_code == 403
+    assert response_no_auth.status_code == 401
 
     response_admin = client.post(QUEUE_ADD, data={"song_name": "test"}, headers=admin_headers)
     assert response_admin.status_code == 403
@@ -67,7 +67,7 @@ def test_user_queue_endpoints_require_jwt(client: httpx.Client, admin_headers: d
 def test_fallback_endpoints_require_admin(client: httpx.Client, jwt_headers: dict[str, str]) -> None:
     """Test that radio playlist endpoints require admin token, not JWT."""
     response_no_auth = client.post(admin_queue_clear(Playlist.FALLBACK))
-    assert response_no_auth.status_code == 403
+    assert response_no_auth.status_code == 401
 
     response_jwt = client.post(admin_queue_clear(Playlist.FALLBACK), headers=jwt_headers)
     assert response_jwt.status_code == 403

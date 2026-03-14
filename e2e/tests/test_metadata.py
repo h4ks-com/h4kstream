@@ -1,9 +1,11 @@
 """E2E tests for metadata tracking system."""
 
+import os
 import subprocess
 import time
 
 import httpx
+import pytest
 import redis
 
 
@@ -66,12 +68,6 @@ def test_metadata_livestream_switching(client: httpx.Client, admin_headers: dict
             "128k",
             "-f",
             "ogg",
-            "-content_type",
-            "audio/ogg",
-            "-ice_name",
-            "E2E Test Stream",  # Icecast metadata
-            "-ice_genre",
-            "Test",
             "-method",
             "PUT",
             "-auth_type",
@@ -81,7 +77,7 @@ def test_metadata_livestream_switching(client: httpx.Client, admin_headers: dict
             "-send_expect_100",
             "0",
             "-content_type",
-            "audio/mpeg",
+            "application/ogg",
             f"http://source:{token}@localhost/stream/live",
             "-loglevel",
             "error",
@@ -180,6 +176,7 @@ def test_metadata_set_livestream(client: httpx.Client, admin_headers: dict[str, 
     # depends on livestream being active
 
 
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Cannot use YouTube in GitHub Actions")
 def test_metadata_user_queue_with_real_song(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that metadata is extracted from real song in user queue."""
     # Add a real song from YouTube with known metadata

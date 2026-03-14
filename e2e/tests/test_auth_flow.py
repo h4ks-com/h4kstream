@@ -70,19 +70,19 @@ def test_jwt_max_duration_enforcement(client: httpx.Client, admin_headers: dict[
 def test_jwt_token_fails_without_auth(client: httpx.Client) -> None:
     """Test that JWT token creation requires admin auth."""
     response = client.post(ADMIN_TOKEN_CREATE, json={"duration_seconds": 3600})
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_public_add_requires_auth(client: httpx.Client) -> None:
     """Test that public add endpoint requires authentication."""
     response = client.post(QUEUE_ADD, data={"url": "https://youtube.com/watch?v=test"})
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_public_delete_requires_auth(client: httpx.Client) -> None:
     """Test that public delete endpoint requires authentication."""
     response = client.delete(queue_delete("u-1"))
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_public_list_works_without_auth(client: httpx.Client) -> None:

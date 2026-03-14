@@ -144,9 +144,13 @@ class RecordingWorker:
         filename = f"{show_name}_{timestamp}.mp3"
         filepath = Path(settings.RECORDINGS_PATH) / filename
 
-        # Retry logic for ffmpeg connection (harbor output may not be ready immediately)
-        max_retries = 3
-        retry_delay = 0.5  # Start with 0.5 seconds
+        # Retry logic for ffmpeg connection (harbor output may not be ready immediately).
+        # output.harbor with fallible=true only opens the port after Liquidsoap has buffered
+        # enough audio from input.harbor, which happens after on_connect fires. This can
+        # take several seconds, so we retry generously.
+        max_retries = 10
+        retry_delay = 1.0
+        max_retry_delay = 5.0
         process = None
 
         for attempt in range(max_retries):
@@ -189,8 +193,7 @@ class RecordingWorker:
                     )
 
                     if attempt < max_retries - 1:
-                        # Retry with exponential backoff
-                        retry_delay *= 2
+                        retry_delay = min(retry_delay * 2, max_retry_delay)
                         logger.info(f"Retrying in {retry_delay}s...")
                         continue
                     else:
