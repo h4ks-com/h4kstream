@@ -63,14 +63,53 @@ export const ManagePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-h4ks-dark-800 flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-h4ks-dark-900 border-r-2 border-h4ks-green-800 p-6 flex flex-col">
+    <div className="min-h-screen bg-h4ks-dark-800 flex flex-col md:flex-row">
+      {/* Mobile top nav */}
+      <div className="md:hidden bg-h4ks-dark-900 border-b-2 border-h4ks-green-800 flex-shrink-0">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <span className="text-h4ks-green-400 font-mono font-bold text-sm">[MY MANAGEMENT]</span>
+          <button onClick={() => navigate('/')} className="text-gray-500 hover:text-gray-300 font-mono text-xs">[← HOME]</button>
+        </div>
+        <div className="flex overflow-x-auto border-t border-h4ks-green-900 px-2 pb-2 gap-1">
+          {[
+            { key: 'queue', label: '[QUEUE]', path: '/manage/queue' },
+            { key: 'livestream', label: '[LIVESTREAM]', path: '/manage/livestream' },
+            ...(authUtils.hasAdminAccess() ? [{ key: 'admin', label: '[ADMIN]', path: '/admin' }] : []),
+          ].map(({ key, label, path }) => (
+            <button
+              key={key}
+              onClick={() => navigate(path)}
+              className={`flex-shrink-0 px-3 py-2 font-mono text-xs transition-colors ${
+                activeSection === key
+                  ? 'text-h4ks-green-400 border-b-2 border-h4ks-green-500'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            onClick={handleLogout}
+            className="flex-shrink-0 ml-auto px-3 py-2 font-mono text-xs text-red-500 hover:text-red-400"
+          >
+            [LOGOUT]
+          </button>
+        </div>
+      </div>
+
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex md:flex-col w-64 bg-h4ks-dark-900 border-r-2 border-h4ks-green-800 p-6">
         <div className="flex-1">
           <h1 className="text-xl font-bold text-h4ks-green-400 mb-6 font-mono">
             [MY MANAGEMENT]
           </h1>
           <nav className="space-y-2 font-mono">
+            <div
+              onClick={() => navigate('/')}
+              className="pl-3 cursor-pointer transition-colors border-l-2 text-gray-400 border-transparent hover:text-gray-300"
+            >
+              [← HOME]
+            </div>
             <div
               onClick={() => navigate('/manage/queue')}
               className={`pl-3 cursor-pointer transition-colors border-l-2 ${
@@ -109,7 +148,6 @@ export const ManagePage: React.FC = () => {
           </div>
         )}
 
-        {/* Logout button */}
         <button
           onClick={handleLogout}
           className="w-full bg-red-900/20 border border-red-700 hover:bg-red-900/30 text-red-400 hover:text-red-300 font-mono py-2 px-4 transition-colors"
@@ -119,7 +157,7 @@ export const ManagePage: React.FC = () => {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 p-6 overflow-y-auto">
+      <div className="flex-1 p-4 md:p-6 overflow-y-auto">
         {activeSection === 'queue' && <QueueSection />}
         {activeSection === 'livestream' && <LivestreamSection />}
       </div>

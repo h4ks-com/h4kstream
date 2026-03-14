@@ -98,15 +98,60 @@ export const AdminPage: React.FC = () => {
     );
   }
 
+  const adminTabs = [
+    ...(authUtils.isUserAuthenticated() ? [{ key: 'you', label: '[YOU]', path: '/manage' }] : []),
+    { key: 'users', label: '[USERS]', path: '/admin/users' },
+    { key: 'shows', label: '[SHOWS]', path: '/admin/shows' },
+    { key: 'queue', label: '[QUEUE]', path: '/admin/queue' },
+    { key: 'livestream', label: '[LIVESTREAM]', path: '/admin/livestream' },
+    { key: 'webhooks', label: '[WEBHOOKS]', path: '/admin/webhooks' },
+    { key: 'transitions', label: '[TRANSITIONS]', path: '/admin/transitions' },
+  ];
+
   return (
-    <div className="min-h-screen bg-h4ks-dark-800 flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-h4ks-dark-900 border-r-2 border-h4ks-green-800 p-6 flex flex-col">
+    <div className="min-h-screen bg-h4ks-dark-800 flex flex-col md:flex-row">
+      {/* Mobile top nav */}
+      <div className="md:hidden bg-h4ks-dark-900 border-b-2 border-h4ks-green-800 flex-shrink-0">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <span className="text-h4ks-green-400 font-mono font-bold text-sm">[ADMIN PANEL]</span>
+          <button onClick={() => navigate('/')} className="text-gray-500 hover:text-gray-300 font-mono text-xs">[← HOME]</button>
+        </div>
+        <div className="flex overflow-x-auto border-t border-h4ks-green-900 px-2 pb-2 gap-1">
+          {adminTabs.map(({ key, label, path }) => (
+            <button
+              key={key}
+              onClick={() => navigate(path)}
+              className={`flex-shrink-0 px-3 py-2 font-mono text-xs transition-colors ${
+                activeSection === key
+                  ? 'text-h4ks-green-400 border-b-2 border-h4ks-green-500'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            onClick={handleLogout}
+            className="flex-shrink-0 ml-auto px-3 py-2 font-mono text-xs text-red-500 hover:text-red-400"
+          >
+            [LOGOUT]
+          </button>
+        </div>
+      </div>
+
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex md:flex-col w-64 bg-h4ks-dark-900 border-r-2 border-h4ks-green-800 p-6">
         <div className="flex-1">
           <h1 className="text-xl font-bold text-h4ks-green-400 mb-6 font-mono">
             [ADMIN PANEL]
           </h1>
           <nav className="space-y-2 font-mono">
+            <div
+              onClick={() => navigate('/')}
+              className="pl-3 cursor-pointer transition-colors border-l-2 text-gray-400 border-transparent hover:text-gray-300"
+            >
+              [← HOME]
+            </div>
             {authUtils.isUserAuthenticated() && (
               <div
                 onClick={() => navigate('/manage')}
@@ -125,60 +170,59 @@ export const AdminPage: React.FC = () => {
             >
               [USERS]
             </div>
-          <div
-            onClick={() => navigate('/admin/shows')}
-            className={`pl-3 cursor-pointer transition-colors border-l-2 ${
-              activeSection === 'shows'
-                ? 'text-h4ks-green-400 border-h4ks-green-500'
-                : 'text-gray-400 border-transparent hover:text-gray-300'
-            }`}
-          >
-            [SHOWS]
-          </div>
-          <div
-            onClick={() => navigate('/admin/queue')}
-            className={`pl-3 cursor-pointer transition-colors border-l-2 ${
-              activeSection === 'queue'
-                ? 'text-h4ks-green-400 border-h4ks-green-500'
-                : 'text-gray-400 border-transparent hover:text-gray-300'
-            }`}
-          >
-            [QUEUE]
-          </div>
-          <div
-            onClick={() => navigate('/admin/livestream')}
-            className={`pl-3 cursor-pointer transition-colors border-l-2 ${
-              activeSection === 'livestream'
-                ? 'text-h4ks-green-400 border-h4ks-green-500'
-                : 'text-gray-400 border-transparent hover:text-gray-300'
-            }`}
-          >
-            [LIVESTREAM]
-          </div>
-          <div
-            onClick={() => navigate('/admin/webhooks')}
-            className={`pl-3 cursor-pointer transition-colors border-l-2 ${
-              activeSection === 'webhooks'
-                ? 'text-h4ks-green-400 border-h4ks-green-500'
-                : 'text-gray-400 border-transparent hover:text-gray-300'
-            }`}
-          >
-            [WEBHOOKS]
-          </div>
-          <div
-            onClick={() => navigate('/admin/transitions')}
-            className={`pl-3 cursor-pointer transition-colors border-l-2 ${
-              activeSection === 'transitions'
-                ? 'text-h4ks-green-400 border-h4ks-green-500'
-                : 'text-gray-400 border-transparent hover:text-gray-300'
-            }`}
-          >
-            [TRANSITIONS]
-          </div>
-        </nav>
+            <div
+              onClick={() => navigate('/admin/shows')}
+              className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+                activeSection === 'shows'
+                  ? 'text-h4ks-green-400 border-h4ks-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              [SHOWS]
+            </div>
+            <div
+              onClick={() => navigate('/admin/queue')}
+              className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+                activeSection === 'queue'
+                  ? 'text-h4ks-green-400 border-h4ks-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              [QUEUE]
+            </div>
+            <div
+              onClick={() => navigate('/admin/livestream')}
+              className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+                activeSection === 'livestream'
+                  ? 'text-h4ks-green-400 border-h4ks-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              [LIVESTREAM]
+            </div>
+            <div
+              onClick={() => navigate('/admin/webhooks')}
+              className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+                activeSection === 'webhooks'
+                  ? 'text-h4ks-green-400 border-h4ks-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              [WEBHOOKS]
+            </div>
+            <div
+              onClick={() => navigate('/admin/transitions')}
+              className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+                activeSection === 'transitions'
+                  ? 'text-h4ks-green-400 border-h4ks-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              [TRANSITIONS]
+            </div>
+          </nav>
         </div>
 
-        {/* Logout button */}
         <button
           onClick={handleLogout}
           className="w-full bg-red-900/20 border border-red-700 hover:bg-red-900/30 text-red-400 hover:text-red-300 font-mono py-2 px-4 transition-colors"
@@ -188,7 +232,7 @@ export const AdminPage: React.FC = () => {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 p-6 overflow-y-auto">
+      <div className="flex-1 p-4 md:p-6 overflow-y-auto">
         {activeSection === 'users' && <UsersSection />}
         {activeSection === 'shows' && <ShowsSection />}
         {activeSection === 'queue' && <QueueSection />}
