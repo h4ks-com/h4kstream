@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 50  # Maximum file size in MB
     DUPLICATE_CHECK_LIMIT: int = 5  # Number of songs to check for duplicates
 
+    # Optional Logto OAuth2 login (leave empty to use email/password login)
+    LOGTO_ENDPOINT: str = ""
+    LOGTO_APP_ID: str = ""
+    LOGTO_APP_SECRET: str = ""
+    LOGTO_REDIRECT_URI: str = ""
+
+    @property
+    def oauth_enabled(self) -> bool:
+        return bool(self.LOGTO_ENDPOINT and self.LOGTO_APP_ID and self.LOGTO_APP_SECRET and self.LOGTO_REDIRECT_URI)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

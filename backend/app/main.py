@@ -12,6 +12,7 @@ from app.routes import songs
 from app.routes import webhooks
 from app.routes.metadata import internal_router as metadata_internal_router
 from app.routes.metadata import metadata_router
+from app.routes.oauth import router as oauth_router
 from app.routes.recordings import admin_router as recordings_admin_router
 from app.routes.recordings import router as recordings_router
 from app.routes.shows import admin_router as shows_admin_router
@@ -90,4 +91,5 @@ app.include_router(shows_router)
 app.include_router(shows_admin_router)
 app.include_router(transitions_router)
 app.include_router(songs.router)
+app.include_router(oauth_router)
 app.include_router(websocket_router)

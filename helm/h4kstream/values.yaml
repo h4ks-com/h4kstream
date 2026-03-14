@@ -49,6 +49,10 @@ backend:
     ADMIN_API_TOKEN: "changeme"
     LIQUIDSOAP_TOKEN: "changeme"
     JWT_SECRET: "changeme"
+    LOGTO_ENDPOINT: ""
+    LOGTO_APP_ID: ""
+    LOGTO_APP_SECRET: ""
+    LOGTO_REDIRECT_URI: ""
 
   # Service configuration
   service:

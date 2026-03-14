@@ -7,6 +7,6 @@ export type Body_admin_add_song_admin_queue_add_post = {
     song_name?: (string | null);
     artist?: (string | null);
     reference_url?: (string | null);
-    file?: (Blob | null);
+    file?: (string | null);
 };
 

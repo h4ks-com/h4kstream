@@ -7,6 +7,7 @@ import { AdminPage } from './pages/AdminPage';
 import { ManagePage } from './pages/ManagePage';
 import { ArchiveDetailPage } from './pages/ArchiveDetailPage';
 import { StreamPage } from './pages/StreamPage';
+import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 
 const App: React.FC = () => {
@@ -23,6 +24,7 @@ const App: React.FC = () => {
       <Route path="/archives" element={<ArchiveDetailPage />} />
       <Route path="/archives/:showName" element={<ArchiveDetailPage />} />
       <Route path="/stream" element={<StreamPage />} />
+      <Route path="/login/callback" element={<OAuthCallbackPage />} />
     </Routes>
     </WebSocketProvider>
   );

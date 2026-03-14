@@ -6,6 +6,6 @@ export type Body_upload_transition_admin_transitions_upload_post = {
     /**
      * Audio file (mp3, wav, ogg, flac)
      */
-    file: Blob;
+    file: string;
 };
 

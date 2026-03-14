@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
 import { getUserLimits, getTokenTimeRemaining, formatTimeRemaining } from '../utils/jwt';
-import { QueueService, ShowsService } from '../utils/apiClient';
+import { QueueService, ShowsService, UsersService } from '../utils/apiClient';
 import type { SongItem, ShowPublic } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
 import { LivestreamTokenDisplay } from '../components/LivestreamTokenDisplay';
@@ -45,6 +45,13 @@ export const ManagePage: React.FC = () => {
   const { section } = useParams<{ section: Section }>();
   const navigate = useNavigate();
   const activeSection = (section as Section) || 'queue';
+  const [username, setUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    UsersService().getCurrentUserUsersMeGet()
+      .then(user => setUsername(user.username || user.email))
+      .catch(() => {});
+  }, []);
 
   if (!authUtils.isUserAuthenticated()) {
     return <Navigate to="/login" />;
@@ -95,6 +102,12 @@ export const ManagePage: React.FC = () => {
           </nav>
           <SessionTimer />
         </div>
+
+        {username && (
+          <div className="mb-3 text-xs font-mono text-gray-500 truncate">
+            {username}
+          </div>
+        )}
 
         {/* Logout button */}
         <button
@@ -209,7 +222,7 @@ const QueueSection: React.FC = () => {
       <div className="mb-6">
         <SongUploadForm
           onUploadComplete={fetchQueue}
-          uploadFunction={(params) => QueueService().addSongQueueAddPost(params)}
+          uploadFunction={(params) => QueueService().addSongQueueAddPost(params as any)}
         />
       </div>
 

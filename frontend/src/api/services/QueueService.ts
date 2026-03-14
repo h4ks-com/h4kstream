@@ -36,7 +36,7 @@ export class QueueService {
     }
     /**
      * List Queue Songs
-     * Get songs in the queue (shared by all users). Returns user queue songs first, then fallback playlist songs. Optional filter to show only songs belonging to authenticated user. No authentication required unless user_only=true.
+     * Get songs in the queue (shared by all users). Returns user queue songs first, then fallback playlist songs. Optional filter to show only songs belonging to authenticated user. No authentication required unless user_only=true. Accepts both admin tokens and user JWT tokens.
      * @param limit Maximum number of songs to return (1-20)
      * @param userOnly Filter to show only user's own songs (requires authentication)
      * @returns SongItem Successful Response

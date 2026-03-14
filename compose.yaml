@@ -29,6 +29,10 @@ x-backend-common: &backend-common
   - LOG_LEVEL=${LOG_LEVEL:-INFO}
   - DEBUG=${DEBUG}
   - RELOAD=${RELOAD}
+  - LOGTO_ENDPOINT=${LOGTO_ENDPOINT:-}
+  - LOGTO_APP_ID=${LOGTO_APP_ID:-}
+  - LOGTO_APP_SECRET=${LOGTO_APP_SECRET:-}
+  - LOGTO_REDIRECT_URI=${LOGTO_REDIRECT_URI:-}
   depends_on:
   - redis
   - janus

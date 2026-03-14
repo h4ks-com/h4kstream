@@ -639,7 +639,7 @@ const ShowsSection: React.FC = () => {
       setError('');
       setUploadingIntro((prev) => ({ ...prev, [showId]: true }));
 
-      await ShowsService().adminUploadShowIntroAdminShowsShowIdIntroPost(showId, { file });
+      await ShowsService().adminUploadShowIntroAdminShowsShowIdIntroPost(showId, { file: file as unknown as string });
 
       setIntroFiles((prev) => ({ ...prev, [showId]: null }));
       await fetchShows();
@@ -896,7 +896,7 @@ const QueueSection: React.FC = () => {
           showQueueTypeSelector={true}
           onUploadComplete={fetchQueue}
           onQueueTypeChange={setQueueType}
-          uploadFunction={(params) => AdminService().adminAddSongAdminQueueAddPost(queueType, params)}
+          uploadFunction={(params) => AdminService().adminAddSongAdminQueueAddPost(queueType, params as any)}
         />
       </div>
 

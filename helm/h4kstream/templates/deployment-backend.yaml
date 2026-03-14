@@ -89,6 +89,26 @@ spec:
                 secretKeyRef:
                   name: {{ include "h4kstream.fullname" . }}-secrets
                   key: JWT_SECRET
+            - name: LOGTO_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h4kstream.fullname" . }}-secrets
+                  key: LOGTO_ENDPOINT
+            - name: LOGTO_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h4kstream.fullname" . }}-secrets
+                  key: LOGTO_APP_ID
+            - name: LOGTO_APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h4kstream.fullname" . }}-secrets
+                  key: LOGTO_APP_SECRET
+            - name: LOGTO_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h4kstream.fullname" . }}-secrets
+                  key: LOGTO_REDIRECT_URI
           volumeMounts:
             - name: data
               mountPath: /app/data

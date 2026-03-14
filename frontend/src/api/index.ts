@@ -54,6 +54,7 @@ export type { WebhookSubscriptionResponse } from './models/WebhookSubscriptionRe
 export { AdminService } from './services/AdminService';
 export { DefaultService } from './services/DefaultService';
 export { MetadataService } from './services/MetadataService';
+export { OauthService } from './services/OauthService';
 export { PublicService } from './services/PublicService';
 export { QueueService } from './services/QueueService';
 export { RecordingsService } from './services/RecordingsService';
