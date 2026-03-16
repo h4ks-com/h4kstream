@@ -162,6 +162,12 @@
 
 	# Radio output - public HTTP audio stream (full radio mix)
 	handle /radio {
+		@head method HEAD
+		handle @head {
+			header Content-Type "audio/mpeg"
+			respond "" 200
+		}
+
 		reverse_proxy liquidsoap:8001 {
 			# Streaming-optimized settings
 			flush_interval -1

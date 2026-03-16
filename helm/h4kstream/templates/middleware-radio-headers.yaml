@@ -1,0 +1,12 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "h4kstream.fullname" . }}-radio-headers
+  labels:
+    {{- include "h4kstream.labels" . | nindent 4 }}
+spec:
+  headers:
+    customResponseHeaders:
+      Content-Type: "audio/mpeg"
+{{- end }}

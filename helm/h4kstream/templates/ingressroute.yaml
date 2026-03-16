@@ -50,6 +50,7 @@ spec:
       kind: Rule
       middlewares:
         - name: {{ include "h4kstream.fullname" . }}-streaming
+        - name: {{ include "h4kstream.fullname" . }}-radio-headers
       services:
         - name: {{ include "h4kstream.fullname" . }}-liquidsoap
           port: 8001
