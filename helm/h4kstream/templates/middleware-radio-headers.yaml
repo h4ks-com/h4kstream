@@ -9,4 +9,6 @@ spec:
   headers:
     customResponseHeaders:
       Content-Type: "audio/mpeg"
+      Access-Control-Allow-Origin: "*"
+      Access-Control-Allow-Methods: "HEAD, GET, OPTIONS"
 {{- end }}
