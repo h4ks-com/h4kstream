@@ -19,6 +19,7 @@ from app.db import get_session
 from app.db.models import FileCache
 from app.dependencies import dep_client_count_service
 from app.dependencies import dep_event_publisher
+from app.dependencies import dep_mpd_fallback
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
 from app.dependencies import get_jwt_token
@@ -27,6 +28,11 @@ from app.exceptions import FileNotFoundInMPDError
 from app.exceptions import SongNotFoundError
 from app.models import ClientCountsResponse
 from app.models import ErrorResponse
+from app.models import NavidromePlaylistItem
+from app.models import PlaylistAddRequest
+from app.models import PlaylistAddResponse
+from app.models import PlaylistSongResult
+from app.models import PlaylistSource
 from app.models import SongAddedResponse
 from app.models import SongDeletedEventData
 from app.models import SongItem
@@ -41,10 +47,13 @@ from app.services.jwt_service import get_max_add_requests
 from app.services.jwt_service import get_max_queue_songs
 from app.services.jwt_service import get_user_id
 from app.services.mpd_service import MPDClient
+from app.services.navidrome_service import NavidromeService
 from app.services.redis_service import RedisService
 from app.services.redis_service import parse_song_id
 from app.services.youtube_dl import YoutubeDownloadException
 from app.settings import get_music_user_dir
+from app.settings import get_songs_dir
+from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -341,6 +350,104 @@ async def edit_song_metadata(
             logger.info(f"Updated reference_url for cache entry {cache_entry.id}")
 
     return SuccessResponse()
+
+
+@router.get(
+    "/playlists/navidrome",
+    response_model=list[NavidromePlaylistItem],
+    summary="List Navidrome Playlists",
+    description="List playlists available to add from Navidrome.",
+    responses={503: {"model": ErrorResponse}},
+)
+async def list_navidrome_playlists(
+    token: str = Depends(get_jwt_token),
+) -> list[NavidromePlaylistItem]:
+    """List Navidrome playlists available to the service account."""
+    if not settings.navidrome_enabled:
+        raise HTTPException(status_code=503, detail="Navidrome integration not configured")
+    svc = NavidromeService()
+    playlists = await svc.get_playlists()
+    return [
+        NavidromePlaylistItem(id=p.id, name=p.name, song_count=p.song_count, comment=p.comment)
+        for p in playlists
+    ]
+
+
+@router.post(
+    "/add-playlist",
+    response_model=PlaylistAddResponse,
+    summary="Add Playlist to Queue",
+    description=(
+        "Add a playlist (from Navidrome or other sources) to your user queue. "
+        "Entire playlist is rejected if adding it would exceed your queue limit."
+    ),
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse, "description": "Queue limit exceeded"},
+        503: {"model": ErrorResponse},
+    },
+)
+async def add_playlist(
+    request: PlaylistAddRequest,
+    mpd_client: MPDClient = Depends(dep_mpd_user),
+    fallback_mpd_client: MPDClient = Depends(dep_mpd_fallback),
+    redis_client: RedisService = Depends(dep_redis_client),
+    token: str = Depends(get_jwt_token),
+    db_session: Session = Depends(get_session),
+) -> PlaylistAddResponse:
+    """Add all songs from a playlist to the user queue."""
+    user_id = get_user_id(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token: no user_id")
+
+    if request.source == PlaylistSource.NAVIDROME:
+        if not settings.navidrome_enabled:
+            raise HTTPException(status_code=503, detail="Navidrome integration not configured")
+
+        svc = NavidromeService()
+        songs = await svc.get_playlist_songs(request.playlist_id)
+
+        # Reject if adding the whole playlist would exceed the JWT queue limit
+        current_count = await redis_client.get_user_song_count(user_id)
+        max_songs = get_max_queue_songs(token)
+        if max_songs and current_count + len(songs) > max_songs:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Adding {len(songs)} songs would exceed your {max_songs}-song limit "
+                    f"(currently {current_count} in queue)"
+                ),
+            )
+
+        added: list[PlaylistSongResult] = []
+        errors: list[str] = []
+
+        for song in songs:
+            tmp = Path(get_songs_dir()) / f"navidrome_{song.id}.{song.suffix}"
+            try:
+                await svc.download_song(song.id, tmp)
+                song_id = await queue_service.add_song(
+                    playlist="user",
+                    mpd_client=mpd_client,
+                    db_session=db_session,
+                    file_path=tmp,
+                    song_name=song.title,
+                    artist_name=song.artist,
+                    reference_url=f"{settings.NAVIDROME_URL}/app/#/song/{song.id}",
+                    redis_client=redis_client,
+                    user_id=user_id,
+                    user_mpd_client=mpd_client,
+                    fallback_mpd_client=fallback_mpd_client,
+                )
+                added.append(PlaylistSongResult(song_id=song_id, title=song.title, artist=song.artist))
+            except Exception as e:
+                errors.append(f"{song.title}: {e}")
+                if tmp.exists():
+                    tmp.unlink()
+
+        return PlaylistAddResponse(added=added, errors=errors, total_added=len(added))
+
+    raise HTTPException(status_code=400, detail=f"Unsupported playlist source: {request.source}")
 
 
 @public_router.get(

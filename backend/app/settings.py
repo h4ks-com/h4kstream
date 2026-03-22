@@ -80,6 +80,15 @@ class Settings(BaseSettings):
     def oauth_enabled(self) -> bool:
         return bool(self.LOGTO_ENDPOINT and self.LOGTO_APP_ID and self.LOGTO_APP_SECRET and self.LOGTO_REDIRECT_URI)
 
+    # Navidrome integration (Subsonic API)
+    NAVIDROME_URL: str = ""
+    NAVIDROME_USER: str = ""
+    NAVIDROME_PASSWORD: str = ""
+
+    @property
+    def navidrome_enabled(self) -> bool:
+        return bool(self.NAVIDROME_URL and self.NAVIDROME_USER and self.NAVIDROME_PASSWORD)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

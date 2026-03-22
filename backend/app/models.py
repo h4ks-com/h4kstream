@@ -1,3 +1,5 @@
+from enum import Enum
+
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -390,6 +392,47 @@ class LivestreamRecordingDoneEventData(BaseModel):
     artist: str | None = Field(None, description="Artist/streamer name")
     duration_seconds: float = Field(..., description="Recording duration in seconds")
     recording_url: str = Field(..., description="Relative API path to recording (e.g., '/recordings/stream/21')")
+
+
+# =============================================================================
+# Playlist Models
+# =============================================================================
+
+
+class PlaylistSource(str, Enum):
+    NAVIDROME = "navidrome"
+
+
+class NavidromePlaylistItem(BaseModel):
+    """A Navidrome playlist available to add to the queue."""
+
+    id: str = Field(..., description="Navidrome playlist ID")
+    name: str = Field(..., description="Playlist name")
+    song_count: int = Field(..., description="Number of songs in the playlist")
+    comment: str = Field(default="", description="Playlist comment/description")
+
+
+class PlaylistAddRequest(BaseModel):
+    """Request to add a playlist to the user queue."""
+
+    source: PlaylistSource = Field(..., description="Playlist source (e.g. navidrome)")
+    playlist_id: str = Field(..., description="ID of the playlist to add")
+
+
+class PlaylistSongResult(BaseModel):
+    """Result for a single song added from a playlist."""
+
+    song_id: str = Field(..., description="Prefixed song ID added to queue")
+    title: str = Field(..., description="Song title")
+    artist: str = Field(..., description="Artist name")
+
+
+class PlaylistAddResponse(BaseModel):
+    """Response after adding a playlist to the queue."""
+
+    added: list[PlaylistSongResult] = Field(default_factory=list, description="Successfully added songs")
+    errors: list[str] = Field(default_factory=list, description="Per-song error messages")
+    total_added: int = Field(..., description="Total number of songs added")
 
 
 class WebhookEventPayload(BaseModel):

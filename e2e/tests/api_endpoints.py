@@ -17,6 +17,8 @@ PUBLIC_CLIENTS = "/public/clients"
 QUEUE_ADD = "/queue/add"
 QUEUE_LIST = "/queue/list"
 QUEUE_DELETE = "/queue/{song_id}"  # Format with song_id
+QUEUE_PLAYLISTS_NAVIDROME = "/queue/playlists/navidrome"
+QUEUE_ADD_PLAYLIST = "/queue/add-playlist"
 
 
 # ============================================================================

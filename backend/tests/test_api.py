@@ -11,9 +11,27 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.dependencies import dep_mpd_user
+from app.dependencies import dep_redis_client
 from app.main import app
+from app.services.jwt_service import generate_token
+from app.services.navidrome_service import NavidromePlaylist
+from app.services.navidrome_service import NavidromeSong
 
 client = TestClient(app)
+
+
+@pytest.fixture
+def user_jwt_headers():
+    """JWT auth headers for a regular user."""
+    token = generate_token(duration_seconds=3600, max_queue_songs=5, max_add_requests=20)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def user_jwt_token():
+    """JWT token for a regular user (raw string)."""
+    return generate_token(duration_seconds=3600, max_queue_songs=5, max_add_requests=20)
 
 
 @pytest.fixture
@@ -152,3 +170,209 @@ class TestPublicEndpoints:
 
             assert response.status_code == 200
             assert isinstance(response.json(), list)
+
+
+class TestNavidromeEndpoints:
+    """Tests for Navidrome playlist integration endpoints."""
+
+    @pytest.fixture(autouse=True)
+    def mock_mpd_dep(self):
+        """Override dep_mpd_user so tests don't require a real MPD connection."""
+        mock_client = AsyncMock()
+        mock_client.update_database = AsyncMock()
+        mock_client.add_local_song = AsyncMock(return_value=42)
+        mock_client.set_consume = AsyncMock()
+        mock_client.set_repeat = AsyncMock()
+        mock_client.set_random = AsyncMock()
+        mock_client.play = AsyncMock()
+        mock_client.get_queue = AsyncMock(return_value=[])
+
+        async def override():
+            yield mock_client
+
+        app.dependency_overrides[dep_mpd_user] = override
+        yield mock_client
+        app.dependency_overrides.pop(dep_mpd_user, None)
+
+    @pytest.fixture
+    def mock_redis_dep(self):
+        """Override dep_redis_client with a controllable mock."""
+        mock_svc = AsyncMock()
+        mock_svc.get_user_song_count = AsyncMock(return_value=0)
+        mock_svc.get_user_add_count = AsyncMock(return_value=0)
+        mock_svc.add_user_song = AsyncMock()
+        mock_svc.map_song_to_user = AsyncMock()
+        mock_svc.increment_user_add_count = AsyncMock()
+        mock_svc.is_livestream_active = AsyncMock(return_value=False)
+        mock_svc.set_song_cache_id = AsyncMock()
+        mock_svc.set_song_metadata = AsyncMock()
+        mock_svc.set_metadata = AsyncMock()
+
+        app.dependency_overrides[dep_redis_client] = lambda: mock_svc
+        yield mock_svc
+        app.dependency_overrides.pop(dep_redis_client, None)
+
+    def test_list_navidrome_playlists_503_when_not_configured(self, user_jwt_headers):
+        """Returns 503 when NAVIDROME_URL is not set."""
+        with patch("app.routes.public.settings") as mock_settings:
+            mock_settings.navidrome_enabled = False
+            response = client.get("/queue/playlists/navidrome", headers=user_jwt_headers)
+
+        assert response.status_code == 503
+        assert "not configured" in response.json()["detail"]
+
+    def test_list_navidrome_playlists_requires_jwt(self, admin_token):
+        """Admin token is rejected; endpoint requires user JWT."""
+        response = client.get(
+            "/queue/playlists/navidrome",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 403
+
+    def test_list_navidrome_playlists_returns_list(self, user_jwt_headers):
+        """Returns list of playlists from Navidrome service."""
+        mock_playlists = [
+            NavidromePlaylist(id="1", name="Rock Classics", song_count=10, comment=""),
+            NavidromePlaylist(id="2", name="Jazz", song_count=5, comment="Smooth"),
+        ]
+
+        with patch("app.routes.public.settings") as mock_settings, \
+             patch("app.routes.public.NavidromeService") as mock_svc_cls:
+            mock_settings.navidrome_enabled = True
+            mock_svc = AsyncMock()
+            mock_svc.get_playlists = AsyncMock(return_value=mock_playlists)
+            mock_svc_cls.return_value = mock_svc
+
+            response = client.get("/queue/playlists/navidrome", headers=user_jwt_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert data[0]["id"] == "1"
+        assert data[0]["name"] == "Rock Classics"
+        assert data[0]["song_count"] == 10
+        assert data[1]["comment"] == "Smooth"
+
+    def test_add_playlist_requires_jwt(self, admin_token):
+        """Admin token is rejected for add-playlist endpoint."""
+        response = client.post(
+            "/queue/add-playlist",
+            json={"source": "navidrome", "playlist_id": "p1"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 403
+
+    def test_add_playlist_503_when_not_configured(self, user_jwt_headers, mock_redis_dep):
+        """Returns 503 when Navidrome is not configured."""
+        with patch("app.routes.public.settings") as mock_settings:
+            mock_settings.navidrome_enabled = False
+            response = client.post(
+                "/queue/add-playlist",
+                json={"source": "navidrome", "playlist_id": "p1"},
+                headers=user_jwt_headers,
+            )
+
+        assert response.status_code == 503
+
+    def test_add_playlist_rejects_when_limit_exceeded(self, mock_redis_dep):
+        """Returns 403 when adding playlist would exceed the JWT max_queue_songs limit."""
+        # Token allows 5 songs, user has 0, playlist has 10 — exceeds limit
+        token = generate_token(duration_seconds=3600, max_queue_songs=5, max_add_requests=20)
+        headers = {"Authorization": f"Bearer {token}"}
+        mock_songs = [
+            NavidromeSong(id=f"s{i}", title=f"Song {i}", artist="Art", album="Alb", duration=200, suffix="mp3")
+            for i in range(10)
+        ]
+        mock_redis_dep.get_user_song_count = AsyncMock(return_value=0)  # 0 + 10 > 5
+
+        with patch("app.routes.public.settings") as mock_settings, \
+             patch("app.routes.public.NavidromeService") as mock_svc_cls:
+            mock_settings.navidrome_enabled = True
+            mock_svc = AsyncMock()
+            mock_svc.get_playlist_songs = AsyncMock(return_value=mock_songs)
+            mock_svc_cls.return_value = mock_svc
+
+            response = client.post(
+                "/queue/add-playlist",
+                json={"source": "navidrome", "playlist_id": "p1"},
+                headers=headers,
+            )
+
+        assert response.status_code == 403
+        assert "exceed" in response.json()["detail"].lower()
+
+    def test_add_playlist_success(self, user_jwt_headers, mock_redis_dep):
+        """Successfully adds playlist songs to user queue."""
+        mock_songs = [
+            NavidromeSong(id="s1", title="Track One", artist="Artist A", album="Alb", duration=180, suffix="mp3"),
+            NavidromeSong(id="s2", title="Track Two", artist="Artist B", album="Alb", duration=200, suffix="mp3"),
+        ]
+
+        with patch("app.routes.public.settings") as mock_settings, \
+             patch("app.routes.public.NavidromeService") as mock_svc_cls, \
+             patch("app.routes.public.queue_service.add_song", return_value="u-42") as mock_add:
+            mock_settings.navidrome_enabled = True
+            mock_settings.NAVIDROME_URL = "http://navidrome.test"
+            mock_svc = AsyncMock()
+            mock_svc.get_playlist_songs = AsyncMock(return_value=mock_songs)
+            mock_svc.download_song = AsyncMock()
+            mock_svc_cls.return_value = mock_svc
+
+            response = client.post(
+                "/queue/add-playlist",
+                json={"source": "navidrome", "playlist_id": "p1"},
+                headers=user_jwt_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_added"] == 2
+        assert len(data["added"]) == 2
+        assert data["errors"] == []
+        assert mock_add.call_count == 2
+
+
+class TestQueueLimit:
+    """Tests for JWT max_queue_songs enforcement on /queue/add."""
+
+    @pytest.fixture(autouse=True)
+    def mock_mpd_dep(self):
+        """Override dep_mpd_user so tests don't require a real MPD connection."""
+        mock_client = AsyncMock()
+        mock_client.update_database = AsyncMock()
+        mock_client.add_local_song = AsyncMock(return_value=42)
+        mock_client.set_consume = AsyncMock()
+        mock_client.play = AsyncMock()
+        mock_client.get_queue = AsyncMock(return_value=[])
+
+        async def override():
+            yield mock_client
+
+        app.dependency_overrides[dep_mpd_user] = override
+        yield mock_client
+        app.dependency_overrides.pop(dep_mpd_user, None)
+
+    @pytest.fixture
+    def mock_redis_dep(self):
+        """Override dep_redis_client with a mock at the JWT limit."""
+        mock_svc = AsyncMock()
+        mock_svc.get_user_song_count = AsyncMock(return_value=5)
+        mock_svc.get_user_add_count = AsyncMock(return_value=0)
+
+        app.dependency_overrides[dep_redis_client] = lambda: mock_svc
+        yield mock_svc
+        app.dependency_overrides.pop(dep_redis_client, None)
+
+    def test_jwt_limit_blocks_add_when_at_cap(self, mock_redis_dep):
+        """Returns 403 when user is at their JWT max_queue_songs limit."""
+        token = generate_token(duration_seconds=3600, max_queue_songs=5, max_add_requests=200)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.post(
+            "/queue/add",
+            data={"url": "https://youtube.com/watch?v=test"},
+            headers=headers,
+        )
+
+        assert response.status_code == 403
+        assert "queue limit exceeded" in response.json()["detail"].lower()

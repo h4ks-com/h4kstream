@@ -119,6 +119,7 @@ async def add_song(
     db_session: Session | None = None,
     url: str | None = None,
     file: UploadFile | None = None,
+    file_path: Path | None = None,
     song_name: str | None = None,
     artist_name: str | None = None,
     reference_url: str | None = None,
@@ -151,11 +152,11 @@ async def add_song(
     :raises ValueError: If both url and file provided, or neither provided, or validation fails
     :raises FileNotFoundInMPDError: If MPD can't find the added file
     """
-    if url and file:
-        raise ValueError("Cannot provide both URL and file")
-
-    if not url and not file:
+    sources = sum(1 for x in [url, file, file_path] if x)
+    if sources == 0:
         raise ValueError("No valid URL or file provided")
+    if sources > 1:
+        raise ValueError("Provide exactly one of: url, file, file_path")
 
     music_path = Path(get_music_user_dir() if playlist == "user" else get_music_fallback_dir())
     filename = uuid4().hex + ".mp3"
@@ -230,6 +231,19 @@ async def add_song(
                         os.unlink(temp_path)
 
                     shutil.copy2(str(cached_path), str(target_path))
+                    cache_hit = True
+                    temp_path = target_path
+                    cache_id = cached_entry.id
+
+        elif file_path:
+            temp_path = file_path
+            md5_hash = await cache_service.calculate_md5(temp_path)
+            if db_session:
+                cached_entry = await cache_service.lookup_by_hash(db_session, md5_hash, playlist)
+                if cached_entry:
+                    if temp_path.exists():
+                        os.unlink(temp_path)
+                    shutil.copy2(str(Path(cached_entry.filepath)), str(target_path))
                     cache_hit = True
                     temp_path = target_path
                     cache_id = cached_entry.id

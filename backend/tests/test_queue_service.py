@@ -119,7 +119,7 @@ class TestAddSong:
 
     async def test_add_song_both_url_and_file_raises_error(self, mock_mpd_client):
         """Test that providing both URL and file raises ValueError."""
-        with pytest.raises(ValueError, match="Cannot provide both URL and file"):
+        with pytest.raises(ValueError, match="Provide exactly one of"):
             await queue_service.add_song(
                 playlist="user",
                 mpd_client=mock_mpd_client,
@@ -134,6 +134,99 @@ class TestAddSong:
                 playlist="user",
                 mpd_client=mock_mpd_client,
             )
+
+    async def test_add_song_with_file_path(self, mock_mpd_client, tmp_path):
+        """Test adding song via a pre-downloaded file path (Navidrome flow)."""
+        audio_file = tmp_path / "navidrome_song-1.mp3"
+        audio_file.write_bytes(b"fake audio data")
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.add_user_song = AsyncMock()
+        mock_redis_client.map_song_to_user = AsyncMock()
+        mock_redis_client.increment_user_add_count = AsyncMock()
+        mock_redis_client.is_livestream_active = AsyncMock(return_value=False)
+
+        with patch("app.services.queue_service.shutil.move"), \
+             patch("app.services.cache_service.calculate_md5", return_value="abc123"):
+            song_id = await queue_service.add_song(
+                playlist="user",
+                mpd_client=mock_mpd_client,
+                file_path=audio_file,
+                song_name="Test Song",
+                artist_name="Test Artist",
+                redis_client=mock_redis_client,
+                user_id="user-1",
+                skip_validation=True,
+            )
+
+        assert song_id.startswith("u-")
+        mock_mpd_client.add_local_song.assert_called_once()
+        mock_redis_client.add_user_song.assert_called_once()
+
+    async def test_add_song_file_path_and_url_raises_error(self, mock_mpd_client, tmp_path):
+        """Test that providing both file_path and url raises ValueError."""
+        audio_file = tmp_path / "song.mp3"
+        audio_file.write_bytes(b"data")
+
+        with pytest.raises(ValueError, match="Provide exactly one of"):
+            await queue_service.add_song(
+                playlist="user",
+                mpd_client=mock_mpd_client,
+                url="https://test.com",
+                file_path=audio_file,
+            )
+
+    async def test_add_song_file_path_and_file_raises_error(self, mock_mpd_client, tmp_path):
+        """Test that providing both file_path and file raises ValueError."""
+        audio_file = tmp_path / "song.mp3"
+        audio_file.write_bytes(b"data")
+
+        with pytest.raises(ValueError, match="Provide exactly one of"):
+            await queue_service.add_song(
+                playlist="user",
+                mpd_client=mock_mpd_client,
+                file=MagicMock(),
+                file_path=audio_file,
+            )
+
+    async def test_add_song_file_path_cache_hit(self, mock_mpd_client, tmp_path):
+        """Test that file_path is replaced with cached version on MD5 match."""
+        audio_file = tmp_path / "navidrome_s1.mp3"
+        audio_file.write_bytes(b"audio content")
+
+        cached_file = tmp_path / "cached.mp3"
+        cached_file.write_bytes(b"cached content")
+
+        mock_cache_entry = MagicMock()
+        mock_cache_entry.filepath = str(cached_file)
+        mock_cache_entry.id = 99
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.is_livestream_active = AsyncMock(return_value=False)
+        mock_redis_client.add_user_song = AsyncMock()
+        mock_redis_client.map_song_to_user = AsyncMock()
+        mock_redis_client.increment_user_add_count = AsyncMock()
+        mock_redis_client.set_song_cache_id = AsyncMock()
+        mock_redis_client.set_song_metadata = AsyncMock()
+        mock_redis_client.set_metadata = AsyncMock()
+
+        mock_db = MagicMock()
+
+        with patch("app.services.cache_service.calculate_md5", return_value="hit_hash"), \
+             patch("app.services.cache_service.lookup_by_hash", return_value=mock_cache_entry), \
+             patch("app.services.queue_service.shutil.copy2"):
+            await queue_service.add_song(
+                playlist="user",
+                mpd_client=mock_mpd_client,
+                db_session=mock_db,
+                file_path=audio_file,
+                skip_validation=True,
+                redis_client=mock_redis_client,
+                user_id="user-1",
+            )
+
+        # Original file should be unlinked (replaced by cache)
+        assert not audio_file.exists()
 
 
 class TestUploadValidation:

@@ -109,6 +109,18 @@ spec:
                 secretKeyRef:
                   name: {{ include "h4kstream.fullname" . }}-secrets
                   key: LOGTO_REDIRECT_URI
+            - name: NAVIDROME_URL
+              value: {{ .Values.backend.env.NAVIDROME_URL | quote }}
+            - name: NAVIDROME_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h4kstream.fullname" . }}-secrets
+                  key: NAVIDROME_USER
+            - name: NAVIDROME_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h4kstream.fullname" . }}-secrets
+                  key: NAVIDROME_PASSWORD
           volumeMounts:
             - name: data
               mountPath: /app/data

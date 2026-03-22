@@ -22,10 +22,15 @@ export type { LivestreamTimeRemainingRequest } from './models/LivestreamTimeRema
 export type { LivestreamTimeRemainingResponse } from './models/LivestreamTimeRemainingResponse';
 export type { LivestreamTokenCreateRequest } from './models/LivestreamTokenCreateRequest';
 export type { LivestreamTokenResponse } from './models/LivestreamTokenResponse';
+export type { NavidromePlaylistItem } from './models/NavidromePlaylistItem';
 export type { NowPlayingMetadata } from './models/NowPlayingMetadata';
 export { NowPlayingResponse } from './models/NowPlayingResponse';
 export type { PendingUserCreate } from './models/PendingUserCreate';
 export type { PendingUserPublic } from './models/PendingUserPublic';
+export type { PlaylistAddRequest } from './models/PlaylistAddRequest';
+export type { PlaylistAddResponse } from './models/PlaylistAddResponse';
+export type { PlaylistSongResult } from './models/PlaylistSongResult';
+export { PlaylistSource } from './models/PlaylistSource';
 export type { RecordingMetadata } from './models/RecordingMetadata';
 export type { RecordingsListResponse } from './models/RecordingsListResponse';
 export type { ShowCreate } from './models/ShowCreate';

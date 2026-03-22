@@ -3,6 +3,9 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { Body_add_song_queue_add_post } from '../models/Body_add_song_queue_add_post';
+import type { NavidromePlaylistItem } from '../models/NavidromePlaylistItem';
+import type { PlaylistAddRequest } from '../models/PlaylistAddRequest';
+import type { PlaylistAddResponse } from '../models/PlaylistAddResponse';
 import type { SongAddedResponse } from '../models/SongAddedResponse';
 import type { SongItem } from '../models/SongItem';
 import type { SongMetadataEditRequest } from '../models/SongMetadataEditRequest';
@@ -111,6 +114,47 @@ export class QueueService {
                 403: `Not authorized to edit this song`,
                 404: `Song not found`,
                 422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * List Navidrome Playlists
+     * List playlists available to add from Navidrome.
+     * @returns NavidromePlaylistItem Successful Response
+     * @throws ApiError
+     */
+    public listNavidromePlaylistsQueuePlaylistsNavidromeGet(): CancelablePromise<Array<NavidromePlaylistItem>> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/queue/playlists/navidrome',
+            errors: {
+                401: `Unauthorized`,
+                403: `Forbidden`,
+                503: `Service Unavailable`,
+            },
+        });
+    }
+    /**
+     * Add Playlist to Queue
+     * Add a playlist (from Navidrome or other sources) to your user queue. Entire playlist is rejected if adding it would exceed your queue limit.
+     * @param requestBody
+     * @returns PlaylistAddResponse Successful Response
+     * @throws ApiError
+     */
+    public addPlaylistQueueAddPlaylistPost(
+        requestBody: PlaylistAddRequest,
+    ): CancelablePromise<PlaylistAddResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/queue/add-playlist',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                400: `Bad Request`,
+                401: `Unauthorized`,
+                403: `Queue limit exceeded`,
+                422: `Validation Error`,
+                503: `Service Unavailable`,
             },
         });
     }

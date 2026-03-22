@@ -43,6 +43,7 @@ backend:
     LOG_LEVEL: "INFO"
     DEBUG: "false"
     RELOAD: "false"
+    NAVIDROME_URL: "http://navidrome.media-stack.svc.cluster.local:4533"
 
   # Secrets - Override in production!
   secrets:
@@ -53,6 +54,8 @@ backend:
     LOGTO_APP_ID: ""
     LOGTO_APP_SECRET: ""
     LOGTO_REDIRECT_URI: ""
+    NAVIDROME_USER: ""
+    NAVIDROME_PASSWORD: ""
 
   # Service configuration
   service:

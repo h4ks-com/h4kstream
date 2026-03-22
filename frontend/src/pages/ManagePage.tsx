@@ -5,6 +5,7 @@ import { getUserLimits, getTokenTimeRemaining, formatTimeRemaining } from '../ut
 import { QueueService, ShowsService, UsersService } from '../utils/apiClient';
 import type { SongItem, ShowPublic } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
+import { NavidromePlaylistPicker } from '../components/NavidromePlaylistPicker';
 import { LivestreamTokenDisplay } from '../components/LivestreamTokenDisplay';
 import { SongEditDialog } from '../components/SongEditDialog';
 import IconButton from '@mui/material/IconButton';
@@ -262,6 +263,11 @@ const QueueSection: React.FC = () => {
           onUploadComplete={fetchQueue}
           uploadFunction={(params) => QueueService().addSongQueueAddPost(params as any)}
         />
+      </div>
+
+      {/* Add Playlist Section */}
+      <div className="mb-6">
+        <NavidromePlaylistPicker onPlaylistAdded={fetchQueue} />
       </div>
 
       {error && (

@@ -33,6 +33,9 @@ x-backend-common: &backend-common
   - LOGTO_APP_ID=${LOGTO_APP_ID:-}
   - LOGTO_APP_SECRET=${LOGTO_APP_SECRET:-}
   - LOGTO_REDIRECT_URI=${LOGTO_REDIRECT_URI:-}
+  - NAVIDROME_URL=${NAVIDROME_URL:-}
+  - NAVIDROME_USER=${NAVIDROME_USER:-}
+  - NAVIDROME_PASSWORD=${NAVIDROME_PASSWORD:-}
   depends_on:
   - redis
   - janus
