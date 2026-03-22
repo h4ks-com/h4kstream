@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.dependencies import dep_mpd_fallback
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
 from app.main import app
@@ -177,7 +178,7 @@ class TestNavidromeEndpoints:
 
     @pytest.fixture(autouse=True)
     def mock_mpd_dep(self):
-        """Override dep_mpd_user so tests don't require a real MPD connection."""
+        """Override dep_mpd_user and dep_mpd_fallback so tests don't require a real MPD connection."""
         mock_client = AsyncMock()
         mock_client.update_database = AsyncMock()
         mock_client.add_local_song = AsyncMock(return_value=42)
@@ -186,13 +187,25 @@ class TestNavidromeEndpoints:
         mock_client.set_random = AsyncMock()
         mock_client.play = AsyncMock()
         mock_client.get_queue = AsyncMock(return_value=[])
+        mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
 
-        async def override():
+        mock_fallback = AsyncMock()
+        mock_fallback.get_queue = AsyncMock(return_value=[])
+        mock_fallback.connect = AsyncMock()
+        mock_fallback.disconnect = AsyncMock()
+
+        async def override_user():
             yield mock_client
 
-        app.dependency_overrides[dep_mpd_user] = override
+        async def override_fallback():
+            yield mock_fallback
+
+        app.dependency_overrides[dep_mpd_user] = override_user
+        app.dependency_overrides[dep_mpd_fallback] = override_fallback
         yield mock_client
         app.dependency_overrides.pop(dep_mpd_user, None)
+        app.dependency_overrides.pop(dep_mpd_fallback, None)
 
     @pytest.fixture
     def mock_redis_dep(self):

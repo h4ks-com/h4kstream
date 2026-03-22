@@ -8,6 +8,7 @@ interface NavidromePlaylistPickerProps {
 
 export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = ({ onPlaylistAdded }) => {
   const [playlists, setPlaylists] = useState<NavidromePlaylistItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
@@ -83,11 +84,32 @@ export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = (
     );
   }
 
+  const filtered = playlists.filter((p) =>
+    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="border-2 border-h4ks-green-800 bg-h4ks-dark-900 p-4">
       <h3 className="text-lg font-bold text-h4ks-green-400 mb-4 font-mono">[ADD PLAYLIST]</h3>
-      <div className="divide-y divide-h4ks-green-900">
-        {playlists.map((playlist) => {
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Search playlists..."
+        className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 font-mono text-sm px-3 py-1.5 mb-3 focus:outline-none focus:border-h4ks-green-600 placeholder-gray-600"
+      />
+      {playlists.length > 10 && (
+        <div className="text-gray-600 text-xs font-mono mb-2">
+          {filtered.length === playlists.length
+            ? `${playlists.length} playlists`
+            : `${filtered.length} of ${playlists.length}`}
+        </div>
+      )}
+      <div className="divide-y divide-h4ks-green-900 max-h-72 overflow-y-auto">
+        {filtered.length === 0 && (
+          <div className="text-gray-500 text-sm py-2">No playlists match.</div>
+        )}
+        {filtered.map((playlist) => {
           const result = results[playlist.id];
           const isAdding = addingId === playlist.id;
           return (
