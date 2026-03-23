@@ -12,7 +12,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { useWebSocketEvent } from '../contexts/WebSocketContext';
+import { useWebSocketContext, useWebSocketEvent } from '../contexts/WebSocketContext';
 
 interface QueueListProps {
   isAdminMode?: boolean;
@@ -24,11 +24,19 @@ export const QueueList: React.FC<QueueListProps> = ({ isAdminMode = false }) => 
   const [error, setError] = useState<string | null>(null);
   const [editingSong, setEditingSong] = useState<SongItem | null>(null);
   const [externalLinkWarning, setExternalLinkWarning] = useState<string | null>(null);
+  const { nowPlaying } = useWebSocketContext();
 
   const fetchQueue = useCallback(async () => {
     try {
       const response = await QueueService().listSongsQueueListGet(11);
-      setSongs(response.slice(1));
+      // Only drop position 0 if its title matches the now-playing metadata.
+      // When metadata lags behind MPD (Liquidsoap audio buffer), the titles
+      // won't match and we keep position 0 to avoid silently dropping a song.
+      const nowPlayingTitle = nowPlaying?.metadata?.title ?? null;
+      const firstTitle = response[0]?.title ?? null;
+      const firstMatchesNowPlaying = nowPlayingTitle && firstTitle &&
+        firstTitle.toLowerCase() === nowPlayingTitle.toLowerCase();
+      setSongs(firstMatchesNowPlaying ? response.slice(1) : response.slice(0, 10));
       setError(null);
     } catch (err) {
       console.error('Queue fetch error:', err);

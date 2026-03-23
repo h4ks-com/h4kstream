@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -93,6 +93,13 @@ export const MetadataDisplay: React.FC = () => {
   useWebSocketEvent('queue_switched', handleQueueSwitched);
   useWebSocketEvent('livestream_started', handleLivestreamStarted);
   useWebSocketEvent('livestream_ended', handleLivestreamEnded);
+
+  // On mount, fetch fresh metadata from the API so we don't rely solely on
+  // the WebSocket snapshot (which reads from Redis and may lag behind MPD
+  // by one song during Liquidsoap's audio buffer window).
+  useEffect(() => {
+    fetchAndUpdateMetadata();
+  }, [fetchAndUpdateMetadata]);
 
   if (nowPlaying && !data) {
     handleNowPlaying(nowPlaying);
