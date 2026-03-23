@@ -87,6 +87,15 @@ class RedisService:
                 await self.redis.srem(key, song)
                 break
 
+    async def reconcile_user_songs(self, user_id: str, active_mpd_song_ids: set[str]) -> None:
+        """Remove from Redis any songs no longer present in MPD (consumed after playback)."""
+        key = f"user:{user_id}:songs"
+        songs = await self.redis.smembers(key)
+        for song in songs:
+            song_id = song.decode().split(":", 1)[0]
+            if song_id not in active_mpd_song_ids:
+                await self.redis.srem(key, song)
+
     async def get_user_song_count(self, user_id: str) -> int:
         """Get count of songs currently in queue for user."""
         key = f"user:{user_id}:songs"

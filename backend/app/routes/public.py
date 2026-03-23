@@ -108,6 +108,12 @@ async def add_song(
     max_songs = get_max_queue_songs(token)
     max_adds = get_max_add_requests(token)
 
+    # Reconcile Redis against MPD before checking limits — consume mode silently
+    # removes played songs from MPD without calling remove_user_song.
+    mpd_queue = await mpd_client.get_queue()
+    active_ids = {song["id"] for song in mpd_queue}
+    await redis_client.reconcile_user_songs(user_id, active_ids)
+
     # Check limits
     current_queue_count = await redis_client.get_user_song_count(user_id)
     current_add_count = await redis_client.get_user_add_count(user_id)
@@ -406,6 +412,11 @@ async def add_playlist(
 
         svc = NavidromeService()
         songs = await svc.get_playlist_songs(request.playlist_id)
+
+        # Reconcile Redis against MPD before checking limits
+        mpd_queue = await mpd_client.get_queue()
+        active_ids = {song["id"] for song in mpd_queue}
+        await redis_client.reconcile_user_songs(user_id, active_ids)
 
         # Reject if adding the whole playlist would exceed the JWT queue limit
         current_count = await redis_client.get_user_song_count(user_id)
