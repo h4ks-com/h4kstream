@@ -22,5 +22,9 @@ export type NavidromePlaylistItem = {
      * Playlist comment/description
      */
     comment?: string;
+    /**
+     * Whether the playlist is public
+     */
+    public?: boolean;
 };
 

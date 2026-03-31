@@ -15,5 +15,9 @@ export type PlaylistAddRequest = {
      * ID of the playlist to add
      */
     playlist_id: string;
+    /**
+     * Trim playlist to remaining queue capacity instead of rejecting
+     */
+    clamp?: boolean;
 };
 

@@ -451,17 +451,23 @@ async def add_playlist(
         active_ids = {song["id"] for song in mpd_queue}
         await redis_client.reconcile_user_songs(user_id, active_ids)
 
-        # Reject if adding the whole playlist would exceed the JWT queue limit
         current_count = await redis_client.get_user_song_count(user_id)
         max_songs = get_max_queue_songs(token)
+        remaining = (max_songs - current_count) if max_songs else len(songs)
+
         if max_songs and current_count + len(songs) > max_songs:
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Adding {len(songs)} songs would exceed your {max_songs}-song limit "
-                    f"(currently {current_count} in queue)"
-                ),
-            )
+            if request.clamp:
+                songs = songs[:remaining]
+                if not songs:
+                    raise HTTPException(status_code=403, detail="Queue is full")
+            else:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        f"Adding {len(songs)} songs would exceed your {max_songs}-song limit "
+                        f"(currently {current_count} in queue)"
+                    ),
+                )
 
         added: list[PlaylistSongResult] = []
         errors: list[str] = []

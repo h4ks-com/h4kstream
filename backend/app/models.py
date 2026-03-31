@@ -418,6 +418,7 @@ class PlaylistAddRequest(BaseModel):
 
     source: PlaylistSource = Field(..., description="Playlist source (e.g. navidrome)")
     playlist_id: str = Field(..., description="ID of the playlist to add")
+    clamp: bool = Field(default=False, description="Trim playlist to remaining queue capacity instead of rejecting")
 
 
 class PlaylistSongResult(BaseModel):

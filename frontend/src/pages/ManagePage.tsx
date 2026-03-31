@@ -267,7 +267,11 @@ const QueueSection: React.FC = () => {
 
       {/* Add Playlist Section */}
       <div className="mb-6">
-        <NavidromePlaylistPicker onPlaylistAdded={fetchQueue} />
+        <NavidromePlaylistPicker
+          onPlaylistAdded={fetchQueue}
+          currentQueueCount={songs.length}
+          maxQueueSongs={limits.maxQueueSongs ?? undefined}
+        />
       </div>
 
       {error && (

@@ -119,7 +119,7 @@ export class QueueService {
     }
     /**
      * List Navidrome Playlists
-     * List playlists available to add from Navidrome.
+     * List Navidrome playlists visible to the caller. Authenticated users see their own playlists plus public ones. Unauthenticated requests (or users without a Navidrome account) see only public playlists.
      * @returns NavidromePlaylistItem Successful Response
      * @throws ApiError
      */

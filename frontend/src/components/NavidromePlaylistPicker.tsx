@@ -4,16 +4,24 @@ import type { NavidromePlaylistItem } from '../api';
 
 interface NavidromePlaylistPickerProps {
   onPlaylistAdded: () => void;
+  currentQueueCount?: number;
+  maxQueueSongs?: number;
 }
 
-export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = ({ onPlaylistAdded }) => {
+export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = ({
+  onPlaylistAdded,
+  currentQueueCount,
+  maxQueueSongs,
+}) => {
   const [playlists, setPlaylists] = useState<NavidromePlaylistItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
-  const [results, setResults] = useState<Record<string, { added: number; errors: string[] }>>({});
+  const [results, setResults] = useState<Record<string, { added: number; errors: string[]; limitExceeded?: boolean }>>({});
   const [fetchError, setFetchError] = useState('');
+
+  const remaining = Math.max(0, (maxQueueSongs ?? 0) - (currentQueueCount ?? 0));
 
   useEffect(() => {
     QueueService().listNavidromePlaylistsQueuePlaylistsNavidromeGet()
@@ -28,7 +36,7 @@ export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = (
       .finally(() => setLoading(false));
   }, []);
 
-  const handleAdd = async (playlist: NavidromePlaylistItem) => {
+  const handleAdd = async (playlist: NavidromePlaylistItem, clamp = false) => {
     setAddingId(playlist.id);
     setResults((prev) => ({ ...prev, [playlist.id]: { added: 0, errors: [] } }));
 
@@ -36,6 +44,7 @@ export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = (
       const data = await QueueService().addPlaylistQueueAddPlaylistPost({
         source: 'navidrome' as any,
         playlist_id: playlist.id,
+        clamp,
       });
       setResults((prev) => ({
         ...prev,
@@ -46,9 +55,10 @@ export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = (
       }
     } catch (err: any) {
       const msg = err?.body?.detail || 'Failed to add playlist';
+      const isLimitError = err?.status === 403 && msg.includes('exceed');
       setResults((prev) => ({
         ...prev,
-        [playlist.id]: { added: 0, errors: [msg] },
+        [playlist.id]: { added: 0, errors: [msg], limitExceeded: isLimitError && !clamp },
       }));
     } finally {
       setAddingId(null);
@@ -137,6 +147,15 @@ export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = (
                 <div className="bg-red-900/20 border border-red-700 text-red-400 px-2 py-1 text-xs">
                   {result.errors[0]}
                 </div>
+              )}
+              {result?.limitExceeded && remaining > 0 && (
+                <button
+                  onClick={() => handleAdd(playlist, true)}
+                  disabled={addingId !== null}
+                  className="mt-1 self-start bg-h4ks-green-900 border border-h4ks-green-700 text-h4ks-green-400 font-mono text-xs px-2 py-1 hover:bg-h4ks-green-800 disabled:opacity-50"
+                >
+                  {addingId === playlist.id ? '[ADDING...]' : `[Add first ${remaining}]`}
+                </button>
               )}
             </div>
           );
