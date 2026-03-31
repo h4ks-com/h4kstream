@@ -5,6 +5,7 @@ User-facing endpoints that require JWT tokens. Users can only access their own u
 
 import logging
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -17,12 +18,14 @@ from sqlmodel import select
 
 from app.db import get_session
 from app.db.models import FileCache
+from app.db.models import User
 from app.dependencies import dep_client_count_service
 from app.dependencies import dep_event_publisher
 from app.dependencies import dep_mpd_fallback
 from app.dependencies import dep_mpd_user
 from app.dependencies import dep_redis_client
 from app.dependencies import get_jwt_token
+from app.dependencies import get_jwt_token_optional
 from app.dependencies import get_token_optional
 from app.exceptions import FileNotFoundInMPDError
 from app.exceptions import SongNotFoundError
@@ -362,20 +365,35 @@ async def edit_song_metadata(
     "/playlists/navidrome",
     response_model=list[NavidromePlaylistItem],
     summary="List Navidrome Playlists",
-    description="List playlists available to add from Navidrome.",
+    description=(
+        "List Navidrome playlists visible to the caller. "
+        "Authenticated users see their own playlists plus public ones. "
+        "Unauthenticated requests (or users without a Navidrome account) see only public playlists."
+    ),
     responses={503: {"model": ErrorResponse}},
 )
 async def list_navidrome_playlists(
-    token: str = Depends(get_jwt_token),
+    token: str | None = Depends(get_jwt_token_optional),
+    db_session: Session = Depends(get_session),
 ) -> list[NavidromePlaylistItem]:
-    """List Navidrome playlists available to the service account."""
+    """List Navidrome playlists filtered by ownership and public visibility."""
     if not settings.navidrome_enabled:
         raise HTTPException(status_code=503, detail="Navidrome integration not configured")
+
+    username: str | None = None
+    if token:
+        user_id = get_user_id(token)
+        if user_id:
+            user = db_session.get(User, UUID(user_id))
+            if user:
+                username = user.username
+
     svc = NavidromeService()
     playlists = await svc.get_playlists()
     return [
-        NavidromePlaylistItem(id=p.id, name=p.name, song_count=p.song_count, comment=p.comment)
+        NavidromePlaylistItem(id=p.id, name=p.name, song_count=p.song_count, comment=p.comment, public=p.public)
         for p in playlists
+        if p.public or (username and p.owner == username)
     ]
 
 
@@ -410,7 +428,22 @@ async def add_playlist(
         if not settings.navidrome_enabled:
             raise HTTPException(status_code=503, detail="Navidrome integration not configured")
 
+        # Resolve Navidrome username to enforce playlist access control
+        username: str | None = None
+        user = db_session.get(User, UUID(user_id))
+        if user:
+            username = user.username
+
         svc = NavidromeService()
+
+        # Only allow adding playlists the user can see (own or public)
+        accessible_ids = {
+            p.id for p in await svc.get_playlists()
+            if p.public or (username and p.owner == username)
+        }
+        if request.playlist_id not in accessible_ids:
+            raise HTTPException(status_code=403, detail="Playlist not accessible")
+
         songs = await svc.get_playlist_songs(request.playlist_id)
 
         # Reconcile Redis against MPD before checking limits

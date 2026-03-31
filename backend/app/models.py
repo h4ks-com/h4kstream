@@ -410,6 +410,7 @@ class NavidromePlaylistItem(BaseModel):
     name: str = Field(..., description="Playlist name")
     song_count: int = Field(..., description="Number of songs in the playlist")
     comment: str = Field(default="", description="Playlist comment/description")
+    public: bool = Field(default=False, description="Whether the playlist is public")
 
 
 class PlaylistAddRequest(BaseModel):

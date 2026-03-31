@@ -15,6 +15,8 @@ class NavidromePlaylist:
     song_count: int
     comment: str = ""
     cover_art: str = ""
+    owner: str = ""
+    public: bool = False
 
 
 @dataclass
@@ -53,6 +55,8 @@ class NavidromeService:
                     song_count=p.get("songCount", 0),
                     comment=p.get("comment", ""),
                     cover_art=p.get("coverArt", ""),
+                    owner=p.get("owner", ""),
+                    public=p.get("public", False),
                 )
                 for p in items
             ]
