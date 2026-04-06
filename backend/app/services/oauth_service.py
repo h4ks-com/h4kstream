@@ -11,6 +11,7 @@ _oidc_config_cache: dict[str, "OIDCConfig"] = {}
 class OIDCConfig(BaseModel):
     authorization_endpoint: str
     token_endpoint: str
+    userinfo_endpoint: str
 
 
 class TokenResponse(BaseModel):
@@ -49,7 +50,7 @@ class OAuthService:
             "response_type": "code",
             "client_id": self.app_id,
             "redirect_uri": self.redirect_uri,
-            "scope": "openid profile email username",
+            "scope": "openid profile email username roles",
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
@@ -74,6 +75,16 @@ class OAuthService:
             )
             response.raise_for_status()
             return TokenResponse.model_validate(response.json())
+
+    async def fetch_userinfo(self, access_token: str) -> dict:
+        config = await self.get_oidc_config()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                config.userinfo_endpoint,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            response.raise_for_status()
+            return response.json()
 
     def extract_user_claims(self, id_token: str) -> UserClaims:
         raw = jwt.decode(id_token, options={"verify_signature": False})

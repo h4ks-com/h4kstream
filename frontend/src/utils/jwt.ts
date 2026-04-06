@@ -7,6 +7,7 @@ interface JWTPayload {
   max_queue_songs?: number;
   max_add_requests?: number;
   role?: string;
+  has_radio?: boolean;
   exp?: number;
   [key: string]: any;
 }
@@ -102,4 +103,12 @@ export function formatTimeRemaining(seconds: number): string {
 export function getUserRole(token: string): string {
   const payload = decodeJWT(token);
   return payload?.role ?? '';
+}
+
+/**
+ * Check if the JWT token grants radio access
+ */
+export function getHasRadio(token: string): boolean {
+  const payload = decodeJWT(token);
+  return payload?.has_radio === true;
 }

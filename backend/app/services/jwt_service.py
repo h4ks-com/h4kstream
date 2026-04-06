@@ -57,6 +57,7 @@ def generate_token(
         "max_queue_songs": max_queue_songs,
         "max_add_requests": max_add_requests,
         "role": role,
+        "has_radio": True,
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 

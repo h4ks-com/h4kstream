@@ -2,7 +2,7 @@
  * Authentication utilities for managing JWT tokens and admin tokens
  */
 
-import { getUserRole } from './jwt';
+import { getHasRadio, getUserRole } from './jwt';
 
 const USER_TOKEN_KEY = 'userToken';
 const ADMIN_TOKEN_KEY = 'adminToken';
@@ -80,6 +80,12 @@ export const authUtils = {
     const token = localStorage.getItem(USER_TOKEN_KEY);
     if (!token) return false;
     return getUserRole(token) === 'admin';
+  },
+
+  hasRadioRole: (): boolean => {
+    const token = localStorage.getItem(USER_TOKEN_KEY);
+    if (!token) return false;
+    return getHasRadio(token);
   },
 
   // Check if user has admin access (either admin TOKEN or admin role)

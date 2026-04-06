@@ -81,6 +81,16 @@ async def oauth_callback(
 
     oauth_service = _get_oauth_service()
     token_response = await oauth_service.exchange_code(code, code_verifier)
+
+    if not token_response.access_token:
+        raise HTTPException(status_code=502, detail="No access token in OAuth response")
+
+    userinfo = await oauth_service.fetch_userinfo(token_response.access_token)
+    roles: list[str] = userinfo.get("roles") or []
+    if "radio" not in roles:
+        frontend_url = f"{request.url.scheme}://{request.url.netloc}"
+        return RedirectResponse(f"{frontend_url}/no-access", status_code=302)
+
     claims = oauth_service.extract_user_claims(token_response.id_token)
     username = claims.username
 
