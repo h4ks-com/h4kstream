@@ -49,6 +49,12 @@ export const HomePage: React.FC = () => {
           </div>
           <div className="flex gap-2">
             <button
+              onClick={() => navigate('/monitor')}
+              className="px-4 py-2 border border-h4ks-green-700 hover:border-h4ks-green-500 text-h4ks-green-400 hover:text-h4ks-green-300 font-mono transition-colors"
+            >
+              [MONITOR]
+            </button>
+            <button
               onClick={() => navigate(isUserLoggedIn ? '/manage' : '/login')}
               className="px-4 py-2 border border-h4ks-green-700 hover:border-h4ks-green-500 text-h4ks-green-400 hover:text-h4ks-green-300 font-mono transition-colors"
             >

@@ -170,14 +170,19 @@ async def stream_recording(
     if end is not None and start is not None and end <= start:
         raise HTTPException(status_code=400, detail="end must be greater than start")
 
+    stem = Path(recording.file_path).stem
+
     if start is None and end is None:
         return FileResponse(
             path=file_path,
             media_type="audio/mpeg",
+            filename=f"{stem}.mp3",
             headers={"Cache-Control": "no-cache"},
         )
 
-    filename = f"segment_{int(start or 0)}-{int(end or 0)}.mp3"
+    t0 = int(start or 0)
+    t1 = int(end) if end is not None else 0
+    filename = f"{stem}_{t0}s-{t1}s.mp3"
     return StreamingResponse(
         _stream_segment(file_path, start, end),
         media_type="audio/mpeg",

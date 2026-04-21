@@ -26,7 +26,7 @@ const App: React.FC = () => {
       <Route path="/archives" element={<ArchiveDetailPage />} />
       <Route path="/archives/:showName" element={<ArchiveDetailPage />} />
       <Route path="/stream" element={<StreamPage />} />
-      <Route path="/streamhealth" element={<StreamHealthPage />} />
+      <Route path="/monitor" element={<StreamHealthPage />} />
       <Route path="/login/callback" element={<OAuthCallbackPage />} />
       <Route path="/no-access" element={<NoAccessPage />} />
     </Routes>

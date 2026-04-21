@@ -11,6 +11,24 @@ global.ResizeObserver = class {
   disconnect() {}
 };
 
+// jsdom doesn't implement canvas 2D — stub globally so any test that renders
+// a component with a <canvas> doesn't crash on getContext('2d').
+HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+  fillRect: jest.fn(),
+  clearRect: jest.fn(),
+  beginPath: jest.fn(),
+  moveTo: jest.fn(),
+  lineTo: jest.fn(),
+  stroke: jest.fn(),
+  fill: jest.fn(),
+  closePath: jest.fn(),
+  fillText: jest.fn(),
+  drawImage: jest.fn(),
+  createImageData: jest.fn(() => ({ data: new Uint8ClampedArray(4) } as ImageData)),
+  putImageData: jest.fn(),
+  setLineDash: jest.fn(),
+})) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+
 // Suppress console logs from Janus cleanup during tests
 const originalConsoleLog = console.log;
 console.log = (...args: any[]) => {

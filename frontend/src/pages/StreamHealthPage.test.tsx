@@ -12,7 +12,7 @@ import { WebSocketProvider } from '../contexts/WebSocketContext';
 const mockStartMonitoring = jest.fn();
 const mockStopMonitoring = jest.fn();
 let mockMonitoring = false;
-let mockMetrics = { rms: 0, peak: 0, clipping: false, crackle: false, click: false };
+let mockMetrics = { rms: 0, peak: 0, clipping: false, crackle: false, click: false, spectralRatio: 0, spectralHigh: false };
 
 jest.mock('../hooks/useStreamHealth', () => ({
   useStreamHealth: () => ({
@@ -24,26 +24,16 @@ jest.mock('../hooks/useStreamHealth', () => ({
     sampleRateRef: { current: 44100 },
     startMonitoring: mockStartMonitoring,
     stopMonitoring: mockStopMonitoring,
+    setVolume: jest.fn(),
+    isLive: true,
+    isPlaying: false,
+    error: null,
+    playback: { currentTime: 0, duration: 0 },
+    seek: jest.fn(),
+    togglePlayback: jest.fn(),
   }),
 }));
 
-// jsdom doesn't implement canvas 2D — stub it out so canvas effects don't crash.
-const mockCtx: Partial<CanvasRenderingContext2D> = {
-  fillRect: jest.fn(),
-  clearRect: jest.fn(),
-  beginPath: jest.fn(),
-  moveTo: jest.fn(),
-  lineTo: jest.fn(),
-  stroke: jest.fn(),
-  fill: jest.fn(),
-  closePath: jest.fn(),
-  fillText: jest.fn(),
-  drawImage: jest.fn(),
-  createImageData: jest.fn(() => ({ data: new Uint8ClampedArray(4) } as ImageData)),
-  putImageData: jest.fn(),
-  setLineDash: jest.fn(),
-};
-HTMLCanvasElement.prototype.getContext = jest.fn(() => mockCtx) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
 // ---------------------------------------------------------------------------
 // WebSocket mock (same pattern as MetadataDisplay.test.tsx)
@@ -105,7 +95,7 @@ describe('StreamHealthPage', () => {
     mockWsOnOpen = null;
     mockWsOnMessage = null;
     mockMonitoring = false;
-    mockMetrics = { rms: 0, peak: 0, clipping: false, crackle: false, click: false };
+    mockMetrics = { rms: 0, peak: 0, clipping: false, crackle: false, click: false, spectralRatio: 0, spectralHigh: false };
     mockStartMonitoring.mockReset();
     mockStopMonitoring.mockReset();
     jest.useFakeTimers();
@@ -118,7 +108,7 @@ describe('StreamHealthPage', () => {
 
   it('renders the page title', () => {
     renderPage();
-    expect(screen.getByText('[STREAM HEALTH MONITOR]')).toBeInTheDocument();
+    expect(screen.getByText('[AUDIO MONITOR]')).toBeInTheDocument();
   });
 
   it('shows NO ACTIVE LIVESTREAM by default', () => {
@@ -185,42 +175,42 @@ describe('StreamHealthPage', () => {
 
   it('shows CLIP indicator when metrics.clipping is true', () => {
     mockMonitoring = true;
-    mockMetrics = { rms: 0.9, peak: 1.0, clipping: true, crackle: false, click: false };
+    mockMetrics = { rms: 0.9, peak: 1.0, clipping: true, crackle: false, click: false, spectralRatio: 0, spectralHigh: false };
     renderPage();
     expect(screen.getByText(/CLIP !!!/)).toBeInTheDocument();
   });
 
   it('shows CLIP OK when signal is within range', () => {
     mockMonitoring = true;
-    mockMetrics = { rms: 0.3, peak: 0.5, clipping: false, crackle: false, click: false };
+    mockMetrics = { rms: 0.3, peak: 0.5, clipping: false, crackle: false, click: false, spectralRatio: 0, spectralHigh: false };
     renderPage();
     expect(screen.getByText('CLIP OK')).toBeInTheDocument();
   });
 
   it('shows CRACKLE DETECTED when metrics.crackle is true', () => {
     mockMonitoring = true;
-    mockMetrics = { rms: 0, peak: 0, clipping: false, crackle: true, click: false };
+    mockMetrics = { rms: 0, peak: 0, clipping: false, crackle: true, click: false, spectralRatio: 0, spectralHigh: false };
     renderPage();
     expect(screen.getByText('CRACKLE DETECTED')).toBeInTheDocument();
   });
 
   it('shows CRACKLE OK when signal is stable', () => {
     mockMonitoring = true;
-    mockMetrics = { rms: 0.3, peak: 0.5, clipping: false, crackle: false, click: false };
+    mockMetrics = { rms: 0.3, peak: 0.5, clipping: false, crackle: false, click: false, spectralRatio: 0, spectralHigh: false };
     renderPage();
     expect(screen.getByText('CRACKLE OK')).toBeInTheDocument();
   });
 
   it('shows CLICK !!! when metrics.click is true', () => {
     mockMonitoring = true;
-    mockMetrics = { rms: 0.05, peak: 0.5, clipping: false, crackle: false, click: true };
+    mockMetrics = { rms: 0.05, peak: 0.5, clipping: false, crackle: false, click: true, spectralRatio: 0, spectralHigh: false };
     renderPage();
     expect(screen.getByText('CLICK !!!')).toBeInTheDocument();
   });
 
   it('shows CLICK OK when no click detected', () => {
     mockMonitoring = true;
-    mockMetrics = { rms: 0.3, peak: 0.5, clipping: false, crackle: false, click: false };
+    mockMetrics = { rms: 0.3, peak: 0.5, clipping: false, crackle: false, click: false, spectralRatio: 0, spectralHigh: false };
     renderPage();
     expect(screen.getByText('CLICK OK')).toBeInTheDocument();
   });
