@@ -128,7 +128,7 @@
 	}
 
 	# Livestream input - proxy to Liquidsoap harbor
-	# Configured for ffmpeg HTTP PUT streaming with chunked transfer
+	# For local streaming use port 8003 directly (icecast:// avoids chunked encoding issues)
 	handle /stream/* {
 		# Strip /stream prefix so liquidsoap receives /live
 		uri strip_prefix /stream
@@ -147,7 +147,6 @@
 			header_up Ice-Url {header.Ice-Url}
 			header_up Ice-Public {header.Ice-Public}
 
-			# Streaming-optimized settings for chunked PUT requests
 			flush_interval -1
 
 			# Force HTTP/1.1 to prevent HTTP/2 negotiation issues
@@ -169,6 +168,10 @@
 			header Access-Control-Allow-Methods "HEAD, GET, OPTIONS"
 			respond "" 200
 		}
+
+		# Required for Web Audio API (crossOrigin="anonymous" on <audio> elements)
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
 
 		reverse_proxy liquidsoap:8001 {
 			# Streaming-optimized settings

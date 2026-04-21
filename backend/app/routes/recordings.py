@@ -1,6 +1,8 @@
 """Public and admin endpoints for livestream recordings."""
 
+import asyncio
 import logging
+from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
 
@@ -9,6 +11,7 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from app.db import get_session
@@ -107,14 +110,52 @@ async def list_recordings(
     )
 
 
+async def _stream_segment(filepath: Path, start: float | None, end: float | None) -> AsyncIterator[bytes]:
+    """Pipe a time-range slice of an audio file via ffmpeg, yielding raw MP3 bytes."""
+    args = ["ffmpeg", "-loglevel", "error"]
+    if start:
+        args += ["-ss", str(start)]
+    args += ["-i", str(filepath)]
+    if end is not None:
+        # -to is relative to -ss when -ss precedes -i
+        duration = end - (start or 0.0)
+        args += ["-to", str(duration)]
+    args += ["-c:a", "copy", "-f", "mp3", "pipe:1"]
+
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    assert proc.stdout is not None
+    try:
+        while True:
+            chunk = await proc.stdout.read(65536)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        if proc.returncode is None:
+            proc.kill()
+        await proc.wait()
+
+
 @router.get(
     "/stream/{recording_id}",
     summary="Stream Recording",
-    description="Stream a livestream recording file with seeking support",
+    description="Stream a livestream recording file. Use start/end (seconds) to request a time-range segment.",
     responses={404: {"model": ErrorResponse, "description": "Recording not found"}},
 )
-async def stream_recording(recording_id: int, db: Session = Depends(get_session)):
-    """Stream a recording file with HTTP range request support for seeking."""
+async def stream_recording(
+    recording_id: int,
+    db: Session = Depends(get_session),
+    start: float | None = Query(None, ge=0, description="Start offset in seconds"),
+    end: float | None = Query(None, gt=0, description="End offset in seconds"),
+):
+    """Stream a recording file.
+
+    Supports full file or a time-range segment via start/end params.
+    """
     recording = recordings_db.get_recording(db, recording_id)
 
     if not recording:
@@ -126,10 +167,22 @@ async def stream_recording(recording_id: int, db: Session = Depends(get_session)
         logger.error(f"Recording file not found: {file_path}")
         raise HTTPException(status_code=404, detail="Recording file not found")
 
-    return FileResponse(
-        path=file_path,
-        media_type="audio/ogg",
+    if end is not None and start is not None and end <= start:
+        raise HTTPException(status_code=400, detail="end must be greater than start")
+
+    if start is None and end is None:
+        return FileResponse(
+            path=file_path,
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    filename = f"segment_{int(start or 0)}-{int(end or 0)}.mp3"
+    return StreamingResponse(
+        _stream_segment(file_path, start, end),
+        media_type="audio/mpeg",
         headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-cache",
         },
     )

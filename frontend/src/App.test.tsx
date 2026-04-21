@@ -9,6 +9,6 @@ test('renders h4kstream header', () => {
       <App />
     </BrowserRouter>
   );
-  const headerElement = screen.getByRole('heading', { name: /\[h4kstream\]/i });
-  expect(headerElement).toBeInTheDocument();
+  const headerElements = screen.getAllByRole('heading', { name: /\[h4kstream\]/i });
+  expect(headerElements.length).toBeGreaterThan(0);
 });

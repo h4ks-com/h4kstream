@@ -90,17 +90,16 @@ async def create_livestream_token(
     If show_name is provided and doesn't exist, auto-creates it without an owner. Admin tokens have no ownership
     validation.
     """
-    show_name = request.show_name
+    show_name = request.show_name or "Anonymous Livestream"
     intro_filename = None
 
-    if show_name:
-        show = session.exec(select(Show).where(Show.show_name == show_name)).first()
-        if not show:
-            show = Show(show_name=show_name, owner_id=None, is_active=True)
-            session.add(show)
-            session.commit()
-            session.refresh(show)
-        intro_filename = show.intro_filename
+    show = session.exec(select(Show).where(Show.show_name == show_name)).first()
+    if not show:
+        show = Show(show_name=show_name, owner_id=None, is_active=True)
+        session.add(show)
+        session.commit()
+        session.refresh(show)
+    intro_filename = show.intro_filename
 
     token, expires_at = generate_livestream_token(
         request.max_streaming_seconds, show_name, None, request.min_recording_duration, intro_filename

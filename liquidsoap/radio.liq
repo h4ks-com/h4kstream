@@ -114,7 +114,7 @@ def livestream_auth(auth_data) =
 
   response = http.post(headers=headers, data=body, auth_url)
 
-  if string.contains(substring='\"success\":true', response) then
+  if string.contains(substring='"success":true', response) then
     log("Livestream auth successful for #{address}")
     # Store token for later use in connect/disconnect callbacks
     current_livestream_token := password

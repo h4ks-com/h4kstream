@@ -402,11 +402,21 @@ const LivestreamSection: React.FC = () => {
     fetchShows();
   }, [fetchShows]);
 
+  const navigate = useNavigate();
+
   return (
     <div>
-      <h2 className="text-2xl font-bold text-h4ks-green-400 mb-6 font-mono">
-        [MY LIVESTREAM]
-      </h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-h4ks-green-400 font-mono">
+          [MY LIVESTREAM]
+        </h2>
+        <button
+          onClick={() => navigate('/streamhealth')}
+          className="font-mono text-xs text-h4ks-green-600 border border-h4ks-green-900 px-3 py-1 hover:bg-h4ks-green-900/20 transition-colors"
+        >
+          [STREAM HEALTH →]
+        </button>
+      </div>
 
       {loading ? (
         <div className="text-gray-400">Loading shows...</div>

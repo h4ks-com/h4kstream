@@ -48,19 +48,27 @@ export class RecordingsService {
     }
     /**
      * Stream Recording
-     * Stream a livestream recording file with seeking support
+     * Stream a livestream recording file. Use start/end (seconds) to request a time-range segment.
      * @param recordingId
+     * @param start Start offset in seconds
+     * @param end End offset in seconds
      * @returns any Successful Response
      * @throws ApiError
      */
     public streamRecordingRecordingsStreamRecordingIdGet(
         recordingId: number,
+        start?: (number | null),
+        end?: (number | null),
     ): CancelablePromise<any> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/recordings/stream/{recording_id}',
             path: {
                 'recording_id': recordingId,
+            },
+            query: {
+                'start': start,
+                'end': end,
             },
             errors: {
                 404: `Recording not found`,

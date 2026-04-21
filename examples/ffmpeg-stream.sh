@@ -24,8 +24,8 @@ set -e
 
 # Configuration
 H4KSTREAM_URL="${H4KSTREAM_URL:-http://localhost/api}"
-STREAM_URL="${STREAM_URL:-http://localhost/stream/live}"
-DEFAULT_DURATION=3600  # 1 hour
+STREAM_URL="${STREAM_URL:-http://localhost:8003/live}"
+DEFAULT_DURATION=86400  # 24 hours — matches Redis quota TTL, allows repeated local testing
 
 # Colors for output
 RED='\033[0;31m'
@@ -70,16 +70,23 @@ if [ $# -lt 1 ]; then
 fi
 
 AUDIO_FILE="$1"
-STREAM_TITLE="${2:-Live Stream}"
-STREAM_ARTIST="${3:-Unknown Artist}"
-STREAM_GENRE="${4:-Live}"
-DURATION="${5:-$DEFAULT_DURATION}"
 
 # Check if file exists
 if [ ! -f "$AUDIO_FILE" ]; then
     echo -e "${RED}Error: File not found: $AUDIO_FILE${NC}"
     exit 1
 fi
+
+# Auto-detect metadata from file tags; args override if provided
+FILE_TITLE=$(ffprobe -v quiet -show_entries format_tags=title -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null | tr -d '\r')
+FILE_ARTIST=$(ffprobe -v quiet -show_entries format_tags=artist -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null | tr -d '\r')
+FILE_GENRE=$(ffprobe -v quiet -show_entries format_tags=genre -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null | tr -d '\r')
+FILE_DURATION=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null | cut -d. -f1)
+
+STREAM_TITLE="${2:-${FILE_TITLE:-Live Stream}}"
+STREAM_ARTIST="${3:-${FILE_ARTIST:-Unknown Artist}}"
+STREAM_GENRE="${4:-${FILE_GENRE:-Live}}"
+DURATION="${5:-${FILE_DURATION:-$DEFAULT_DURATION}}"
 
 # Check dependencies
 for cmd in ffmpeg curl jq; do
@@ -105,7 +112,7 @@ if [ "$SKIP_TOKEN_REQUEST" = false ]; then
     TOKEN_RESPONSE=$(curl -s -X POST "${H4KSTREAM_URL}/admin/livestream/token" \
         -H "Authorization: Bearer ${ADMIN_TOKEN}" \
         -H "Content-Type: application/json" \
-        -d "{\"max_streaming_seconds\": ${DURATION}}")
+        -d "{\"max_streaming_seconds\": ${DEFAULT_DURATION}}")
 
     # Check if request was successful
     if [ $? -ne 0 ]; then
@@ -130,42 +137,40 @@ else
     echo ""
 fi
 
+# Parse host, port, mount from STREAM_URL (format: http://host:port/mount)
+STREAM_INNER="${STREAM_URL#http://}"
+STREAM_HOSTPORT="${STREAM_INNER%%/*}"
+STREAM_MOUNT="/${STREAM_INNER#*/}"
+STREAM_HOST="${STREAM_HOSTPORT%:*}"
+STREAM_PORT="${STREAM_HOSTPORT##*:}"
+B64=$(printf "source:%s" "$TOKEN" | base64)
+
 # Start streaming
 echo -e "${YELLOW}Starting stream with embedded metadata...${NC}"
-echo "Stream URL: icecast://source:***@${STREAM_URL#*://}"
+echo "Stream URL: source://***@${STREAM_HOSTPORT}${STREAM_MOUNT}"
 echo "Listen at: http://localhost/radio"
 echo "Metadata: http://localhost/api/metadata/now"
 echo ""
 echo -e "${GREEN}Press Ctrl+C to stop${NC}"
 echo ""
 
-# Stream with ffmpeg via Caddy reverse proxy using HTTP PUT
-# -re: Read input at native frame rate (real-time)
-# -i: Input file
-# -metadata: Embed metadata in the stream (Vorbis comments for Ogg)
-# -c:a libvorbis: Encode audio with Vorbis codec
-# -b:a 128k: Audio bitrate 128 kbps
-# -f ogg: Output format Ogg
-# -method PUT: Use HTTP PUT for streaming
-# -auth_type basic: HTTP basic authentication
-# -chunked_post 1: Enable chunked transfer encoding
-# -send_expect_100 0: Disable Expect headers
-# -content_type: MIME type for the stream
-# -headers: Icecast metadata headers (ice-name format: "Artist - Title")
-ffmpeg -re -i "$AUDIO_FILE" \
-    -metadata title="$STREAM_TITLE" \
-    -metadata artist="$STREAM_ARTIST" \
-    -metadata genre="$STREAM_GENRE" \
-    -c:a libvorbis \
-    -b:a 128k \
-    -f ogg \
-    -method PUT \
-    -auth_type basic \
-    -chunked_post 1 \
-    -send_expect_100 0 \
-    -content_type application/ogg \
-    -headers "ice-name: $STREAM_ARTIST - $STREAM_TITLE"$'\r\n'"ice-genre: $STREAM_GENRE"$'\r\n'"ice-description: Livestream: $STREAM_ARTIST - $STREAM_TITLE"$'\r\n' \
-    "http://source:${TOKEN}@${STREAM_URL#*://}"
+# Send SOURCE handshake then pipe ffmpeg MP3 output directly into the TCP connection.
+# ffmpeg's icecast:// muxer mishandles the HTTP/1.1 200 OK response from Liquidsoap's
+# harbor, so we implement the handshake ourselves and pipe raw MP3 into nc.
+# ffmpeg stderr (progress) still goes to the terminal; only stdout is piped.
+(
+  printf "SOURCE %s HTTP/1.1\r\nUser-Agent: Lavf/62.3.100\r\nAccept: */*\r\nConnection: close\r\nHost: %s\r\nContent-Type: audio/mpeg\r\nIcy-MetaData: 1\r\nIce-Name: %s - %s\r\nIce-Genre: %s\r\nIce-Public: 0\r\nAuthorization: Basic %s\r\n\r\n" \
+    "$STREAM_MOUNT" "$STREAM_HOSTPORT" "$STREAM_ARTIST" "$STREAM_TITLE" "$STREAM_GENRE" "$B64"
+  ffmpeg -re -i "$AUDIO_FILE" \
+      -vn \
+      -metadata title="$STREAM_TITLE" \
+      -metadata artist="$STREAM_ARTIST" \
+      -metadata genre="$STREAM_GENRE" \
+      -c:a copy \
+      -f mp3 \
+      -t "$DURATION" \
+      -
+) | nc "$STREAM_HOST" "$STREAM_PORT"
 
 echo ""
 echo -e "${GREEN}Stream ended${NC}"
