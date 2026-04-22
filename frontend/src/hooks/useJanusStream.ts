@@ -60,7 +60,7 @@ const ensureJanusInitialized = (callback: () => void) => {
   }
 
   Janus.init({
-    debug: 'all',
+    debug: false,
     callback: () => {
       janusInitialized = true;
       callback();
@@ -124,8 +124,6 @@ const startConnection = (connection: JanusConnection) => {
   emitSnapshot(connection);
 
   ensureJanusInitialized(() => {
-    console.log('Janus initialized');
-
     if (!Janus.isWebrtcSupported()) {
       connection.isStarting = false;
       connection.error = 'WebRTC not supported in this browser';
@@ -136,12 +134,9 @@ const startConnection = (connection: JanusConnection) => {
     const janus = new Janus({
       server: connection.janusUrl,
       success: () => {
-        console.log('Janus session created');
-
         janus.attach({
           plugin: 'janus.plugin.streaming',
           success: (pluginHandle: any) => {
-            console.log('Streaming plugin attached');
             connection.streamingHandle = pluginHandle;
             connection.isStarting = false;
 
@@ -159,18 +154,12 @@ const startConnection = (connection: JanusConnection) => {
             emitSnapshot(connection);
           },
           onmessage: (msg: any, jsep: any) => {
-            console.log('Got message:', msg);
-
             if (jsep) {
-              console.log('Got JSEP:', jsep);
-
               const pc = connection.streamingHandle?.webrtcStuff?.pc;
               if (pc && pc.addTransceiver) {
                 const transceivers = pc.getTransceivers();
-                console.log('Current transceivers:', transceivers.length);
 
                 if (transceivers.length === 0) {
-                  console.log('Adding audio transceiver for Firefox compatibility');
                   pc.addTransceiver('audio', { direction: 'recvonly' });
                 }
               }
@@ -179,7 +168,6 @@ const startConnection = (connection: JanusConnection) => {
                 jsep,
                 media: { audioSend: false, videoSend: false },
                 success: (ourJsep: any) => {
-                  console.log('Created answer:', ourJsep);
                   connection.streamingHandle?.send({
                     message: { request: 'start' },
                     jsep: ourJsep,
@@ -195,7 +183,6 @@ const startConnection = (connection: JanusConnection) => {
             }
 
             if (msg.streaming === 'event' && msg.result?.status) {
-              console.log('Stream status:', msg.result.status);
               if (msg.result.status === 'started') {
                 connection.isConnected = true;
                 connection.error = null;
@@ -204,8 +191,6 @@ const startConnection = (connection: JanusConnection) => {
             }
           },
           onremotetrack: (track: MediaStreamTrack, mid: string, on: boolean) => {
-            console.log('Remote track:', track.kind, mid, on);
-
             if (on) {
               connection.mediaStream = new MediaStream([track]);
             } else {
@@ -215,7 +200,6 @@ const startConnection = (connection: JanusConnection) => {
             emitSnapshot(connection);
           },
           oncleanup: () => {
-            console.log('Janus cleanup');
             connection.isConnected = false;
             connection.mediaStream = null;
             emitSnapshot(connection);
@@ -229,7 +213,6 @@ const startConnection = (connection: JanusConnection) => {
         emitSnapshot(connection);
       },
       destroyed: () => {
-        console.log('Janus session destroyed');
         connection.isConnected = false;
         connection.isStarting = false;
         connection.janus = null;
@@ -290,7 +273,6 @@ export const useJanusStream = ({
 
     // Cleanup
     return () => {
-      console.log('Cleaning up Janus connection');
       connection.subscribers.delete(handleSnapshot);
       connection.refCount = Math.max(0, connection.refCount - 1);
 
