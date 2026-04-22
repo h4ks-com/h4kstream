@@ -7,6 +7,7 @@ from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import func
 from sqlmodel import Session
 from sqlmodel import col
 from sqlmodel import desc
@@ -171,20 +172,23 @@ async def list_cache_entries(
     :param limit: Pagination limit
     :return: Tuple of (entries, total_count)
     """
-    statement = select(FileCache)
-
+    filters = []
     if playlist_type:
-        statement = statement.where(FileCache.playlist_type == playlist_type)
-
+        filters.append(FileCache.playlist_type == playlist_type)
     if search:
         search_term = f"%{search}%"
-        statement = statement.where(
-            (col(FileCache.filename).ilike(search_term)) | (col(FileCache.origin_url).ilike(search_term))
+        filters.append(
+            col(FileCache.filename).ilike(search_term) | col(FileCache.origin_url).ilike(search_term)
         )
 
-    count_statement = select(FileCache.id).select_from(statement.subquery())
-    total_count = len(session.exec(count_statement).all())
+    count_statement = select(func.count()).select_from(FileCache)
+    for f in filters:
+        count_statement = count_statement.where(f)
+    total_count = session.exec(count_statement).one()
 
+    statement = select(FileCache)
+    for f in filters:
+        statement = statement.where(f)
     statement = statement.order_by(desc(FileCache.created_at)).offset(offset).limit(limit)
     entries = session.exec(statement).all()
 
@@ -225,17 +229,14 @@ async def get_cache_stats(session: Session) -> dict[str, int | dict[str, int]]:
     :param session: Database session
     :return: Statistics dictionary
     """
-    total_statement = select(FileCache.id)
-    total_entries = len(session.exec(total_statement).all())
-
-    user_statement = select(FileCache.id).where(FileCache.playlist_type == "user")
-    user_entries = len(session.exec(user_statement).all())
-
-    fallback_statement = select(FileCache.id).where(FileCache.playlist_type == "fallback")
-    fallback_entries = len(session.exec(fallback_statement).all())
-
-    size_statement = select(FileCache.file_size)
-    total_size = sum(session.exec(size_statement).all())
+    total_entries = session.exec(select(func.count()).select_from(FileCache)).one()
+    user_entries = session.exec(
+        select(func.count()).select_from(FileCache).where(FileCache.playlist_type == "user")
+    ).one()
+    fallback_entries = session.exec(
+        select(func.count()).select_from(FileCache).where(FileCache.playlist_type == "fallback")
+    ).one()
+    total_size = session.exec(select(func.coalesce(func.sum(FileCache.file_size), 0))).one()
 
     return {
         "total_entries": total_entries,
