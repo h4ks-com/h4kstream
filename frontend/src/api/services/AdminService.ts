@@ -266,6 +266,32 @@ export class AdminService {
         });
     }
     /**
+     * Bulk Delete Cache Entries
+     * Delete multiple cache entries by ID, optionally deleting their files
+     * @param requestBody
+     * @param deleteFile Also delete the physical files
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public bulkDeleteCacheAdminCacheDelete(
+        requestBody: Array<number>,
+        deleteFile: boolean = false,
+    ): CancelablePromise<Record<string, any>> {
+        return this.httpRequest.request({
+            method: 'DELETE',
+            url: '/admin/cache',
+            query: {
+                'delete_file': deleteFile,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                401: `Unauthorized`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Delete Cache Entry
      * Delete a cache entry and optionally the file
      * @param cacheId
@@ -336,6 +362,29 @@ export class AdminService {
             url: '/admin/cache/stats',
             errors: {
                 401: `Unauthorized`,
+            },
+        });
+    }
+    /**
+     * Stream Cached File
+     * Stream a cached audio file by its ID
+     * @param cacheId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public streamCacheFileAdminCacheCacheIdStreamGet(
+        cacheId: number,
+    ): CancelablePromise<any> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/admin/cache/{cache_id}/stream',
+            path: {
+                'cache_id': cacheId,
+            },
+            errors: {
+                401: `Unauthorized`,
+                404: `Cache entry or file not found`,
+                422: `Validation Error`,
             },
         });
     }

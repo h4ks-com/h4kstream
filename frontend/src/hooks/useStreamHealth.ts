@@ -16,6 +16,9 @@ export interface HistoryPoint {
   rms: number;
   peak: number;
   click?: boolean;
+  /** Signed linear peak of the raw waveform in [-1, 1] range, preserved for waveform envelope overlay */
+  waveMin: number;
+  waveMax: number;
 }
 
 export type AlertType = 'CLIP' | 'CRACKLE' | 'CLICK' | 'HIGH_FREQ';
@@ -126,8 +129,11 @@ export function useStreamHealth(config: AudioMonitorConfig) {
   const bufferRef   = useRef<Float32Array | null>(null);
   const freqBufRef  = useRef<Uint8Array | null>(null);
   const freqDataRef = useRef<Uint8Array | null>(null);
+  const fftSizeRef  = useRef<number>(2048);
   const sampleRateRef   = useRef<number>(44100);
   const intervalRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const workletRef      = useRef<AudioWorkletNode | null>(null);
+  const tickSubsRef     = useRef<Set<() => void>>(new Set());
   const peakHistoryRef  = useRef<number[]>([]);
   const historyRef      = useRef<HistoryPoint[]>([]);
   const isLiveRef       = useRef(true);
@@ -151,6 +157,22 @@ export function useStreamHealth(config: AudioMonitorConfig) {
 
   const setVolume = useCallback((v: number) => {
     if (audioRef.current) audioRef.current.volume = Math.max(0, Math.min(1, v));
+  }, []);
+
+  const subscribeTick = useCallback((cb: () => void) => {
+    tickSubsRef.current.add(cb);
+    return () => { tickSubsRef.current.delete(cb); };
+  }, []);
+
+  const setFftSize = useCallback((size: number) => {
+    fftSizeRef.current = size;
+    const analyser = analyserRef.current;
+    if (!analyser) return;
+    analyser.fftSize = size;
+    bufferRef.current = new Float32Array(analyser.fftSize);
+    const newFreqBuf = new Uint8Array(analyser.frequencyBinCount);
+    freqBufRef.current = newFreqBuf;
+    freqDataRef.current = newFreqBuf;
   }, []);
 
   const startMonitoring = useCallback(async (audioSrc: string = '/radio') => {
@@ -193,7 +215,7 @@ export function useStreamHealth(config: AudioMonitorConfig) {
     sampleRateRef.current = ctx.sampleRate;
 
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 2048;
+    analyser.fftSize = fftSizeRef.current;
     analyserRef.current = analyser;
     bufferRef.current = new Float32Array(analyser.fftSize);
     freqBufRef.current = new Uint8Array(analyser.frequencyBinCount);
@@ -206,7 +228,7 @@ export function useStreamHealth(config: AudioMonitorConfig) {
     audio.play().catch(() => { setIsPlaying(false); });
     setIsPlaying(true);
 
-    intervalRef.current = setInterval(() => {
+    const tick = () => {
       const analyserNode = analyserRef.current;
       const buf = bufferRef.current;
       if (!analyserNode || !buf) return;
@@ -215,13 +237,17 @@ export function useStreamHealth(config: AudioMonitorConfig) {
       analyserNode.getFloatTimeDomainData(buf);
       if (freqBufRef.current) analyserNode.getByteFrequencyData(freqBufRef.current);
 
-      // RMS + peak
+      // RMS + peak + waveform extents
       let sumSq = 0;
       let peak = 0;
+      let waveMin = 0;
+      let waveMax = 0;
       for (let i = 0; i < buf.length; i++) {
         const v = buf[i];
         sumSq += v * v;
         if (Math.abs(v) > peak) peak = Math.abs(v);
+        if (v < waveMin) waveMin = v;
+        if (v > waveMax) waveMax = v;
       }
       const rms = Math.sqrt(sumSq / buf.length);
       const clipping = peak >= cfg.clipThreshold;
@@ -267,7 +293,7 @@ export function useStreamHealth(config: AudioMonitorConfig) {
 
       // History
       const now = Date.now();
-      historyRef.current.push({ t: now, rms, peak, click });
+      historyRef.current.push({ t: now, rms, peak, click, waveMin, waveMax });
       if (historyRef.current.length > historySizeRef.current) historyRef.current.shift();
 
       // Alerts: rising edge AND cooldown must both pass
@@ -303,13 +329,38 @@ export function useStreamHealth(config: AudioMonitorConfig) {
           setPlayback({ currentTime: audioRef.current.currentTime, duration: audioRef.current.duration });
         }
       }
-    }, POLL_INTERVAL_MS);
+
+      tickSubsRef.current.forEach(cb => cb());
+    };
+
+    // Prefer AudioWorklet as timer source — not throttled in hidden tabs.
+    // Falls back to setInterval if worklet module fails to load.
+    let workletLoaded = false;
+    try {
+      await ctx.audioWorklet.addModule('/stream-metrics-worklet.js');
+      const node = new AudioWorkletNode(ctx, 'stream-metrics-timer');
+      node.port.onmessage = () => tick();
+      // Must connect somewhere for process() to be pulled; output is silent.
+      node.connect(ctx.destination);
+      workletRef.current = node;
+      workletLoaded = true;
+    } catch (e) {
+      console.warn('AudioWorklet unavailable, falling back to setInterval', e);
+    }
+    if (!workletLoaded) {
+      intervalRef.current = setInterval(tick, POLL_INTERVAL_MS);
+    }
 
     setMonitoring(true);
   }, [monitoring]);
 
   const stopMonitoring = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (workletRef.current) {
+      try { workletRef.current.disconnect(); } catch { /* already disconnected */ }
+      workletRef.current.port.onmessage = null;
+      workletRef.current = null;
+    }
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; audioRef.current = null; }
     if (ctxRef.current) { ctxRef.current.close().catch(() => {}); ctxRef.current = null; }
     if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
@@ -355,10 +406,14 @@ export function useStreamHealth(config: AudioMonitorConfig) {
   useEffect(() => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (workletRef.current) {
+        try { workletRef.current.disconnect(); } catch { /* already disconnected */ }
+        workletRef.current.port.onmessage = null;
+      }
       if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
       if (ctxRef.current) ctxRef.current.close().catch(() => {});
     };
   }, []);
 
-  return { monitoring, metrics, alerts, historyRef, freqDataRef, sampleRateRef, startMonitoring, stopMonitoring, setVolume, isLive, isPlaying, error, playback, seek, togglePlayback };
+  return { monitoring, metrics, alerts, historyRef, freqDataRef, sampleRateRef, startMonitoring, stopMonitoring, setVolume, setFftSize, subscribeTick, isLive, isPlaying, error, playback, seek, togglePlayback };
 }

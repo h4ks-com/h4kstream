@@ -30,6 +30,24 @@ export function drawWaveformStrip(
   ctx.fillRect(0, 0, width, toY(0));
 
   const gridLevels = [-60, -36, -18, -12, -6, 0];
+  // Soundwave envelope overlay: actual waveform min/max in grey behind the level lines.
+  // Centered at mid-panel (0V), scaled so ±1.0 = ±half-panel height.
+  const cy = height / 2;
+  ctx.beginPath();
+  ctx.moveTo(Math.max(0, -startIdx), cy);
+  const xStartW = Math.max(0, -startIdx);
+  const xEndW   = Math.min(width, history.length - startIdx);
+  for (let col = xStartW; col < xEndW; col++) {
+    const pt = history[startIdx + col];
+    ctx.lineTo(col, cy + pt.waveMax * cy * -1); // waveMax positive = above center
+  }
+  for (let col = xEndW - 1; col >= xStartW; col--) {
+    const pt = history[startIdx + col];
+    ctx.lineTo(col, cy + pt.waveMin * cy * -1); // waveMin negative = below center
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  ctx.fill();
   ctx.lineWidth = 0.5;
   ctx.font = '9px monospace';
   gridLevels.forEach(db => {

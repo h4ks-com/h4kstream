@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { COLORMAP, clearCanvas, freqToYPct, makeYToBin } from './colormap';
 import { VerticalDualFreqSlider } from './VerticalDualFreqSlider';
+import { VerticalResolutionSlider } from './VerticalResolutionSlider';
 
 const SPEC_HEIGHT = 160;
 const SPEC_MIN_FREQ_DEFAULT = 20;
 const SPEC_MAX_FREQ_DEFAULT = 20000;
 const SPEC_HISTORY_MAX = 12000; // 10 min at 20 fps — matches hook
-const SPEC_FRAME_INTERVAL_MS = 50;
 
 interface Props {
   monitoring: boolean;
@@ -16,12 +16,17 @@ interface Props {
   onViewOffsetChange: (n: number) => void;
   expanded: boolean;
   onToggleExpand: () => void;
+  fftSize: number;
+  onFftSizeChange: (size: number) => void;
+  subscribeTick: (cb: () => void) => () => void;
 }
 
 export const SpectrogramPanel: React.FC<Props> = ({
   monitoring, freqDataRef, sampleRateRef,
   viewOffset, onViewOffsetChange,
   expanded, onToggleExpand,
+  fftSize, onFftSizeChange,
+  subscribeTick,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,7 +34,7 @@ export const SpectrogramPanel: React.FC<Props> = ({
   const [height, setHeight] = useState(SPEC_HEIGHT);
 
   const yToBinRef = useRef<Int32Array | null>(null);
-  const lastFrameTimeRef = useRef(0);
+  const yToBinNumBinsRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
 
   const historyRef = useRef<Uint8Array[]>([]);
@@ -56,10 +61,15 @@ export const SpectrogramPanel: React.FC<Props> = ({
       return;
     }
 
-    const numBins = history[0].length;
+    const numBins = history[history.length - 1].length;
     const nyquist = sampleRateRef.current / 2;
-    if (!yToBinRef.current || yToBinRef.current.length !== h) {
+    if (
+      !yToBinRef.current
+      || yToBinRef.current.length !== h
+      || yToBinNumBinsRef.current !== numBins
+    ) {
       yToBinRef.current = makeYToBin(h, numBins, nyquist, minFreqRef.current, maxFreqRef.current);
+      yToBinNumBinsRef.current = numBins;
     }
 
     // same startIdx convention as waveform strip: leftmost pixel = history index startIdx
@@ -68,8 +78,10 @@ export const SpectrogramPanel: React.FC<Props> = ({
     for (let col = 0; col < w; col++) {
       const hi = startIdx + col;
       const frame = hi >= 0 && hi < history.length ? history[hi] : null;
+      // Only use frames matching current bin count; older frames from a different fftSize get dropped.
+      const frameValid = frame !== null && frame.length === numBins;
       for (let y = 0; y < h; y++) {
-        const val = frame ? frame[yToBinRef.current[y]] : 0;
+        const val = frameValid ? frame![yToBinRef.current[y]] : 0;
         const base = (y * w + col) * 4;
         imgData.data[base]     = COLORMAP[val * 4];
         imgData.data[base + 1] = COLORMAP[val * 4 + 1];
@@ -100,6 +112,13 @@ export const SpectrogramPanel: React.FC<Props> = ({
     clearCanvas(canvasRef.current);
   }, [monitoring]);
 
+  // fftSize change: analyser bin count differs, so cached yToBin and stored frames are stale.
+  useEffect(() => {
+    yToBinRef.current = null;
+    historyRef.current = [];
+    clearCanvas(canvasRef.current);
+  }, [fftSize]);
+
   // Re-render on size, freq range, or offset change
   useEffect(() => {
     yToBinRef.current = null;
@@ -120,28 +139,37 @@ export const SpectrogramPanel: React.FC<Props> = ({
     return () => canvas.removeEventListener('wheel', onWheel);
   }, [onViewOffsetChange]);
 
+  // Data collection via hook's subscribeTick (backed by AudioWorklet, not throttled in hidden tabs).
+  // Rendering stays in rAF so it only draws when the tab is visible.
   useEffect(() => {
     if (!monitoring) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       return;
     }
-    const loop = (now: number) => {
-      if (now - lastFrameTimeRef.current >= SPEC_FRAME_INTERVAL_MS) {
-        const freqData = freqDataRef.current;
-        if (freqData) {
-          historyRef.current.push(new Uint8Array(freqData));
-          if (historyRef.current.length > SPEC_HISTORY_MAX) historyRef.current.shift();
-          renderFrame();
-        }
-        lastFrameTimeRef.current = now;
+
+    const unsubscribe = subscribeTick(() => {
+      const freqData = freqDataRef.current;
+      if (freqData) {
+        historyRef.current.push(new Uint8Array(freqData));
+        if (historyRef.current.length > SPEC_HISTORY_MAX) historyRef.current.shift();
       }
+    });
+
+    const loop = () => {
+      renderFrame();
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [monitoring, freqDataRef, renderFrame]);
 
-  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
+    return () => {
+      unsubscribe();
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [monitoring, freqDataRef, renderFrame, subscribeTick]);
+
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  }, []);
 
   const visibleFreqLabels = useMemo(() => {
     const ALL = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
@@ -194,6 +222,7 @@ export const SpectrogramPanel: React.FC<Props> = ({
           ? 'relative w-full flex flex-1 min-h-0'
           : 'relative w-full flex'
       } style={expanded ? undefined : { height: SPEC_HEIGHT }}>
+        {/* left: freq labels */}
         <div className="relative shrink-0 w-7 mr-1 h-full">
           {visibleFreqLabels.map(({ freq, label }) => (
             <span key={freq}
@@ -203,16 +232,26 @@ export const SpectrogramPanel: React.FC<Props> = ({
             </span>
           ))}
         </div>
+        {/* left: freq range slider */}
         <div className="shrink-0 mr-1 h-full">
           <VerticalDualFreqSlider
             minHz={minFreq} maxHz={maxFreq}
             onChangeMin={setMinFreq} onChangeMax={setMaxFreq}
           />
         </div>
+        {/* canvas */}
         <div ref={containerRef} className="flex-1 h-full">
           <canvas ref={canvasRef} width={width} height={height}
             className="w-full h-full block"
             style={{ imageRendering: 'pixelated', cursor: 'col-resize' }} />
+        </div>
+        {/* right: resolution slider */}
+        <div className="shrink-0 ml-1 h-full flex flex-col items-center gap-0.5">
+          <span className="font-mono text-[7px] text-blue-700/60 leading-none mb-0.5">hi</span>
+          <div className="flex-1">
+            <VerticalResolutionSlider fftSize={fftSize} onChangeFftSize={onFftSizeChange} />
+          </div>
+          <span className="font-mono text-[7px] text-blue-700/60 leading-none mt-0.5">lo</span>
         </div>
       </div>
     </div>

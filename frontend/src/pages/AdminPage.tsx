@@ -23,7 +23,7 @@ import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 
-type Section = 'users' | 'shows' | 'queue' | 'livestream' | 'webhooks' | 'transitions';
+type Section = 'users' | 'shows' | 'queue' | 'livestream' | 'webhooks' | 'transitions' | 'cache';
 
 export const AdminPage: React.FC = () => {
   const { section } = useParams<{ section: Section }>();
@@ -106,6 +106,7 @@ export const AdminPage: React.FC = () => {
     { key: 'livestream', label: '[LIVESTREAM]', path: '/admin/livestream' },
     { key: 'webhooks', label: '[WEBHOOKS]', path: '/admin/webhooks' },
     { key: 'transitions', label: '[TRANSITIONS]', path: '/admin/transitions' },
+    { key: 'cache', label: '[CACHE]', path: '/admin/cache' },
   ];
 
   return (
@@ -220,6 +221,16 @@ export const AdminPage: React.FC = () => {
             >
               [TRANSITIONS]
             </div>
+            <div
+              onClick={() => navigate('/admin/cache')}
+              className={`pl-3 cursor-pointer transition-colors border-l-2 ${
+                activeSection === 'cache'
+                  ? 'text-h4ks-green-400 border-h4ks-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              [CACHE]
+            </div>
           </nav>
         </div>
 
@@ -239,6 +250,7 @@ export const AdminPage: React.FC = () => {
         {activeSection === 'livestream' && <LivestreamSection />}
         {activeSection === 'webhooks' && <WebhooksSection />}
         {activeSection === 'transitions' && <TransitionsSection />}
+        {activeSection === 'cache' && <CacheSection />}
       </div>
     </div>
   );
@@ -1506,6 +1518,297 @@ const WebhooksSection: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+};
+
+// Cache Section Component
+interface CacheEntry {
+  id: number;
+  filename: string;
+  origin_url: string | null;
+  reference_url: string | null;
+  file_size: number;
+  playlist_type: string;
+  created_at: string;
+  last_used_at: string;
+  use_count: number;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+const CacheSection: React.FC = () => {
+  const [entries, setEntries] = useState<CacheEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [playlist, setPlaylist] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [stats, setStats] = useState<{ total_entries: number; total_size_bytes: number } | null>(null);
+  const LIMIT = 50;
+
+  const token = authUtils.getUserToken() || authUtils.getAdminToken();
+
+  const fetchEntries = useCallback(async (currentOffset: number, currentSearch: string, currentPlaylist: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ offset: String(currentOffset), limit: String(LIMIT) });
+      if (currentSearch) params.set('search', currentSearch);
+      if (currentPlaylist) params.set('playlist', currentPlaylist);
+      const resp = await fetch(`/api/admin/cache?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) throw new Error('Failed to fetch cache entries');
+      const data = await resp.json();
+      setEntries(data.entries);
+      setTotal(data.total);
+      setSelected(new Set());
+    } catch (e: any) {
+      setError(e.message || 'Error loading cache');
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/admin/cache/stats', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (resp.ok) setStats(await resp.json());
+    } catch {
+      // non-critical
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchEntries(0, '', '');
+    fetchStats();
+  }, [fetchEntries, fetchStats]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setOffset(0);
+    setSearch(searchInput);
+    fetchEntries(0, searchInput, playlist);
+  };
+
+  const handlePlaylistChange = (p: string) => {
+    setPlaylist(p);
+    setOffset(0);
+    fetchEntries(0, search, p);
+  };
+
+  const handlePage = (dir: 1 | -1) => {
+    const next = Math.max(0, offset + dir * LIMIT);
+    setOffset(next);
+    fetchEntries(next, search, playlist);
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelected(prev => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  };
+
+  const selectAll = () => {
+    if (selected.size === entries.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(entries.map(e => e.id)));
+    }
+  };
+
+  const deleteSingle = async (id: number) => {
+    if (!window.confirm('Delete this cache entry? The file will be removed from disk.')) return;
+    try {
+      const resp = await fetch(`/api/admin/cache/${id}?delete_file=true`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) throw new Error('Delete failed');
+      await fetchEntries(offset, search, playlist);
+      await fetchStats();
+    } catch (e: any) {
+      setError(e.message || 'Delete failed');
+    }
+  };
+
+  const bulkDelete = async () => {
+    if (selected.size === 0) return;
+    if (!window.confirm(`Delete ${selected.size} cache entries? Files will be removed from disk.`)) return;
+    setDeleting(true);
+    try {
+      const resp = await fetch('/api/admin/cache?delete_file=true', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([...selected]),
+      });
+      if (!resp.ok) throw new Error('Bulk delete failed');
+      await fetchEntries(offset, search, playlist);
+      await fetchStats();
+    } catch (e: any) {
+      setError(e.message || 'Bulk delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const streamUrl = (id: number) => `/api/admin/cache/${id}/stream`;
+
+  return (
+    <div className="space-y-4">
+      <div className="border-b-2 border-h4ks-green-700 pb-3">
+        <h2 className="text-xl font-bold text-h4ks-green-400 font-mono">AUDIO CACHE</h2>
+        {stats && (
+          <p className="text-gray-500 font-mono text-xs mt-1">
+            {stats.total_entries} entries · {formatBytes(stats.total_size_bytes)} on disk
+          </p>
+        )}
+      </div>
+
+      {error && (
+        <div className="border border-red-700 bg-red-900/20 px-3 py-2 font-mono text-xs text-red-400">
+          ERROR: {error}
+        </div>
+      )}
+
+      {/* Search + filters */}
+      <form onSubmit={handleSearch} className="flex flex-wrap gap-2 items-end">
+        <input
+          type="text"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+          placeholder="Search filename or URL..."
+          className="flex-1 min-w-0 bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 font-mono text-sm px-3 py-1.5 focus:outline-none focus:border-h4ks-green-500"
+        />
+        <select
+          value={playlist}
+          onChange={e => handlePlaylistChange(e.target.value)}
+          className="bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 font-mono text-sm px-3 py-1.5 focus:outline-none"
+        >
+          <option value="">all playlists</option>
+          <option value="user">user</option>
+          <option value="fallback">fallback</option>
+        </select>
+        <button type="submit"
+          className="font-mono text-sm border border-h4ks-green-700 text-h4ks-green-400 px-4 py-1.5 hover:bg-h4ks-green-900/30 transition-colors">
+          [SEARCH]
+        </button>
+      </form>
+
+      {/* Bulk actions */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="flex items-center gap-2 font-mono text-xs text-gray-400 cursor-pointer">
+          <input type="checkbox" checked={selected.size > 0 && selected.size === entries.length}
+            onChange={selectAll}
+            className="accent-h4ks-green-500" />
+          {selected.size > 0 ? `${selected.size} selected` : 'select all on page'}
+        </label>
+        {selected.size > 0 && (
+          <button onClick={bulkDelete} disabled={deleting}
+            className="font-mono text-xs border border-red-700 text-red-400 px-3 py-1 hover:bg-red-900/30 transition-colors disabled:opacity-50">
+            {deleting ? '[DELETING…]' : `[DELETE ${selected.size}]`}
+          </button>
+        )}
+        <span className="ml-auto font-mono text-xs text-gray-600">
+          {offset + 1}–{Math.min(offset + LIMIT, total)} of {total}
+        </span>
+        <button onClick={() => handlePage(-1)} disabled={offset === 0}
+          className="font-mono text-xs text-gray-400 hover:text-gray-200 disabled:opacity-30">← prev</button>
+        <button onClick={() => handlePage(1)} disabled={offset + LIMIT >= total}
+          className="font-mono text-xs text-gray-400 hover:text-gray-200 disabled:opacity-30">next →</button>
+      </div>
+
+      {loading ? (
+        <p className="font-mono text-xs text-gray-500 animate-pulse">loading…</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm font-mono">
+            <thead>
+              <tr className="border-b border-h4ks-green-900 text-gray-500 text-xs">
+                <th className="text-left pb-2 pr-2 w-6" />
+                <th className="text-left pb-2 pr-4">filename</th>
+                <th className="text-left pb-2 pr-4">playlist</th>
+                <th className="text-left pb-2 pr-4">size</th>
+                <th className="text-left pb-2 pr-4">uses</th>
+                <th className="text-left pb-2 pr-4">added</th>
+                <th className="text-left pb-2">actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.length === 0 ? (
+                <tr><td colSpan={7} className="py-8 text-center text-gray-600">no entries found</td></tr>
+              ) : entries.map(entry => (
+                <tr key={entry.id} className="border-b border-h4ks-green-900/30 hover:bg-h4ks-dark-900/50">
+                  <td className="py-1.5 pr-2">
+                    <input type="checkbox" checked={selected.has(entry.id)}
+                      onChange={() => toggleSelect(entry.id)}
+                      className="accent-h4ks-green-500" />
+                  </td>
+                  <td className="py-1.5 pr-4 max-w-xs">
+                    <span className="text-gray-300 block truncate" title={entry.filename}>
+                      {entry.filename}
+                    </span>
+                    {entry.origin_url && (
+                      <span className="text-gray-600 text-[10px] block truncate" title={entry.origin_url}>
+                        {entry.origin_url}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1.5 pr-4">
+                    <span className={`text-[10px] px-1.5 py-0.5 border ${
+                      entry.playlist_type === 'user'
+                        ? 'border-h4ks-green-800 text-h4ks-green-600'
+                        : 'border-gray-700 text-gray-500'
+                    }`}>
+                      {entry.playlist_type}
+                    </span>
+                  </td>
+                  <td className="py-1.5 pr-4 text-gray-400">{formatBytes(entry.file_size)}</td>
+                  <td className="py-1.5 pr-4 text-gray-500">{entry.use_count}</td>
+                  <td className="py-1.5 pr-4 text-gray-600 text-[10px]">
+                    {new Date(entry.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="py-1.5">
+                    <div className="flex gap-3 items-center">
+                      <a href={streamUrl(entry.id)} target="_blank" rel="noopener noreferrer"
+                        className="text-h4ks-green-600 hover:text-h4ks-green-400 text-xs">
+                        [play]
+                      </a>
+                      {entry.reference_url && (
+                        <a href={entry.reference_url} target="_blank" rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-400 text-xs">
+                          [src]
+                        </a>
+                      )}
+                      <button onClick={() => deleteSingle(entry.id)}
+                        className="text-red-600 hover:text-red-400 text-xs">
+                        [del]
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };

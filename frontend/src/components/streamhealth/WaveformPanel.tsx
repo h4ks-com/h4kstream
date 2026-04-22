@@ -90,7 +90,13 @@ export const WaveformPanel: React.FC<Props> = ({
             <span className="font-mono text-[9px] text-h4ks-green-600 animate-pulse">● LIVE</span>
           )}
           {monitoring && frozen && (
-            <span className="font-mono text-[9px] text-yellow-700">PAUSED</span>
+            <>
+              <span className="font-mono text-[9px] text-yellow-700">PAUSED · scroll to explore</span>
+              <button onClick={() => onViewOffsetChange(0)}
+                className="font-mono text-[9px] px-2 py-0.5 border border-yellow-700 text-yellow-400 hover:bg-yellow-900/20 transition-colors">
+                [GO LIVE]
+              </button>
+            </>
           )}
           <button onClick={onToggleExpand} title={expanded ? 'Close (Esc)' : 'Expand (Esc to close)'}
             className={`font-mono text-xs ${expanded ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-h4ks-green-400'} transition-colors ml-1`}>

@@ -25,6 +25,8 @@ jest.mock('../hooks/useStreamHealth', () => ({
     startMonitoring: mockStartMonitoring,
     stopMonitoring: mockStopMonitoring,
     setVolume: jest.fn(),
+    setFftSize: jest.fn(),
+    subscribeTick: jest.fn(() => () => {}),
     isLive: true,
     isPlaying: false,
     error: null,

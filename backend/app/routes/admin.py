@@ -4,17 +4,21 @@ Admin-only endpoints that can manage both user queue and radio playlist, create 
 """
 
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi import Body
 from fastapi import Depends
 from fastapi import Form
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi import UploadFile
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 from sqlmodel import select
 
 from app.db import get_session
+from app.db.models import FileCache
 from app.db.models import FileCachePublic
 from app.db.models import Show
 from app.dependencies import dep_event_publisher
@@ -415,3 +419,71 @@ async def cache_stats(
 ) -> dict:
     """Get cache statistics."""
     return await cache_service.get_cache_stats(db_session)
+
+
+@router.get(
+    "/cache/{cache_id}/stream",
+    summary="Stream Cached File",
+    description="Stream a cached audio file by its ID",
+    responses={404: {"model": ErrorResponse, "description": "Cache entry or file not found"}},
+    dependencies=[Depends(require_admin_role)],
+)
+async def stream_cache_file(
+    cache_id: int,
+    db_session: Session = Depends(get_session),
+) -> StreamingResponse:
+    """Stream a cached audio file."""
+    entry = db_session.get(FileCache, cache_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Cache entry not found")
+
+    file_path = Path(entry.filepath)
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Cached file not found on disk")
+
+    media_type_map = {
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".ogg": "audio/ogg",
+        ".flac": "audio/flac",
+        ".m4a": "audio/mp4",
+        ".aac": "audio/aac",
+        ".opus": "audio/opus",
+    }
+    media_type = media_type_map.get(file_path.suffix.lower(), "audio/mpeg")
+
+    def iterfile():
+        with open(file_path, "rb") as f:
+            while chunk := f.read(64 * 1024):
+                yield chunk
+
+    return StreamingResponse(
+        iterfile(),
+        media_type=media_type,
+        headers={"Accept-Ranges": "bytes", "Cache-Control": "no-cache"},
+    )
+
+
+@router.delete(
+    "/cache",
+    response_model=dict,
+    summary="Bulk Delete Cache Entries",
+    description="Delete multiple cache entries by ID, optionally deleting their files",
+    dependencies=[Depends(require_admin_role)],
+)
+async def bulk_delete_cache(
+    ids: list[int] = Body(..., description="List of cache entry IDs to delete"),
+    delete_file: bool = Query(False, description="Also delete the physical files"),
+    db_session: Session = Depends(get_session),
+) -> dict:
+    """Bulk delete cache entries."""
+    deleted = 0
+    not_found = 0
+    for cache_id in ids:
+        try:
+            await cache_service.delete_cache_entry(db_session, cache_id, delete_file)
+            deleted += 1
+        except ValueError:
+            not_found += 1
+
+    return {"deleted": deleted, "not_found": not_found}

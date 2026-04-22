@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 
-const FREQ_HZ_MIN = 20;
+const FREQ_HZ_MIN = 1;
 const FREQ_HZ_MAX = 100000;
 const FREQ_LOG_MIN = Math.log10(FREQ_HZ_MIN);
 const FREQ_LOG_MAX = Math.log10(FREQ_HZ_MAX);
-const MIN_GAP_HZ = 20;
+const MIN_GAP_HZ = 5;
 
 function yPctToHz(pct: number): number {
   const c = Math.max(0, Math.min(1, pct));

@@ -18,6 +18,7 @@ type ExpandedPanel = 'waveform' | 'spectrogram' | null;
 export const StreamHealthPage: React.FC = () => {
   const navigate = useNavigate();
   const [livestreamActive, setLivestreamActive] = useState(false);
+  const [listenerCount, setListenerCount] = useState<number | null>(null);
   const [tuningOpen, setTuningOpen] = useState(false);
   const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel>(null);
 
@@ -28,9 +29,15 @@ export const StreamHealthPage: React.FC = () => {
 
   const {
     monitoring, metrics, alerts, historyRef, freqDataRef, sampleRateRef,
-    startMonitoring, stopMonitoring, setVolume: setHookVolume,
+    startMonitoring, stopMonitoring, setVolume: setHookVolume, setFftSize, subscribeTick,
     isLive, isPlaying, error, playback, seek, togglePlayback,
   } = useStreamHealth(config);
+
+  const [fftSize, setFftSizeState] = useState(2048);
+  const handleFftSizeChange = useCallback((size: number) => {
+    setFftSizeState(size);
+    setFftSize(size);
+  }, [setFftSize]);
 
   const [sourceMode, setSourceMode] = useState<SourceMode>('radio');
   const [urlInput, setUrlInput] = useState('');
@@ -46,6 +53,19 @@ export const StreamHealthPage: React.FC = () => {
 
   // Reset to live on monitoring restart
   useEffect(() => { if (!monitoring) setViewOffset(0); }, [monitoring]);
+
+  // While paused, advance viewOffset by +1 each tick so the viewed time anchor
+  // stays locked even as new frames push into history.
+  useEffect(() => {
+    if (!monitoring) return;
+    return subscribeTick(() => {
+      setViewOffset(prev => {
+        if (prev <= 0) return 0;
+        const maxBack = Math.max(0, historyRef.current.length - 1);
+        return Math.min(prev + 1, maxBack);
+      });
+    });
+  }, [monitoring, subscribeTick, historyRef]);
 
   const onJump = useCallback((t: number) => {
     const hist = historyRef.current;
@@ -90,6 +110,21 @@ export const StreamHealthPage: React.FC = () => {
   useWebSocketEvent('livestream_ended',   useCallback(() => setLivestreamActive(false), []));
 
   useEffect(() => {
+    const fetchListeners = async () => {
+      try {
+        const r = await fetch('/api/public/clients');
+        const d = await r.json();
+        setListenerCount(d.total ?? 0);
+      } catch (err) {
+        console.error('Failed to fetch listener count:', err);
+      }
+    };
+    fetchListeners();
+    const id = setInterval(fetchListeners, 10_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
     if (!expandedPanel) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpandedPanel(null); };
     window.addEventListener('keydown', onKey);
@@ -109,7 +144,14 @@ export const StreamHealthPage: React.FC = () => {
         <div className="space-y-5">
 
           <div className="border-b-2 border-h4ks-green-700 pb-4 flex items-start justify-between">
-            <h2 className="text-2xl font-bold text-h4ks-green-400 font-mono">[AUDIO MONITOR]</h2>
+            <div>
+              <h2 className="text-2xl font-bold text-h4ks-green-400 font-mono">[AUDIO MONITOR]</h2>
+              {listenerCount !== null && (
+                <p className="text-h4ks-green-500 text-sm mt-1 font-mono">
+                  ▸ {listenerCount} {listenerCount === 1 ? 'listener' : 'listeners'}
+                </p>
+              )}
+            </div>
             <button onClick={() => setTuningOpen(true)} title="Detector tuning & profiles"
               className="font-mono text-xs text-gray-500 border border-h4ks-green-900 px-3 py-1.5 hover:border-h4ks-green-600 hover:text-h4ks-green-400 transition-colors shrink-0 ml-4">
               [⚙ TUNE]
@@ -201,6 +243,9 @@ export const StreamHealthPage: React.FC = () => {
             onViewOffsetChange={setViewOffset}
             expanded={expandedPanel === 'spectrogram'}
             onToggleExpand={() => toggleExpand('spectrogram')}
+            fftSize={fftSize}
+            onFftSizeChange={handleFftSizeChange}
+            subscribeTick={subscribeTick}
           />
 
           <div className="border border-h4ks-green-800 bg-h4ks-dark-900 p-4 space-y-2">
