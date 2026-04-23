@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { QueueService, AdminService } from '../utils/apiClient';
 import { authUtils } from '../utils/auth';
 import type { SongItem } from '../api';
@@ -25,6 +25,10 @@ export const QueueList: React.FC<QueueListProps> = ({ isAdminMode = false }) => 
   const [editingSong, setEditingSong] = useState<SongItem | null>(null);
   const [externalLinkWarning, setExternalLinkWarning] = useState<string | null>(null);
   const { nowPlaying } = useWebSocketContext();
+  const nowPlayingTitleRef = useRef<string | null | undefined>(nowPlaying?.metadata?.title);
+  useEffect(() => {
+    nowPlayingTitleRef.current = nowPlaying?.metadata?.title;
+  }, [nowPlaying?.metadata?.title]);
 
   const fetchQueue = useCallback(async () => {
     try {
@@ -32,7 +36,7 @@ export const QueueList: React.FC<QueueListProps> = ({ isAdminMode = false }) => 
       // Only drop position 0 if its title matches the now-playing metadata.
       // When metadata lags behind MPD (Liquidsoap audio buffer), the titles
       // won't match and we keep position 0 to avoid silently dropping a song.
-      const nowPlayingTitle = nowPlaying?.metadata?.title ?? null;
+      const nowPlayingTitle = nowPlayingTitleRef.current ?? null;
       const firstTitle = response[0]?.title ?? null;
       const firstMatchesNowPlaying = nowPlayingTitle && firstTitle &&
         firstTitle.toLowerCase() === nowPlayingTitle.toLowerCase();

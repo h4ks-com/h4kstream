@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Footer } from '../components/Footer';
+import { MetadataService, PublicService } from '../utils/apiClient';
 import { AlertLog } from '../components/streamhealth/AlertLog';
 import { MetricsPanel } from '../components/streamhealth/MetricsPanel';
 import { PlaybackControls } from '../components/streamhealth/PlaybackControls';
@@ -100,9 +101,8 @@ export const StreamHealthPage: React.FC = () => {
   }, [startMonitoring, sourceMode, urlInput]);
 
   useEffect(() => {
-    fetch('/api/metadata/now')
-      .then(r => r.json())
-      .then(data => { if (data?.source === 'livestream') setLivestreamActive(true); })
+    MetadataService().getNowPlayingMetadataNowGet()
+      .then(data => { if ((data as any)?.source === 'livestream') setLivestreamActive(true); })
       .catch(() => {});
   }, []);
 
@@ -112,11 +112,10 @@ export const StreamHealthPage: React.FC = () => {
   useEffect(() => {
     const fetchListeners = async () => {
       try {
-        const r = await fetch('/api/public/clients');
-        const d = await r.json();
-        setListenerCount(d.total ?? 0);
-      } catch (err) {
-        console.error('Failed to fetch listener count:', err);
+        const d = await PublicService().getClientCountsPublicClientsGet();
+        setListenerCount((d as any).total ?? 0);
+      } catch {
+        // non-critical
       }
     };
     fetchListeners();

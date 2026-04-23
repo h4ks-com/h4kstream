@@ -1,35 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArchiveSearch } from './ArchiveSearch';
-
-interface Recording {
-  id: number;
-  created_at: string;
-  title: string | null;
-  artist: string | null;
-  genre: string | null;
-  description: string | null;
-  duration_seconds: number;
-  stream_url: string;
-  max_listeners: number | null;
-}
-
-interface ShowGroup {
-  show_name: string;
-  recordings: Recording[];
-}
-
-interface ArchivesResponse {
-  shows: ShowGroup[];
-  total_shows: number;
-  total_recordings: number;
-  page: number;
-  page_size: number;
-}
+import type { ShowRecordings } from '../api/models/ShowRecordings';
+import { RecordingsService } from '../utils/apiClient';
 
 export const ArchivesTab: React.FC = () => {
   const navigate = useNavigate();
-  const [shows, setShows] = useState<ShowGroup[]>([]);
+  const [shows, setShows] = useState<ShowRecordings[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -39,23 +16,19 @@ export const ArchivesTab: React.FC = () => {
   const fetchArchives = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (searchText) params.append('search', searchText);
-      if (dateFrom) params.append('date_from', `${dateFrom}T00:00:00`);
-      if (dateTo) params.append('date_to', `${dateTo}T23:59:59`);
-      params.append('page_size', '50');
-
-      const response = await fetch(`/api/recordings/list?${params}`);
-      if (response.ok) {
-        const data: ArchivesResponse = await response.json();
-        setShows(data.shows);
-        setError(null);
-      } else {
-        setError('Failed to fetch archives');
-      }
-    } catch (err) {
-      console.error('Archives fetch error:', err);
-      setError('Connection error');
+      const data = await RecordingsService().listRecordingsRecordingsListGet(
+        undefined,
+        searchText || undefined,
+        undefined,
+        dateFrom ? `${dateFrom}T00:00:00` : undefined,
+        dateTo ? `${dateTo}T23:59:59` : undefined,
+        1,
+        50,
+      );
+      setShows(data.shows);
+      setError(null);
+    } catch (err: any) {
+      setError(err.body?.detail || err.message || 'Connection error');
     } finally {
       setLoading(false);
     }
@@ -128,7 +101,7 @@ export const ArchivesTab: React.FC = () => {
                     </div>
                     <div className="text-xs text-gray-500 ml-3">
                       {new Date(recording.created_at).toLocaleDateString()} • {Math.floor(recording.duration_seconds / 60)}m
-                      {recording.max_listeners !== null && recording.max_listeners > 0 && (
+                      {recording.max_listeners != null && recording.max_listeners > 0 && (
                         <span className="text-h4ks-green-600 ml-2">
                           ▸ {recording.max_listeners} peak
                         </span>

@@ -33,6 +33,21 @@
     "extends": [
       "react-app",
       "react-app/jest"
+    ],
+    "overrides": [
+      {
+        "files": ["src/**/*.ts", "src/**/*.tsx"],
+        "excludedFiles": ["src/utils/apiClient.ts", "src/api/**/*"],
+        "rules": {
+          "no-restricted-globals": [
+            "error",
+            {
+              "name": "fetch",
+              "message": "Use the API client from src/utils/apiClient.ts instead of raw fetch."
+            }
+          ]
+        }
+      }
     ]
   },
   "browserslist": {

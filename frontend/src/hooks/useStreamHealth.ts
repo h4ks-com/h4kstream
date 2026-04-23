@@ -237,7 +237,6 @@ export function useStreamHealth(config: AudioMonitorConfig) {
       analyserNode.getFloatTimeDomainData(buf);
       if (freqBufRef.current) analyserNode.getByteFrequencyData(freqBufRef.current);
 
-      // RMS + peak + waveform extents
       let sumSq = 0;
       let peak = 0;
       let waveMin = 0;
@@ -333,8 +332,7 @@ export function useStreamHealth(config: AudioMonitorConfig) {
       tickSubsRef.current.forEach(cb => cb());
     };
 
-    // Prefer AudioWorklet as timer source — not throttled in hidden tabs.
-    // Falls back to setInterval if worklet module fails to load.
+    // AudioWorklet timer source is not throttled in hidden tabs; setInterval is.
     let workletLoaded = false;
     try {
       await ctx.audioWorklet.addModule('/stream-metrics-worklet.js');

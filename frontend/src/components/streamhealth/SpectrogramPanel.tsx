@@ -78,7 +78,6 @@ export const SpectrogramPanel: React.FC<Props> = ({
     for (let col = 0; col < w; col++) {
       const hi = startIdx + col;
       const frame = hi >= 0 && hi < history.length ? history[hi] : null;
-      // Only use frames matching current bin count; older frames from a different fftSize get dropped.
       const frameValid = frame !== null && frame.length === numBins;
       for (let y = 0; y < h; y++) {
         const val = frameValid ? frame![yToBinRef.current[y]] : 0;
@@ -112,7 +111,6 @@ export const SpectrogramPanel: React.FC<Props> = ({
     clearCanvas(canvasRef.current);
   }, [monitoring]);
 
-  // fftSize change: analyser bin count differs, so cached yToBin and stored frames are stale.
   useEffect(() => {
     yToBinRef.current = null;
     historyRef.current = [];
@@ -139,8 +137,6 @@ export const SpectrogramPanel: React.FC<Props> = ({
     return () => canvas.removeEventListener('wheel', onWheel);
   }, [onViewOffsetChange]);
 
-  // Data collection via hook's subscribeTick (backed by AudioWorklet, not throttled in hidden tabs).
-  // Rendering stays in rAF so it only draws when the tab is visible.
   useEffect(() => {
     if (!monitoring) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);

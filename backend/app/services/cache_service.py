@@ -3,16 +3,18 @@
 import asyncio
 import hashlib
 import logging
+from collections import defaultdict
 from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import exists
 from sqlalchemy import func
 from sqlmodel import Session
 from sqlmodel import col
-from sqlmodel import desc
 from sqlmodel import select
 
+from app.db.models import CacheMetadata
 from app.db.models import FileCache
 from app.types import PlaylistType
 
@@ -100,6 +102,30 @@ async def lookup_by_hash(session: Session, md5_hash: str, playlist_type: Playlis
     return None
 
 
+def add_metadata(session: Session, cache_id: int, title: str | None, artist: str | None) -> None:
+    """Associate title/artist metadata with a cache entry, skipping duplicates.
+
+    :param session: Database session
+    :param cache_id: FileCache entry ID
+    :param title: Song title
+    :param artist: Song artist
+    """
+    if not title and not artist:
+        return
+
+    # SQLite treats each NULL as distinct, so the UNIQUE constraint won't catch duplicates when title/artist is NULL.
+    existing = session.exec(
+        select(CacheMetadata).where(
+            CacheMetadata.cache_id == cache_id,
+            (CacheMetadata.title == title) if title is not None else col(CacheMetadata.title).is_(None),
+            (CacheMetadata.artist == artist) if artist is not None else col(CacheMetadata.artist).is_(None),
+        )
+    ).first()
+    if not existing:
+        session.add(CacheMetadata(cache_id=cache_id, title=title, artist=artist, created_at=datetime.now(UTC)))
+        session.commit()
+
+
 async def create_cache_entry(
     session: Session,
     filepath: Path,
@@ -107,6 +133,8 @@ async def create_cache_entry(
     playlist_type: PlaylistType,
     origin_url: str | None = None,
     reference_url: str | None = None,
+    title: str | None = None,
+    artist: str | None = None,
 ) -> FileCache:
     """Create new cache entry for a file.
 
@@ -152,6 +180,9 @@ async def create_cache_entry(
     session.commit()
     session.refresh(cache_entry)
 
+    if (title or artist) and cache_entry.id is not None:
+        add_metadata(session, cache_entry.id, title, artist)
+
     logger.info(f"Created cache entry {cache_entry.id} for {filepath.name}")
     return cache_entry
 
@@ -162,14 +193,18 @@ async def list_cache_entries(
     search: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    sort: str = "added",
+    order: str = "desc",
 ) -> tuple[list[FileCache], int]:
-    """List cache entries with pagination and search.
+    """List cache entries with pagination, search, and sort.
 
     :param session: Database session
     :param playlist_type: Optional filter by playlist type
-    :param search: Optional search term for filename or origin_url
+    :param search: Optional search term for filename, origin_url, or reference_url
     :param offset: Pagination offset
     :param limit: Pagination limit
+    :param sort: Sort field: "added" | "size" | "uses" | "used"
+    :param order: Sort order: "asc" | "desc"
     :return: Tuple of (entries, total_count)
     """
     filters = []
@@ -177,8 +212,15 @@ async def list_cache_entries(
         filters.append(FileCache.playlist_type == playlist_type)
     if search:
         search_term = f"%{search}%"
+        metadata_match = exists().where(
+            CacheMetadata.cache_id == FileCache.id,
+            col(CacheMetadata.title).ilike(search_term) | col(CacheMetadata.artist).ilike(search_term),
+        )
         filters.append(
-            col(FileCache.filename).ilike(search_term) | col(FileCache.origin_url).ilike(search_term)
+            col(FileCache.filename).ilike(search_term)
+            | col(FileCache.origin_url).ilike(search_term)
+            | col(FileCache.reference_url).ilike(search_term)
+            | metadata_match
         )
 
     count_statement = select(func.count()).select_from(FileCache)
@@ -186,13 +228,52 @@ async def list_cache_entries(
         count_statement = count_statement.where(f)
     total_count = session.exec(count_statement).one()
 
+    sort_column_map = {
+        "added": FileCache.created_at,
+        "size": FileCache.file_size,
+        "uses": FileCache.use_count,
+        "used": FileCache.last_used_at,
+    }
+    sort_col = sort_column_map.get(sort, FileCache.created_at)
+    order_clause = sort_col.asc() if order == "asc" else sort_col.desc()
+
     statement = select(FileCache)
     for f in filters:
         statement = statement.where(f)
-    statement = statement.order_by(desc(FileCache.created_at)).offset(offset).limit(limit)
+    statement = statement.order_by(order_clause).offset(offset).limit(limit)
     entries = session.exec(statement).all()
 
     return list(entries), total_count
+
+
+def get_metadata_map(session: Session, cache_ids: list[int]) -> dict[int, list[dict[str, str | None]]]:
+    """Fetch all metadata rows for a set of cache IDs and group by cache_id.
+
+    :param session: Database session
+    :param cache_ids: List of FileCache IDs to fetch metadata for
+    :return: Dict mapping cache_id → list of {title, artist} dicts
+    """
+    if not cache_ids:
+        return {}
+    rows = session.exec(select(CacheMetadata).where(col(CacheMetadata.cache_id).in_(cache_ids))).all()
+    result: dict[int, list[dict[str, str | None]]] = defaultdict(list)
+    for row in rows:
+        result[row.cache_id].append({"title": row.title, "artist": row.artist})
+    return dict(result)
+
+
+def get_distinct_metadata_values(session: Session, field: str) -> list[str]:
+    """Get distinct non-null values for a metadata field (title or artist) for dropdowns.
+
+    :param session: Database session
+    :param field: "title" or "artist"
+    :return: Sorted list of distinct values
+    """
+    col_ref = col(CacheMetadata.title) if field == "title" else col(CacheMetadata.artist)
+    rows = session.exec(
+        select(col_ref).where(col_ref.is_not(None)).distinct().order_by(col_ref)
+    ).all()
+    return [r for r in rows if r]
 
 
 async def delete_cache_entry(session: Session, cache_id: int, delete_file: bool = False) -> None:

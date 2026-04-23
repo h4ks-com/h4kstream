@@ -30,8 +30,7 @@ export function drawWaveformStrip(
   ctx.fillRect(0, 0, width, toY(0));
 
   const gridLevels = [-60, -36, -18, -12, -6, 0];
-  // Soundwave envelope overlay: actual waveform min/max in grey behind the level lines.
-  // Centered at mid-panel (0V), scaled so ±1.0 = ±half-panel height.
+  // Envelope centered at 0V; ±1.0 sample value maps to ±half-panel height.
   const cy = height / 2;
   ctx.beginPath();
   ctx.moveTo(Math.max(0, -startIdx), cy);

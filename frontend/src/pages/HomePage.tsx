@@ -6,6 +6,7 @@ import { QueueList } from '../components/QueueList';
 import { ArchivesTab } from '../components/ArchivesTab';
 import { Footer } from '../components/Footer';
 import { authUtils } from '../utils/auth';
+import { PublicService } from '../utils/apiClient';
 
 export const HomePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'queue' | 'archives'>('queue');
@@ -16,11 +17,10 @@ export const HomePage: React.FC = () => {
   useEffect(() => {
     const fetchListeners = async () => {
       try {
-        const response = await fetch('/api/public/clients');
-        const data = await response.json();
+        const data = await PublicService().getClientCountsPublicClientsGet();
         setListenerCount(data.total || 0);
-      } catch (error) {
-        console.error('Failed to fetch listener count:', error);
+      } catch {
+        // non-critical
       }
     };
 

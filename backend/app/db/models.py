@@ -6,6 +6,7 @@ from uuid import UUID
 from uuid import uuid4
 
 from sqlalchemy import Text
+from sqlalchemy import UniqueConstraint
 from sqlalchemy import event
 from sqlalchemy.sql import text
 from sqlmodel import Field
@@ -165,6 +166,22 @@ class FileCache(SQLModel, table=True):  # type: ignore[call-arg]
     use_count: int = Field(default=1)
 
 
+class CacheMetadata(SQLModel, table=True):  # type: ignore[call-arg]
+    """Title/artist metadata associated with a cached file.
+
+    One file may be known under multiple title/artist combinations across different sources.
+    """
+
+    __tablename__ = "cache_metadata"
+    __table_args__ = (UniqueConstraint("cache_id", "title", "artist", name="uq_cache_metadata"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    cache_id: int = Field(foreign_key="file_cache.id", index=True, ondelete="CASCADE")
+    title: str | None = Field(default=None, index=True)
+    artist: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class FileCachePublic(SQLModel):
     """Public file cache model."""
 
@@ -172,6 +189,7 @@ class FileCachePublic(SQLModel):
     filename: str
     origin_url: str | None
     reference_url: str | None
+    md5_hash: str
     file_size: int
     playlist_type: str
     created_at: datetime

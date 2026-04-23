@@ -4,6 +4,7 @@
 /* eslint-disable */
 import type { Body_admin_add_song_admin_queue_add_post } from '../models/Body_admin_add_song_admin_queue_add_post';
 import type { Body_admin_upload_show_intro_admin_shows__show_id__intro_post } from '../models/Body_admin_upload_show_intro_admin_shows__show_id__intro_post';
+import type { Body_lookup_cache_by_hash_admin_cache_lookup_by_hash_post } from '../models/Body_lookup_cache_by_hash_admin_cache_lookup_by_hash_post';
 import type { Body_update_user_role_admin_users__user_id__role_patch } from '../models/Body_update_user_role_admin_users__user_id__role_patch';
 import type { Body_upload_transition_admin_transitions_upload_post } from '../models/Body_upload_transition_admin_transitions_upload_post';
 import type { LivestreamTokenCreateRequest } from '../models/LivestreamTokenCreateRequest';
@@ -238,9 +239,11 @@ export class AdminService {
      * List Cached Files
      * List all cached files with pagination and search
      * @param playlist Filter by playlist type
-     * @param search Search in filename or origin_url
+     * @param search Search in filename, origin_url, or reference_url
      * @param offset
      * @param limit
+     * @param sort Sort field
+     * @param order Sort order
      * @returns any Successful Response
      * @throws ApiError
      */
@@ -249,6 +252,8 @@ export class AdminService {
         search?: (string | null),
         offset?: number,
         limit: number = 50,
+        sort: string = 'added',
+        order: string = 'desc',
     ): CancelablePromise<Record<string, any>> {
         return this.httpRequest.request({
             method: 'GET',
@@ -258,6 +263,8 @@ export class AdminService {
                 'search': search,
                 'offset': offset,
                 'limit': limit,
+                'sort': sort,
+                'order': order,
             },
             errors: {
                 401: `Unauthorized`,
@@ -385,6 +392,42 @@ export class AdminService {
                 401: `Unauthorized`,
                 404: `Cache entry or file not found`,
                 422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Lookup Cache Entries by File Hash
+     * Upload a file to compute its MD5 and find matching cache entries. File is not stored.
+     * @param formData
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public lookupCacheByHashAdminCacheLookupByHashPost(
+        formData: Body_lookup_cache_by_hash_admin_cache_lookup_by_hash_post,
+    ): CancelablePromise<Record<string, any>> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/admin/cache/lookup-by-hash',
+            formData: formData,
+            mediaType: 'multipart/form-data',
+            errors: {
+                401: `Unauthorized`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Distinct Metadata Values
+     * Get distinct titles and artists from cache_metadata for filter dropdowns
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public cacheMetadataDistinctAdminCacheMetadataDistinctGet(): CancelablePromise<Record<string, any>> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/admin/cache/metadata/distinct',
+            errors: {
+                401: `Unauthorized`,
             },
         });
     }

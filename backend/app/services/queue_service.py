@@ -185,6 +185,8 @@ async def add_song(
 
                     md5_hash = cached_entry.md5_hash
                     cache_id = cached_entry.id
+                    if (final_title or final_artist) and cached_entry.id is not None:
+                        cache_service.add_metadata(db_session, cached_entry.id, final_title, final_artist)
 
             if not cache_hit:
                 # Check video info before downloading to fail early
@@ -234,6 +236,8 @@ async def add_song(
                     cache_hit = True
                     temp_path = target_path
                     cache_id = cached_entry.id
+                    if (final_title or final_artist) and cached_entry.id is not None:
+                        cache_service.add_metadata(db_session, cached_entry.id, final_title, final_artist)
 
         elif file_path:
             temp_path = file_path
@@ -294,6 +298,8 @@ async def add_song(
                         playlist,
                         origin_url=url if url else None,
                         reference_url=reference_url,
+                        title=final_title,
+                        artist=final_artist,
                     )
                     cache_id = new_cache_entry.id
                 except Exception as e:

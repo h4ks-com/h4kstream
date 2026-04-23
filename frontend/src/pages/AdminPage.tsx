@@ -1522,17 +1522,23 @@ const WebhooksSection: React.FC = () => {
   );
 };
 
-// Cache Section Component
+interface CacheMetadataItem {
+  title: string | null;
+  artist: string | null;
+}
+
 interface CacheEntry {
   id: number;
   filename: string;
   origin_url: string | null;
   reference_url: string | null;
+  md5_hash: string;
   file_size: number;
   playlist_type: string;
   created_at: string;
   last_used_at: string;
   use_count: number;
+  metadata: CacheMetadataItem[];
 }
 
 function formatBytes(bytes: number): string {
@@ -1549,27 +1555,40 @@ const CacheSection: React.FC = () => {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [playlist, setPlaylist] = useState<string>('');
+  const [sort, setSort] = useState<'added' | 'size' | 'uses' | 'used'>('added');
+  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [stats, setStats] = useState<{ total_entries: number; total_size_bytes: number } | null>(null);
+  const [playingId, setPlayingId] = useState<number | null>(null);
+  const [playerSrc, setPlayerSrc] = useState<string | null>(null);
+  const [playerLoading, setPlayerLoading] = useState(false);
+  const [hashLookup, setHashLookup] = useState<{ md5: string; matches: CacheEntry[] } | null>(null);
+  const [hashLookupLoading, setHashLookupLoading] = useState(false);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const LIMIT = 50;
 
-  const token = authUtils.getUserToken() || authUtils.getAdminToken();
-
-  const fetchEntries = useCallback(async (currentOffset: number, currentSearch: string, currentPlaylist: string) => {
+  const fetchEntries = useCallback(async (
+    currentOffset: number,
+    currentSearch: string,
+    currentPlaylist: string,
+    currentSort: string,
+    currentOrder: string,
+  ) => {
     setLoading(true);
     setError('');
     try {
-      const params = new URLSearchParams({ offset: String(currentOffset), limit: String(LIMIT) });
-      if (currentSearch) params.set('search', currentSearch);
-      if (currentPlaylist) params.set('playlist', currentPlaylist);
-      const resp = await fetch(`/api/admin/cache?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resp.ok) throw new Error('Failed to fetch cache entries');
-      const data = await resp.json();
+      const data = await AdminService().listCacheAdminCacheGet(
+        (currentPlaylist as 'user' | 'fallback') || undefined,
+        currentSearch || undefined,
+        currentOffset,
+        LIMIT,
+        currentSort,
+        currentOrder,
+      );
       setEntries(data.entries);
       setTotal(data.total);
       setSelected(new Set());
@@ -1578,21 +1597,19 @@ const CacheSection: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   const fetchStats = useCallback(async () => {
     try {
-      const resp = await fetch('/api/admin/cache/stats', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (resp.ok) setStats(await resp.json());
+      const data = await AdminService().cacheStatsAdminCacheStatsGet();
+      setStats(data as { total_entries: number; total_size_bytes: number });
     } catch {
       // non-critical
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
-    fetchEntries(0, '', '');
+    fetchEntries(0, '', '', 'added', 'desc');
     fetchStats();
   }, [fetchEntries, fetchStats]);
 
@@ -1600,19 +1617,31 @@ const CacheSection: React.FC = () => {
     e.preventDefault();
     setOffset(0);
     setSearch(searchInput);
-    fetchEntries(0, searchInput, playlist);
+    fetchEntries(0, searchInput, playlist, sort, order);
   };
 
   const handlePlaylistChange = (p: string) => {
     setPlaylist(p);
     setOffset(0);
-    fetchEntries(0, search, p);
+    fetchEntries(0, search, p, sort, order);
+  };
+
+  const handleSortChange = (s: typeof sort) => {
+    setSort(s);
+    setOffset(0);
+    fetchEntries(0, search, playlist, s, order);
+  };
+
+  const handleOrderChange = (o: typeof order) => {
+    setOrder(o);
+    setOffset(0);
+    fetchEntries(0, search, playlist, sort, o);
   };
 
   const handlePage = (dir: 1 | -1) => {
     const next = Math.max(0, offset + dir * LIMIT);
     setOffset(next);
-    fetchEntries(next, search, playlist);
+    fetchEntries(next, search, playlist, sort, order);
   };
 
   const toggleSelect = (id: number) => {
@@ -1634,15 +1663,11 @@ const CacheSection: React.FC = () => {
   const deleteSingle = async (id: number) => {
     if (!window.confirm('Delete this cache entry? The file will be removed from disk.')) return;
     try {
-      const resp = await fetch(`/api/admin/cache/${id}?delete_file=true`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resp.ok) throw new Error('Delete failed');
-      await fetchEntries(offset, search, playlist);
+      await AdminService().deleteCacheAdminCacheCacheIdDelete(id, true);
+      await fetchEntries(offset, search, playlist, sort, order);
       await fetchStats();
     } catch (e: any) {
-      setError(e.message || 'Delete failed');
+      setError(e.body?.detail || e.message || 'Delete failed');
     }
   };
 
@@ -1651,25 +1676,67 @@ const CacheSection: React.FC = () => {
     if (!window.confirm(`Delete ${selected.size} cache entries? Files will be removed from disk.`)) return;
     setDeleting(true);
     try {
-      const resp = await fetch('/api/admin/cache?delete_file=true', {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify([...selected]),
-      });
-      if (!resp.ok) throw new Error('Bulk delete failed');
-      await fetchEntries(offset, search, playlist);
+      await AdminService().bulkDeleteCacheAdminCacheDelete([...selected], true);
+      await fetchEntries(offset, search, playlist, sort, order);
       await fetchStats();
     } catch (e: any) {
-      setError(e.message || 'Bulk delete failed');
+      setError(e.body?.detail || e.message || 'Bulk delete failed');
     } finally {
       setDeleting(false);
     }
   };
 
-  const streamUrl = (id: number) => `/api/admin/cache/${id}/stream`;
+  // New-tab <a href> can't attach Authorization header, so admin stream 401s.
+  // Workaround: auth'd fetch → blob URL → inline <audio>.
+  const playInline = async (id: number) => {
+    setPlayerLoading(true);
+    setError('');
+    try {
+      const streamToken = authUtils.getAdminToken() || authUtils.getUserToken();
+      // eslint-disable-next-line no-restricted-globals
+      const resp = await fetch(`/api/admin/cache/${id}/stream`, {
+        headers: { Authorization: `Bearer ${streamToken}` },
+      });
+      if (!resp.ok) throw new Error(`Stream failed: ${resp.status}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      setPlayerSrc(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+      setPlayingId(id);
+      setTimeout(() => {
+        audioRef.current?.play().catch(() => {});
+      }, 0);
+    } catch (e: any) {
+      setError(e.message || 'Playback failed');
+    } finally {
+      setPlayerLoading(false);
+    }
+  };
+
+  useEffect(() => () => {
+    if (playerSrc) URL.revokeObjectURL(playerSrc);
+  }, [playerSrc]);
+
+  const handleFileHashLookup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setHashLookupLoading(true);
+    setHashLookup(null);
+    setError('');
+    try {
+      const data = await AdminService().lookupCacheByHashAdminCacheLookupByHashPost(
+        { file: file as unknown as string },
+      );
+      setHashLookup({ md5: data.md5_hash, matches: data.matches });
+    } catch (e: any) {
+      setError(e.body?.detail || e.message || 'Hash lookup failed');
+    } finally {
+      setHashLookupLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -1694,7 +1761,7 @@ const CacheSection: React.FC = () => {
           type="text"
           value={searchInput}
           onChange={e => setSearchInput(e.target.value)}
-          placeholder="Search filename or URL..."
+          placeholder="Search URL, title, or artist…"
           className="flex-1 min-w-0 bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 font-mono text-sm px-3 py-1.5 focus:outline-none focus:border-h4ks-green-500"
         />
         <select
@@ -1706,11 +1773,89 @@ const CacheSection: React.FC = () => {
           <option value="user">user</option>
           <option value="fallback">fallback</option>
         </select>
+        <select
+          value={sort}
+          onChange={e => handleSortChange(e.target.value as typeof sort)}
+          className="bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 font-mono text-sm px-3 py-1.5 focus:outline-none"
+          title="Sort by"
+        >
+          <option value="added">added</option>
+          <option value="used">last used</option>
+          <option value="size">size</option>
+          <option value="uses">uses</option>
+        </select>
+        <select
+          value={order}
+          onChange={e => handleOrderChange(e.target.value as typeof order)}
+          className="bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 font-mono text-sm px-3 py-1.5 focus:outline-none"
+          title="Order"
+        >
+          <option value="desc">↓ desc</option>
+          <option value="asc">↑ asc</option>
+        </select>
         <button type="submit"
           className="font-mono text-sm border border-h4ks-green-700 text-h4ks-green-400 px-4 py-1.5 hover:bg-h4ks-green-900/30 transition-colors">
           [SEARCH]
         </button>
       </form>
+
+      <div className="flex items-center gap-2">
+        <label className="font-mono text-xs text-gray-500">lookup by file:</label>
+        <label className="font-mono text-xs border border-h4ks-green-900 text-h4ks-green-700 px-3 py-1 hover:bg-h4ks-green-900/20 cursor-pointer transition-colors">
+          {hashLookupLoading ? '[computing…]' : '[upload file]'}
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileHashLookup} disabled={hashLookupLoading} />
+        </label>
+        {hashLookup && (
+          <span className="font-mono text-[10px] text-gray-500">
+            md5: {hashLookup.md5} · {hashLookup.matches.length} match{hashLookup.matches.length !== 1 ? 'es' : ''}
+          </span>
+        )}
+        {hashLookup && (
+          <button onClick={() => setHashLookup(null)} className="font-mono text-[10px] text-gray-600 hover:text-gray-400">[×]</button>
+        )}
+      </div>
+
+      {hashLookup && hashLookup.matches.length > 0 && (
+        <div className="border border-h4ks-green-900/50 bg-h4ks-dark-900/50 p-3">
+          <p className="font-mono text-xs text-gray-500 mb-2">file matches in cache:</p>
+          <div className="space-y-1">
+            {hashLookup.matches.map(entry => (
+              <div key={entry.id} className="flex items-center gap-3 font-mono text-xs">
+                <span className="text-gray-600">#{entry.id}</span>
+                <span className="text-gray-400">{entry.playlist_type}</span>
+                <span className="text-gray-300">{entry.metadata[0]?.title || entry.filename}</span>
+                {entry.metadata[0]?.artist && <span className="text-gray-500">— {entry.metadata[0].artist}</span>}
+                <span className="text-gray-600">{formatBytes(entry.file_size)}</span>
+                <button onClick={() => playInline(entry.id)} disabled={playerLoading}
+                  className="text-h4ks-green-600 hover:text-h4ks-green-400 disabled:opacity-40">
+                  {playingId === entry.id ? '[playing]' : '[play]'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {hashLookup && hashLookup.matches.length === 0 && (
+        <p className="font-mono text-xs text-gray-600">no cache entries found for this file hash</p>
+      )}
+
+      {(playerSrc || playerLoading) && (
+        <div className="border border-h4ks-green-800 bg-h4ks-dark-900 p-3 flex items-center gap-3">
+          <span className="font-mono text-xs text-gray-500">
+            {playerLoading && !playerSrc ? 'loading…' : `▸ now playing #${playingId}`}
+          </span>
+          {playerSrc && (
+            <audio ref={audioRef} controls src={playerSrc} className="flex-1 h-8" />
+          )}
+          {playerSrc && (
+            <button onClick={() => {
+              if (playerSrc) URL.revokeObjectURL(playerSrc);
+              setPlayerSrc(null);
+              setPlayingId(null);
+            }} className="font-mono text-xs text-gray-500 hover:text-gray-300">[×]</button>
+          )}
+        </div>
+      )}
 
       {/* Bulk actions */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -1743,7 +1888,7 @@ const CacheSection: React.FC = () => {
             <thead>
               <tr className="border-b border-h4ks-green-900 text-gray-500 text-xs">
                 <th className="text-left pb-2 pr-2 w-6" />
-                <th className="text-left pb-2 pr-4">filename</th>
+                <th className="text-left pb-2 pr-4">title / filename</th>
                 <th className="text-left pb-2 pr-4">playlist</th>
                 <th className="text-left pb-2 pr-4">size</th>
                 <th className="text-left pb-2 pr-4">uses</th>
@@ -1754,7 +1899,9 @@ const CacheSection: React.FC = () => {
             <tbody>
               {entries.length === 0 ? (
                 <tr><td colSpan={7} className="py-8 text-center text-gray-600">no entries found</td></tr>
-              ) : entries.map(entry => (
+              ) : entries.map(entry => {
+                const primaryMeta = entry.metadata[0];
+                return (
                 <tr key={entry.id} className="border-b border-h4ks-green-900/30 hover:bg-h4ks-dark-900/50">
                   <td className="py-1.5 pr-2">
                     <input type="checkbox" checked={selected.has(entry.id)}
@@ -1762,9 +1909,23 @@ const CacheSection: React.FC = () => {
                       className="accent-h4ks-green-500" />
                   </td>
                   <td className="py-1.5 pr-4 max-w-xs">
-                    <span className="text-gray-300 block truncate" title={entry.filename}>
-                      {entry.filename}
-                    </span>
+                    {primaryMeta?.title ? (
+                      <>
+                        <span className="text-gray-200 block truncate" title={primaryMeta.title}>
+                          {primaryMeta.title}
+                        </span>
+                        {primaryMeta.artist && (
+                          <span className="text-gray-500 text-[10px] block truncate">{primaryMeta.artist}</span>
+                        )}
+                        <span className="text-gray-600 text-[10px] block truncate font-mono" title={entry.filename}>
+                          {entry.filename}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-gray-300 block truncate font-mono" title={entry.filename}>
+                        {entry.filename}
+                      </span>
+                    )}
                     {entry.origin_url && (
                       <span className="text-gray-600 text-[10px] block truncate" title={entry.origin_url}>
                         {entry.origin_url}
@@ -1787,10 +1948,15 @@ const CacheSection: React.FC = () => {
                   </td>
                   <td className="py-1.5">
                     <div className="flex gap-3 items-center">
-                      <a href={streamUrl(entry.id)} target="_blank" rel="noopener noreferrer"
-                        className="text-h4ks-green-600 hover:text-h4ks-green-400 text-xs">
-                        [play]
-                      </a>
+                      <button onClick={() => playInline(entry.id)}
+                        disabled={playerLoading}
+                        className={`text-xs ${
+                          playingId === entry.id
+                            ? 'text-h4ks-green-400'
+                            : 'text-h4ks-green-600 hover:text-h4ks-green-400'
+                        } disabled:opacity-40`}>
+                        {playingId === entry.id ? '[playing]' : '[play]'}
+                      </button>
                       {entry.reference_url && (
                         <a href={entry.reference_url} target="_blank" rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-400 text-xs">
@@ -1804,7 +1970,8 @@ const CacheSection: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
@@ -1815,34 +1982,20 @@ const CacheSection: React.FC = () => {
 
 // Transitions Section Component
 const TransitionsSection: React.FC = () => {
-  type TransitionType = 'livestream' | 'user' | 'fallback';
-  const [activeTab, setActiveTab] = useState<TransitionType>('livestream');
-  const [transitions, setTransitions] = useState<Record<TransitionType, any[]>>({
-    livestream: [],
-    user: [],
-    fallback: [],
-  });
+  const [transitions, setTransitions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const fetchTransitions = useCallback(async (type?: TransitionType) => {
+  const fetchTransitions = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      const token = authUtils.getUserToken() || authUtils.getAdminToken();
-      const response = await fetch(
-        `/api/admin/transitions/list${type ? `?transition_type=${type}` : ''}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!response.ok) throw new Error('Failed to fetch transitions');
-      const data = await response.json();
-      setTransitions(data);
+      const data = await AdminService().listTransitionsAdminTransitionsListGet();
+      setTransitions(data.files ?? []);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch transitions');
+      setError(err.body?.detail || err.message || 'Failed to fetch transitions');
     } finally {
       setLoading(false);
     }
@@ -1856,26 +2009,13 @@ const TransitionsSection: React.FC = () => {
     try {
       setUploading(true);
       setError('');
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-      formData.append('transition_type', activeTab);
-
-      const token = authUtils.getUserToken() || authUtils.getAdminToken();
-      const response = await fetch('/api/admin/transitions/upload', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Upload failed');
-      }
-
+      await AdminService().uploadTransitionAdminTransitionsUploadPost(
+        { file: uploadFile as unknown as string },
+      );
       setUploadFile(null);
-      fetchTransitions(activeTab);
+      fetchTransitions();
     } catch (err: any) {
-      setError(err.message || 'Failed to upload transition');
+      setError(err.body?.detail || err.message || 'Failed to upload transition');
     } finally {
       setUploading(false);
     }
@@ -1884,20 +2024,11 @@ const TransitionsSection: React.FC = () => {
   const deleteTransition = async (filename: string) => {
     if (!window.confirm(`Delete ${filename}?`)) return;
     try {
-      const token = authUtils.getUserToken() || authUtils.getAdminToken();
-      const response = await fetch(`/api/admin/transitions/${activeTab}/${filename}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error('Failed to delete transition');
-      fetchTransitions(activeTab);
+      await AdminService().deleteTransitionAdminTransitionsFilenameDelete(filename);
+      fetchTransitions();
     } catch (err: any) {
-      setError(err.message || 'Failed to delete transition');
+      setError(err.body?.detail || err.message || 'Failed to delete transition');
     }
-  };
-
-  const getStreamUrl = (filename: string) => {
-    return `/api/admin/transitions/stream/${activeTab}/${filename}`;
   };
 
   useEffect(() => {
@@ -1916,27 +2047,10 @@ const TransitionsSection: React.FC = () => {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex space-x-2 mb-6">
-        {(['livestream', 'user', 'fallback'] as TransitionType[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 font-mono transition-colors ${
-              activeTab === tab
-                ? 'bg-h4ks-green-700 text-white'
-                : 'bg-h4ks-dark-900 text-gray-400 hover:bg-h4ks-dark-800'
-            }`}
-          >
-            [{tab.toUpperCase()}]
-          </button>
-        ))}
-      </div>
-
       {/* Upload Form */}
       <div className="mb-6 border-2 border-h4ks-green-800 bg-h4ks-dark-900 p-4">
         <h3 className="text-lg font-bold text-h4ks-green-400 mb-4 font-mono">
-          [UPLOAD {activeTab.toUpperCase()} TRANSITION]
+          [UPLOAD TRANSITION]
         </h3>
         <div className="space-y-4">
           <div>
@@ -1982,14 +2096,14 @@ const TransitionsSection: React.FC = () => {
                     Loading...
                   </td>
                 </tr>
-              ) : transitions[activeTab]?.length === 0 ? (
+              ) : transitions.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="p-3 text-gray-400 text-center">
-                    No transitions uploaded for {activeTab}
+                    No transitions uploaded
                   </td>
                 </tr>
               ) : (
-                transitions[activeTab]?.map((transition: any) => (
+                transitions.map((transition: any) => (
                   <tr key={transition.filename} className="border-b border-h4ks-green-900 hover:bg-h4ks-dark-800">
                     <td className="p-3 text-gray-300 font-mono text-sm">{transition.filename}</td>
                     <td className="p-3 text-gray-400 text-sm">
@@ -2000,7 +2114,7 @@ const TransitionsSection: React.FC = () => {
                     </td>
                     <td className="p-3 space-x-2">
                       <a
-                        href={getStreamUrl(transition.filename)}
+                        href={`/api/admin/transitions/stream/${transition.filename}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-h4ks-green-400 hover:text-h4ks-green-300 font-mono text-sm"

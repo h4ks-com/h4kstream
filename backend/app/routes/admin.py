@@ -3,6 +3,7 @@
 Admin-only endpoints that can manage both user queue and radio playlist, create tokens, and control playback.
 """
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -40,6 +41,8 @@ from app.services import cache_service
 from app.services import metadata_editor
 from app.services import playback_service
 from app.services import queue_service
+from app.services.cache_service import get_distinct_metadata_values
+from app.services.cache_service import get_metadata_map
 from app.services.event_publisher import EventPublisher
 from app.services.jwt_service import generate_livestream_token
 from app.services.jwt_service import generate_token
@@ -311,18 +314,31 @@ async def admin_resume(
 )
 async def list_cache(
     playlist: PlaylistType | None = Query(None, description="Filter by playlist type"),
-    search: str | None = Query(None, description="Search in filename or origin_url"),
+    search: str | None = Query(None, description="Search in filename, origin_url, or reference_url"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    sort: str = Query("added", pattern="^(added|size|uses|used)$", description="Sort field"),
+    order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
     db_session: Session = Depends(get_session),
 ) -> dict:
-    """List cached files with pagination and search."""
+    """List cached files with pagination, search, and sort."""
     entries, total = await cache_service.list_cache_entries(
-        db_session, playlist_type=playlist, search=search, offset=offset, limit=limit
+        db_session,
+        playlist_type=playlist,
+        search=search,
+        offset=offset,
+        limit=limit,
+        sort=sort,
+        order=order,
     )
 
+    metadata_map = get_metadata_map(db_session, [e.id for e in entries if e.id])
+
     return {
-        "entries": [FileCachePublic.model_validate(entry) for entry in entries],
+        "entries": [
+            {**FileCachePublic.model_validate(entry).model_dump(), "metadata": metadata_map.get(entry.id or 0, [])}
+            for entry in entries
+        ],
         "total": total,
         "offset": offset,
         "limit": limit,
@@ -462,6 +478,50 @@ async def stream_cache_file(
         media_type=media_type,
         headers={"Accept-Ranges": "bytes", "Cache-Control": "no-cache"},
     )
+
+
+@router.post(
+    "/cache/lookup-by-hash",
+    response_model=dict,
+    summary="Lookup Cache Entries by File Hash",
+    description="Upload a file to compute its MD5 and find matching cache entries. File is not stored.",
+)
+async def lookup_cache_by_hash(
+    file: UploadFile,
+    db_session: Session = Depends(get_session),
+) -> dict:
+    """Compute MD5 of the uploaded file and return matching cache entries."""
+    content = await file.read()
+    # MD5 here is for dedup identity matching, not cryptographic security
+    md5_hash = hashlib.md5(content).hexdigest()
+
+    statement = select(FileCache).where(FileCache.md5_hash == md5_hash)
+    matches = db_session.exec(statement).all()
+    metadata_map = get_metadata_map(db_session, [e.id for e in matches if e.id is not None])
+
+    return {
+        "md5_hash": md5_hash,
+        "matches": [
+            {**FileCachePublic.model_validate(entry).model_dump(), "metadata": metadata_map.get(entry.id or 0, [])}
+            for entry in matches
+        ],
+    }
+
+
+@router.get(
+    "/cache/metadata/distinct",
+    response_model=dict,
+    summary="Get Distinct Metadata Values",
+    description="Get distinct titles and artists from cache_metadata for filter dropdowns",
+)
+async def cache_metadata_distinct(
+    db_session: Session = Depends(get_session),
+) -> dict:
+    """Return distinct title and artist values stored in cache_metadata."""
+    return {
+        "titles": get_distinct_metadata_values(db_session, "title"),
+        "artists": get_distinct_metadata_values(db_session, "artist"),
+    }
 
 
 @router.delete(

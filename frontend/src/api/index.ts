@@ -13,6 +13,7 @@ export type { OpenAPIConfig } from './core/OpenAPI';
 export type { Body_add_song_queue_add_post } from './models/Body_add_song_queue_add_post';
 export type { Body_admin_add_song_admin_queue_add_post } from './models/Body_admin_add_song_admin_queue_add_post';
 export type { Body_admin_upload_show_intro_admin_shows__show_id__intro_post } from './models/Body_admin_upload_show_intro_admin_shows__show_id__intro_post';
+export type { Body_lookup_cache_by_hash_admin_cache_lookup_by_hash_post } from './models/Body_lookup_cache_by_hash_admin_cache_lookup_by_hash_post';
 export type { Body_update_user_role_admin_users__user_id__role_patch } from './models/Body_update_user_role_admin_users__user_id__role_patch';
 export type { Body_upload_transition_admin_transitions_upload_post } from './models/Body_upload_transition_admin_transitions_upload_post';
 export type { ClientCountsResponse } from './models/ClientCountsResponse';

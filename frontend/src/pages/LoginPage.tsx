@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UsersService } from '../utils/apiClient';
+import { UsersService, OauthService } from '../utils/apiClient';
 import { authUtils } from '../utils/auth';
 
 export const LoginPage: React.FC = () => {
@@ -12,8 +12,7 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(window.location.origin + '/api/users/oauth/status')
-      .then(r => r.json())
+    OauthService().oauthStatusUsersOauthStatusGet()
       .then(data => {
         if (data.enabled) {
           window.location.href = window.location.origin + '/api/users/oauth/login';

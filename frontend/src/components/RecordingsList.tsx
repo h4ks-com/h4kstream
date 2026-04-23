@@ -1,24 +1,14 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { OpenInNewTabButton } from './OpenInNewTabButton';
-
-interface Recording {
-  id: number;
-  created_at: string;
-  title: string | null;
-  artist: string | null;
-  genre: string | null;
-  description: string | null;
-  duration_seconds: number;
-  stream_url: string;
-  max_listeners: number | null;
-}
+import type { RecordingMetadata } from '../api/models/RecordingMetadata';
+import { RecordingsService } from '../utils/apiClient';
 
 interface RecordingsListProps {
   showName: string;
 }
 
 export const RecordingsList: React.FC<RecordingsListProps> = ({ showName }) => {
-  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [recordings, setRecordings] = useState<RecordingMetadata[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -41,17 +31,14 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ showName }) => {
     const fetchRecordings = async () => {
       setLoading(true);
       try {
-        const response = await fetch(
-          `/api/recordings/list?show_name=${encodeURIComponent(showName)}&page=${page}&page_size=20`
+        const data = await RecordingsService().listRecordingsRecordingsListGet(
+          showName, undefined, undefined, undefined, undefined, page, 20,
         );
-        if (response.ok) {
-          const data = await response.json();
-          if (data.shows.length > 0) {
-            setRecordings(prev => [...prev, ...data.shows[0].recordings]);
-            setHasMore(data.shows[0].recordings.length === 20);
-          } else {
-            setHasMore(false);
-          }
+        if (data.shows.length > 0) {
+          setRecordings(prev => [...prev, ...data.shows[0].recordings]);
+          setHasMore(data.shows[0].recordings.length === 20);
+        } else {
+          setHasMore(false);
         }
       } catch (err) {
         console.error('Failed to fetch recordings:', err);
@@ -115,7 +102,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ showName }) => {
               <div className="text-gray-500 text-sm text-right ml-4">
                 <div>{formatDate(recording.created_at)}</div>
                 <div>{formatDuration(recording.duration_seconds)}</div>
-                {recording.max_listeners !== null && recording.max_listeners !== undefined && (
+                {recording.max_listeners != null && recording.max_listeners > 0 && (
                   <div className="text-h4ks-green-400/70">
                     👥 {recording.max_listeners} peak
                   </div>

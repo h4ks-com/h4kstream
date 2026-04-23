@@ -135,4 +135,6 @@ export const AdminService = () => getApiClient().admin;
 export const QueueService = () => getApiClient().queue;
 export const RecordingsService = () => getApiClient().recordings;
 export const MetadataService = () => getApiClient().metadata;
+export const PublicService = () => getApiClient().public;
+export const OauthService = () => getApiClient().oauth;
 export const WebhooksService = () => getApiClient().webhooks;
