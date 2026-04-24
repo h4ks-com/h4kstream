@@ -15,6 +15,8 @@ import type { NavidromePurgeRequest } from '../models/NavidromePurgeRequest';
 import type { NavidromePurgeResponse } from '../models/NavidromePurgeResponse';
 import type { PendingUserCreate } from '../models/PendingUserCreate';
 import type { PendingUserPublic } from '../models/PendingUserPublic';
+import type { PurgeAllCacheRequest } from '../models/PurgeAllCacheRequest';
+import type { PurgeAllCacheResponse } from '../models/PurgeAllCacheResponse';
 import type { ShowCreate } from '../models/ShowCreate';
 import type { ShowPublic } from '../models/ShowPublic';
 import type { SongAddedResponse } from '../models/SongAddedResponse';
@@ -485,6 +487,27 @@ export class AdminService {
         return this.httpRequest.request({
             method: 'POST',
             url: '/admin/cache/purge-navidrome',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                401: `Unauthorized`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Purge ALL cache entries and files
+     * DESTRUCTIVE: deletes every cache row and every file on disk it references. Songs currently queued in MPD that reference deleted files will fail to play until re-added. Requires confirm='PURGE ALL CACHE' in the request body.
+     * @param requestBody
+     * @returns PurgeAllCacheResponse Successful Response
+     * @throws ApiError
+     */
+    public purgeAllCacheAdminCachePurgeAllPost(
+        requestBody: PurgeAllCacheRequest,
+    ): CancelablePromise<PurgeAllCacheResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/admin/cache/purge-all',
             body: requestBody,
             mediaType: 'application/json',
             errors: {

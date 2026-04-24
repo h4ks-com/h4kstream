@@ -462,6 +462,21 @@ class NavidromePurgeResponse(BaseModel):
     songs_checked: int = Field(..., description="Number of songs looked up from Navidrome")
 
 
+class PurgeAllCacheRequest(BaseModel):
+    """Destructive: wipe every cache entry AND its file on disk."""
+
+    confirm: Literal["PURGE ALL CACHE"] = Field(
+        ..., description="Must equal 'PURGE ALL CACHE' to proceed; any other value rejected"
+    )
+
+
+class PurgeAllCacheResponse(BaseModel):
+    """Response after full cache purge."""
+
+    entries: int = Field(..., description="Number of cache rows deleted")
+    files: int = Field(..., description="Number of files unlinked from disk")
+
+
 class WebhookEventPayload(BaseModel):
     """Complete webhook event payload structure sent to webhook URLs."""
 

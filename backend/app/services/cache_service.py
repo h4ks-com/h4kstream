@@ -305,7 +305,11 @@ async def delete_cache_entry(session: Session, cache_id: int, delete_file: bool 
 
 
 async def purge_navidrome_songs(session: Session, song_ids: list[str]) -> int:
-    """Delete all cache entries whose reference_url matches a Navidrome song URL.
+    """Invalidate cache entries whose reference_url matches a Navidrome song URL.
+
+    Deletes DB rows only. Files on disk are left intact — they are the live MPD-served files (filepath points into
+    /music/user/ or /music/fallback/), and songs currently queued in MPD would fail to play if we removed them. Next
+    time the user adds the same playlist/album, cache miss triggers a fresh download.
 
     :param session: Database session
     :param song_ids: List of Navidrome song IDs to purge
@@ -317,17 +321,35 @@ async def purge_navidrome_songs(session: Session, song_ids: list[str]) -> int:
         statement = select(FileCache).where(col(FileCache.reference_url).ilike(pattern))
         entries = session.exec(statement).all()
         for entry in entries:
-            filepath = Path(entry.filepath)
-            if filepath.exists():
-                try:
-                    filepath.unlink()
-                    logger.info(f"Deleted file {filepath}")
-                except OSError as e:
-                    logger.error(f"Failed to delete file {filepath}: {e}")
             session.delete(entry)
             purged += 1
     session.commit()
     return purged
+
+
+async def purge_all(session: Session) -> dict[str, int]:
+    """Delete ALL cache entries and their files on disk.
+
+    Destructive. Any songs currently queued in MPD that reference these files will fail to play until re-added. Intended
+    for a manual, admin-confirmed full reset of the cache.
+
+    :param session: Database session
+    :return: Dict with 'entries' (rows deleted) and 'files' (files unlinked)
+    """
+    entries = session.exec(select(FileCache)).all()
+    files_deleted = 0
+    for entry in entries:
+        filepath = Path(entry.filepath)
+        if filepath.exists():
+            try:
+                filepath.unlink()
+                files_deleted += 1
+            except OSError as e:
+                logger.error(f"Failed to delete file {filepath}: {e}")
+        session.delete(entry)
+    session.commit()
+    logger.warning(f"Full cache purge: {len(entries)} entries, {files_deleted} files deleted")
+    return {"entries": len(entries), "files": files_deleted}
 
 
 async def get_cache_stats(session: Session) -> dict[str, int | dict[str, int]]:

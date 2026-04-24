@@ -35,6 +35,8 @@ export type { PlaylistAddRequest } from './models/PlaylistAddRequest';
 export type { PlaylistAddResponse } from './models/PlaylistAddResponse';
 export type { PlaylistSongResult } from './models/PlaylistSongResult';
 export { PlaylistSource } from './models/PlaylistSource';
+export type { PurgeAllCacheRequest } from './models/PurgeAllCacheRequest';
+export type { PurgeAllCacheResponse } from './models/PurgeAllCacheResponse';
 export type { RecordingMetadata } from './models/RecordingMetadata';
 export type { RecordingsListResponse } from './models/RecordingsListResponse';
 export type { ShowCreate } from './models/ShowCreate';

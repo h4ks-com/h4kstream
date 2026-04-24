@@ -34,6 +34,8 @@ from app.models import NavidromeAlbumItem
 from app.models import NavidromePlaylistItem
 from app.models import NavidromePurgeRequest
 from app.models import NavidromePurgeResponse
+from app.models import PurgeAllCacheRequest
+from app.models import PurgeAllCacheResponse
 from app.models import SongAddedResponse
 from app.models import SongDeletedEventData
 from app.models import SongItem
@@ -614,3 +616,26 @@ async def purge_navidrome_cache(
     song_ids = [s.id for s in songs]
     purged = await cache_service.purge_navidrome_songs(db_session, song_ids)
     return NavidromePurgeResponse(purged=purged, songs_checked=len(song_ids))
+
+
+@router.post(
+    "/cache/purge-all",
+    response_model=PurgeAllCacheResponse,
+    summary="Purge ALL cache entries and files",
+    description=(
+        "DESTRUCTIVE: deletes every cache row and every file on disk it references. "
+        "Songs currently queued in MPD that reference deleted files will fail to play until re-added. "
+        "Requires confirm='PURGE ALL CACHE' in the request body."
+    ),
+    dependencies=[Depends(require_admin_role)],
+)
+async def purge_all_cache(
+    request: PurgeAllCacheRequest,  # noqa: ARG001  # kept for request-body validation gate
+    db_session: Session = Depends(get_session),
+) -> PurgeAllCacheResponse:
+    """Wipe full cache (db rows + files).
+
+    Guarded by Literal on request.confirm.
+    """
+    result = await cache_service.purge_all(db_session)
+    return PurgeAllCacheResponse(entries=result["entries"], files=result["files"])

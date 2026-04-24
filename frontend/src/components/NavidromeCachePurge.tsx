@@ -18,6 +18,8 @@ type Mode = 'playlist' | 'album';
 
 const MAX_SHOWN = 8;
 
+const PURGE_ALL_PHRASE = 'PURGE ALL CACHE';
+
 export const NavidromeCachePurge: React.FC = () => {
   const [mode, setMode] = useState<Mode>('playlist');
   const [playlists, setPlaylists] = useState<NavidromeItem[]>([]);
@@ -29,6 +31,9 @@ export const NavidromeCachePurge: React.FC = () => {
   const [unavailable, setUnavailable] = useState(false);
   const [purgingId, setPurgingId] = useState<string | null>(null);
   const [purgeResults, setPurgeResults] = useState<Record<string, PurgeResult | string>>({});
+  const [purgeAllConfirm, setPurgeAllConfirm] = useState('');
+  const [purgingAll, setPurgingAll] = useState(false);
+  const [purgeAllResult, setPurgeAllResult] = useState<{ entries: number; files: number } | string | null>(null);
 
   useEffect(() => {
     if (mode !== 'playlist' || playlists.length > 0) return;
@@ -77,6 +82,21 @@ export const NavidromeCachePurge: React.FC = () => {
       setPurgeResults((prev) => ({ ...prev, [item.id]: err?.body?.detail || err?.message || 'Purge failed' }));
     } finally {
       setPurgingId(null);
+    }
+  };
+
+  const handlePurgeAll = async () => {
+    if (purgeAllConfirm !== PURGE_ALL_PHRASE) return;
+    setPurgingAll(true);
+    setPurgeAllResult(null);
+    try {
+      const result = await AdminService().purgeAllCacheAdminCachePurgeAllPost({ confirm: PURGE_ALL_PHRASE });
+      setPurgeAllResult(result);
+      setPurgeAllConfirm('');
+    } catch (err: any) {
+      setPurgeAllResult(err?.body?.detail || err?.message || 'Purge all failed');
+    } finally {
+      setPurgingAll(false);
     }
   };
 
@@ -182,6 +202,40 @@ export const NavidromeCachePurge: React.FC = () => {
           {mode === 'playlist' ? 'type to filter playlists' : 'type to search albums'}
         </p>
       )}
+
+      <div className="mt-6 pt-4 border-t border-red-900/50">
+        <p className="text-red-500 font-mono text-xs mb-2">[DANGER ZONE]</p>
+        <p className="text-gray-400 font-mono text-xs mb-2">
+          Wipes every cache DB row and its file on disk. Currently-queued songs that reference
+          deleted files will fail to play until re-added. Type <span className="text-red-400">{PURGE_ALL_PHRASE}</span> to confirm.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={purgeAllConfirm}
+            onChange={(e) => setPurgeAllConfirm(e.target.value)}
+            placeholder={PURGE_ALL_PHRASE}
+            className="flex-1 bg-h4ks-dark-800 border border-red-900 text-red-300 font-mono text-sm px-3 py-1.5 focus:outline-none focus:border-red-500 placeholder-gray-700"
+            disabled={purgingAll}
+          />
+          <button
+            onClick={handlePurgeAll}
+            disabled={purgingAll || purgeAllConfirm !== PURGE_ALL_PHRASE}
+            className="flex-shrink-0 bg-red-900 border border-red-700 text-red-200 font-mono py-1 px-3 text-xs hover:bg-red-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {purgingAll ? '[PURGING ALL…]' : '[PURGE ALL]'}
+          </button>
+        </div>
+        {purgeAllResult && typeof purgeAllResult === 'object' && (
+          <div className="text-orange-400 text-xs font-mono mt-2">
+            ✓ Purged {purgeAllResult.entries} {purgeAllResult.entries !== 1 ? 'entries' : 'entry'},
+            {' '}{purgeAllResult.files} {purgeAllResult.files !== 1 ? 'files' : 'file'} deleted
+          </div>
+        )}
+        {purgeAllResult && typeof purgeAllResult === 'string' && (
+          <div className="text-red-400 text-xs font-mono mt-2">{purgeAllResult}</div>
+        )}
+      </div>
     </div>
   );
 };
