@@ -92,13 +92,18 @@ const getUserApiClient = (): ApiClient => {
   return userApiClient;
 };
 
-// Admin API client — always sends the admin token. Only for AdminService.
+// Admin API client — for AdminService endpoints (require_admin_role backend).
+// Backend accepts either admin token OR user JWT with role=admin. Prefer user JWT when
+// it carries admin role (refresh flow works); fall back to admin token for token-only admin login.
 const getAdminApiClient = (): ApiClient => {
   if (!adminApiClient) {
-    adminApiClient = new ApiClient({
+    adminApiClient = wrapWithRefresh(new ApiClient({
       BASE: window.location.origin + '/api',
-      TOKEN: async () => authUtils.getAdminToken() || '',
-    });
+      TOKEN: async () => {
+        if (authUtils.hasAdminRole()) return authUtils.getUserToken() || '';
+        return authUtils.getAdminToken() || '';
+      },
+    }));
   }
   return adminApiClient;
 };
