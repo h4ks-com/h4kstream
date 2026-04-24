@@ -20,6 +20,14 @@ class NavidromePlaylist:
 
 
 @dataclass
+class NavidromeAlbum:
+    id: str
+    name: str
+    artist: str
+    song_count: int
+
+
+@dataclass
 class NavidromeSong:
     id: str
     title: str
@@ -70,6 +78,48 @@ class NavidromeService:
             )
             r.raise_for_status()
             entries = r.json()["subsonic-response"]["playlist"].get("entry", [])
+            return [
+                NavidromeSong(
+                    id=e["id"],
+                    title=e.get("title", ""),
+                    artist=e.get("artist", ""),
+                    album=e.get("album", ""),
+                    duration=e.get("duration", 0),
+                    suffix=e.get("suffix", "mp3"),
+                )
+                for e in entries
+            ]
+
+    async def search_albums(self, query: str) -> list[NavidromeAlbum]:
+        """Search albums by name/artist via Subsonic search3."""
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                self._url("search3.view"),
+                params={**self._params, "query": query, "albumCount": 20, "artistCount": 0, "songCount": 0},
+                timeout=10,
+            )
+            r.raise_for_status()
+            items = r.json()["subsonic-response"]["searchResult3"].get("album", [])
+            return [
+                NavidromeAlbum(
+                    id=a["id"],
+                    name=a["name"],
+                    artist=a.get("artist", ""),
+                    song_count=a.get("songCount", 0),
+                )
+                for a in items
+            ]
+
+    async def get_album_songs(self, album_id: str) -> list[NavidromeSong]:
+        """Return all songs in an album."""
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                self._url("getAlbum.view"),
+                params={**self._params, "id": album_id},
+                timeout=10,
+            )
+            r.raise_for_status()
+            entries = r.json()["subsonic-response"]["album"].get("song", [])
             return [
                 NavidromeSong(
                     id=e["id"],

@@ -23,7 +23,10 @@ export type { LivestreamTimeRemainingRequest } from './models/LivestreamTimeRema
 export type { LivestreamTimeRemainingResponse } from './models/LivestreamTimeRemainingResponse';
 export type { LivestreamTokenCreateRequest } from './models/LivestreamTokenCreateRequest';
 export type { LivestreamTokenResponse } from './models/LivestreamTokenResponse';
+export type { NavidromeAlbumItem } from './models/NavidromeAlbumItem';
 export type { NavidromePlaylistItem } from './models/NavidromePlaylistItem';
+export { NavidromePurgeRequest } from './models/NavidromePurgeRequest';
+export type { NavidromePurgeResponse } from './models/NavidromePurgeResponse';
 export type { NowPlayingMetadata } from './models/NowPlayingMetadata';
 export { NowPlayingResponse } from './models/NowPlayingResponse';
 export type { PendingUserCreate } from './models/PendingUserCreate';

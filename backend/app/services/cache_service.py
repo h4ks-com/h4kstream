@@ -304,6 +304,32 @@ async def delete_cache_entry(session: Session, cache_id: int, delete_file: bool 
     logger.info(f"Deleted cache entry {cache_id}")
 
 
+async def purge_navidrome_songs(session: Session, song_ids: list[str]) -> int:
+    """Delete all cache entries whose reference_url matches a Navidrome song URL.
+
+    :param session: Database session
+    :param song_ids: List of Navidrome song IDs to purge
+    :return: Number of cache entries deleted
+    """
+    purged = 0
+    for song_id in song_ids:
+        pattern = f"%/song/{song_id}"
+        statement = select(FileCache).where(col(FileCache.reference_url).ilike(pattern))
+        entries = session.exec(statement).all()
+        for entry in entries:
+            filepath = Path(entry.filepath)
+            if filepath.exists():
+                try:
+                    filepath.unlink()
+                    logger.info(f"Deleted file {filepath}")
+                except OSError as e:
+                    logger.error(f"Failed to delete file {filepath}: {e}")
+            session.delete(entry)
+            purged += 1
+    session.commit()
+    return purged
+
+
 async def get_cache_stats(session: Session) -> dict[str, int | dict[str, int]]:
     """Get cache statistics.
 

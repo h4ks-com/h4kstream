@@ -234,19 +234,29 @@ class TestNavidromeEndpoints:
         assert response.status_code == 503
         assert "not configured" in response.json()["detail"]
 
-    def test_list_navidrome_playlists_requires_jwt(self, admin_token):
-        """Admin token is rejected; endpoint requires user JWT."""
-        response = client.get(
-            "/queue/playlists/navidrome",
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-        assert response.status_code == 403
+    def test_list_navidrome_playlists_admin_token_treated_as_anonymous(self, admin_token):
+        """Admin token is treated as anonymous (returns only public playlists, not 403)."""
+        mock_playlists = [
+            NavidromePlaylist(id="1", name="Public Mix", song_count=5, comment="", public=True),
+        ]
+        with patch("app.routes.public.settings") as mock_settings, \
+             patch("app.routes.public.NavidromeService") as mock_svc_cls:
+            mock_settings.navidrome_enabled = True
+            mock_svc = AsyncMock()
+            mock_svc.get_playlists = AsyncMock(return_value=mock_playlists)
+            mock_svc_cls.return_value = mock_svc
+            response = client.get(
+                "/queue/playlists/navidrome",
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
+        assert response.status_code == 200
+        assert len(response.json()) == 1  # only public playlists visible
 
     def test_list_navidrome_playlists_returns_list(self, user_jwt_headers):
         """Returns list of playlists from Navidrome service."""
         mock_playlists = [
-            NavidromePlaylist(id="1", name="Rock Classics", song_count=10, comment=""),
-            NavidromePlaylist(id="2", name="Jazz", song_count=5, comment="Smooth"),
+            NavidromePlaylist(id="1", name="Rock Classics", song_count=10, comment="", public=True),
+            NavidromePlaylist(id="2", name="Jazz", song_count=5, comment="Smooth", public=True),
         ]
 
         with patch("app.routes.public.settings") as mock_settings, \
@@ -302,6 +312,9 @@ class TestNavidromeEndpoints:
              patch("app.routes.public.NavidromeService") as mock_svc_cls:
             mock_settings.navidrome_enabled = True
             mock_svc = AsyncMock()
+            mock_svc.get_playlists = AsyncMock(return_value=[
+                NavidromePlaylist(id="p1", name="Test", song_count=10, public=True)
+            ])
             mock_svc.get_playlist_songs = AsyncMock(return_value=mock_songs)
             mock_svc_cls.return_value = mock_svc
 
@@ -327,6 +340,9 @@ class TestNavidromeEndpoints:
             mock_settings.navidrome_enabled = True
             mock_settings.NAVIDROME_URL = "http://navidrome.test"
             mock_svc = AsyncMock()
+            mock_svc.get_playlists = AsyncMock(return_value=[
+                NavidromePlaylist(id="p1", name="Test", song_count=2, public=True)
+            ])
             mock_svc.get_playlist_songs = AsyncMock(return_value=mock_songs)
             mock_svc.download_song = AsyncMock()
             mock_svc_cls.return_value = mock_svc

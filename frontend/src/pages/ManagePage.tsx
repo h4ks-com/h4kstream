@@ -5,6 +5,7 @@ import { getUserLimits, getTokenTimeRemaining, formatTimeRemaining } from '../ut
 import { QueueService, ShowsService, UsersService } from '../utils/apiClient';
 import type { SongItem, ShowPublic } from '../api';
 import { SongUploadForm } from '../components/SongUploadForm';
+import { NavidromeAlbumPicker } from '../components/NavidromeAlbumPicker';
 import { NavidromePlaylistPicker } from '../components/NavidromePlaylistPicker';
 import { LivestreamTokenDisplay } from '../components/LivestreamTokenDisplay';
 import { SongEditDialog } from '../components/SongEditDialog';
@@ -269,6 +270,15 @@ const QueueSection: React.FC = () => {
       <div className="mb-6">
         <NavidromePlaylistPicker
           onPlaylistAdded={fetchQueue}
+          currentQueueCount={songs.length}
+          maxQueueSongs={limits.maxQueueSongs ?? undefined}
+        />
+      </div>
+
+      {/* Add Album Section */}
+      <div className="mb-6">
+        <NavidromeAlbumPicker
+          onAlbumAdded={fetchQueue}
           currentQueueCount={songs.length}
           maxQueueSongs={limits.maxQueueSongs ?? undefined}
         />

@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { Body_add_song_queue_add_post } from '../models/Body_add_song_queue_add_post';
+import type { NavidromeAlbumItem } from '../models/NavidromeAlbumItem';
 import type { NavidromePlaylistItem } from '../models/NavidromePlaylistItem';
 import type { PlaylistAddRequest } from '../models/PlaylistAddRequest';
 import type { PlaylistAddResponse } from '../models/PlaylistAddResponse';
@@ -130,6 +131,30 @@ export class QueueService {
             errors: {
                 401: `Unauthorized`,
                 403: `Forbidden`,
+                503: `Service Unavailable`,
+            },
+        });
+    }
+    /**
+     * Search Navidrome Albums
+     * Search albums in Navidrome by name or artist. Returns up to 20 results.
+     * @param query
+     * @returns NavidromeAlbumItem Successful Response
+     * @throws ApiError
+     */
+    public searchNavidromeAlbumsQueueAlbumsNavidromeSearchGet(
+        query: string,
+    ): CancelablePromise<Array<NavidromeAlbumItem>> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/queue/albums/navidrome/search',
+            query: {
+                'query': query,
+            },
+            errors: {
+                401: `Unauthorized`,
+                403: `Forbidden`,
+                422: `Validation Error`,
                 503: `Service Unavailable`,
             },
         });

@@ -9,6 +9,10 @@ import type { Body_update_user_role_admin_users__user_id__role_patch } from '../
 import type { Body_upload_transition_admin_transitions_upload_post } from '../models/Body_upload_transition_admin_transitions_upload_post';
 import type { LivestreamTokenCreateRequest } from '../models/LivestreamTokenCreateRequest';
 import type { LivestreamTokenResponse } from '../models/LivestreamTokenResponse';
+import type { NavidromeAlbumItem } from '../models/NavidromeAlbumItem';
+import type { NavidromePlaylistItem } from '../models/NavidromePlaylistItem';
+import type { NavidromePurgeRequest } from '../models/NavidromePurgeRequest';
+import type { NavidromePurgeResponse } from '../models/NavidromePurgeResponse';
 import type { PendingUserCreate } from '../models/PendingUserCreate';
 import type { PendingUserPublic } from '../models/PendingUserPublic';
 import type { ShowCreate } from '../models/ShowCreate';
@@ -428,6 +432,64 @@ export class AdminService {
             url: '/admin/cache/metadata/distinct',
             errors: {
                 401: `Unauthorized`,
+            },
+        });
+    }
+    /**
+     * List All Navidrome Playlists
+     * Return all Navidrome playlists (no user visibility filter). Admin only.
+     * @returns NavidromePlaylistItem Successful Response
+     * @throws ApiError
+     */
+    public listAllNavidromePlaylistsAdminNavidromePlaylistsGet(): CancelablePromise<Array<NavidromePlaylistItem>> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/admin/navidrome/playlists',
+            errors: {
+                401: `Unauthorized`,
+            },
+        });
+    }
+    /**
+     * Search Navidrome Albums
+     * Search Navidrome albums by query string. Admin only.
+     * @param query Search query
+     * @returns NavidromeAlbumItem Successful Response
+     * @throws ApiError
+     */
+    public searchNavidromeAlbumsAdminAdminNavidromeAlbumsSearchGet(
+        query: string,
+    ): CancelablePromise<Array<NavidromeAlbumItem>> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/admin/navidrome/albums/search',
+            query: {
+                'query': query,
+            },
+            errors: {
+                401: `Unauthorized`,
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Purge Cache by Navidrome Playlist or Album
+     * Fetch songs from a Navidrome playlist or album and delete matching cache entries.
+     * @param requestBody
+     * @returns NavidromePurgeResponse Successful Response
+     * @throws ApiError
+     */
+    public purgeNavidromeCacheAdminCachePurgeNavidromePost(
+        requestBody: NavidromePurgeRequest,
+    ): CancelablePromise<NavidromePurgeResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/admin/cache/purge-navidrome',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                401: `Unauthorized`,
+                422: `Validation Error`,
             },
         });
     }

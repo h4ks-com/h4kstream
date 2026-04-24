@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth';
 import { AdminService, WebhooksService, ShowsService } from '../utils/apiClient';
 import type { UserPublic, ShowPublic, WebhookSubscription, SongItem, WebhookDelivery } from '../api';
+import { NavidromeCachePurge } from '../components/NavidromeCachePurge';
 import { SongUploadForm } from '../components/SongUploadForm';
 import { LivestreamTokenDisplay } from '../components/LivestreamTokenDisplay';
 import { SongEditDialog } from '../components/SongEditDialog';
@@ -1748,6 +1749,8 @@ const CacheSection: React.FC = () => {
           </p>
         )}
       </div>
+
+      <NavidromeCachePurge />
 
       {error && (
         <div className="border border-red-700 bg-red-900/20 px-3 py-2 font-mono text-xs text-red-400">

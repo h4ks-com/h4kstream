@@ -4,4 +4,5 @@
 /* eslint-disable */
 export enum PlaylistSource {
     NAVIDROME = 'navidrome',
+    NAVIDROME_ALBUM = 'navidrome_album',
 }

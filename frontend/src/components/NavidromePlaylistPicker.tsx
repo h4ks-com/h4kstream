@@ -8,6 +8,8 @@ interface NavidromePlaylistPickerProps {
   maxQueueSongs?: number;
 }
 
+const MAX_SHOWN = 8;
+
 export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = ({
   onPlaylistAdded,
   currentQueueCount,
@@ -71,7 +73,7 @@ export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = (
     return (
       <div className="border-2 border-h4ks-green-800 bg-h4ks-dark-900 p-4">
         <h3 className="text-lg font-bold text-h4ks-green-400 mb-2 font-mono">[ADD PLAYLIST]</h3>
-        <div className="text-gray-500 text-sm">Loading playlists...</div>
+        <div className="text-gray-500 text-sm font-mono animate-pulse">loading…</div>
       </div>
     );
   }
@@ -89,14 +91,14 @@ export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = (
     return (
       <div className="border-2 border-h4ks-green-800 bg-h4ks-dark-900 p-4">
         <h3 className="text-lg font-bold text-h4ks-green-400 mb-2 font-mono">[ADD PLAYLIST]</h3>
-        <div className="text-gray-500 text-sm">No Navidrome playlists found.</div>
+        <div className="text-gray-500 text-sm font-mono">no Navidrome playlists found</div>
       </div>
     );
   }
 
-  const filtered = playlists.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filtered = searchQuery.trim()
+    ? playlists.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, MAX_SHOWN)
+    : [];
 
   return (
     <div className="border-2 border-h4ks-green-800 bg-h4ks-dark-900 p-4">
@@ -105,20 +107,16 @@ export const NavidromePlaylistPicker: React.FC<NavidromePlaylistPickerProps> = (
         type="text"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="Search playlists..."
+        placeholder="Filter playlists…"
         className="w-full bg-h4ks-dark-800 border border-h4ks-green-800 text-gray-300 font-mono text-sm px-3 py-1.5 mb-3 focus:outline-none focus:border-h4ks-green-600 placeholder-gray-600"
       />
-      {playlists.length > 10 && (
-        <div className="text-gray-600 text-xs font-mono mb-2">
-          {filtered.length === playlists.length
-            ? `${playlists.length} playlists`
-            : `${filtered.length} of ${playlists.length}`}
-        </div>
+      {!searchQuery && (
+        <p className="font-mono text-xs text-gray-600">type to filter playlists</p>
       )}
-      <div className="divide-y divide-h4ks-green-900 max-h-72 overflow-y-auto">
-        {filtered.length === 0 && (
-          <div className="text-gray-500 text-sm py-2">No playlists match.</div>
-        )}
+      {searchQuery.trim() && filtered.length === 0 && (
+        <div className="text-gray-500 text-sm font-mono">no playlists match</div>
+      )}
+      <div className="divide-y divide-h4ks-green-900">
         {filtered.map((playlist) => {
           const result = results[playlist.id];
           const isAdding = addingId === playlist.id;

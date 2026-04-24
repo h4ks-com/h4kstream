@@ -30,6 +30,10 @@ from app.exceptions import SongNotFoundError
 from app.models import ErrorResponse
 from app.models import LivestreamTokenCreateRequest
 from app.models import LivestreamTokenResponse
+from app.models import NavidromeAlbumItem
+from app.models import NavidromePlaylistItem
+from app.models import NavidromePurgeRequest
+from app.models import NavidromePurgeResponse
 from app.models import SongAddedResponse
 from app.models import SongDeletedEventData
 from app.models import SongItem
@@ -46,10 +50,12 @@ from app.services.cache_service import get_metadata_map
 from app.services.event_publisher import EventPublisher
 from app.services.jwt_service import generate_livestream_token
 from app.services.jwt_service import generate_token
+from app.services.navidrome_service import NavidromeService
 from app.services.playback_service import get_mpd_client
 from app.services.redis_service import RedisService
 from app.services.redis_service import parse_song_id
 from app.services.youtube_dl import YoutubeDownloadException
+from app.settings import settings
 from app.types import PlaylistType
 
 logger = logging.getLogger(__name__)
@@ -547,3 +553,64 @@ async def bulk_delete_cache(
             not_found += 1
 
     return {"deleted": deleted, "not_found": not_found}
+
+
+@router.get(
+    "/navidrome/playlists",
+    response_model=list[NavidromePlaylistItem],
+    summary="List All Navidrome Playlists",
+    description="Return all Navidrome playlists (no user visibility filter). Admin only.",
+    dependencies=[Depends(require_admin_role)],
+)
+async def list_all_navidrome_playlists() -> list[NavidromePlaylistItem]:
+    """Return all Navidrome playlists for admin cache purge use."""
+    if not settings.navidrome_enabled:
+        raise HTTPException(status_code=503, detail="Navidrome integration not configured")
+    svc = NavidromeService()
+    playlists = await svc.get_playlists()
+    return [
+        NavidromePlaylistItem(id=p.id, name=p.name, song_count=p.song_count, comment=p.comment, public=p.public)
+        for p in playlists
+    ]
+
+
+@router.get(
+    "/navidrome/albums/search",
+    response_model=list[NavidromeAlbumItem],
+    summary="Search Navidrome Albums",
+    description="Search Navidrome albums by query string. Admin only.",
+    dependencies=[Depends(require_admin_role)],
+)
+async def search_navidrome_albums_admin(query: str = Query(..., description="Search query")) -> list[NavidromeAlbumItem]:
+    """Search Navidrome albums for admin cache purge use."""
+    if not settings.navidrome_enabled:
+        raise HTTPException(status_code=503, detail="Navidrome integration not configured")
+    if not query.strip():
+        return []
+    svc = NavidromeService()
+    albums = await svc.search_albums(query)
+    return [NavidromeAlbumItem(id=a.id, name=a.name, artist=a.artist, song_count=a.song_count) for a in albums]
+
+
+@router.post(
+    "/cache/purge-navidrome",
+    response_model=NavidromePurgeResponse,
+    summary="Purge Cache by Navidrome Playlist or Album",
+    description="Fetch songs from a Navidrome playlist or album and delete matching cache entries.",
+    dependencies=[Depends(require_admin_role)],
+)
+async def purge_navidrome_cache(
+    request: NavidromePurgeRequest,
+    db_session: Session = Depends(get_session),
+) -> NavidromePurgeResponse:
+    """Purge all cache entries whose reference_url matches songs in the given playlist or album."""
+    if not settings.navidrome_enabled:
+        raise HTTPException(status_code=503, detail="Navidrome integration not configured")
+    svc = NavidromeService()
+    if request.source == "playlist":
+        songs = await svc.get_playlist_songs(request.id)
+    else:
+        songs = await svc.get_album_songs(request.id)
+    song_ids = [s.id for s in songs]
+    purged = await cache_service.purge_navidrome_songs(db_session, song_ids)
+    return NavidromePurgeResponse(purged=purged, songs_checked=len(song_ids))

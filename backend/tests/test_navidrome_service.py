@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.services.navidrome_service import NavidromeAlbum
 from app.services.navidrome_service import NavidromePlaylist
 from app.services.navidrome_service import NavidromeService
 from app.services.navidrome_service import NavidromeSong
@@ -258,6 +259,136 @@ class TestDownloadSong:
 
         call_kwargs = mock_client.stream.call_args
         assert call_kwargs.kwargs["params"]["id"] == "unique-song-id"
+
+
+class TestSearchAlbums:
+    """Tests for search_albums()."""
+
+    async def test_returns_albums(self, service):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "subsonic-response": {
+                "searchResult3": {
+                    "album": [
+                        {"id": "al-1", "name": "Dark Side", "artist": "Pink Floyd", "songCount": 10},
+                        {"id": "al-2", "name": "OK Computer", "artist": "Radiohead", "songCount": 12},
+                    ]
+                }
+            }
+        }
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("app.services.navidrome_service.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            albums = await service.search_albums("pink floyd")
+
+        assert len(albums) == 2
+        assert isinstance(albums[0], NavidromeAlbum)
+        assert albums[0].id == "al-1"
+        assert albums[0].name == "Dark Side"
+        assert albums[0].artist == "Pink Floyd"
+        assert albums[0].song_count == 10
+
+    async def test_returns_empty_when_no_results(self, service):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "subsonic-response": {"searchResult3": {}}
+        }
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("app.services.navidrome_service.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            albums = await service.search_albums("noresults")
+
+        assert albums == []
+
+    async def test_sends_correct_params(self, service):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "subsonic-response": {"searchResult3": {"album": []}}
+        }
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("app.services.navidrome_service.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            await service.search_albums("beatles")
+
+        params = mock_client.get.call_args.kwargs["params"]
+        assert params["query"] == "beatles"
+        assert params["artistCount"] == 0
+        assert params["songCount"] == 0
+
+
+class TestGetAlbumSongs:
+    """Tests for get_album_songs()."""
+
+    async def test_returns_songs(self, service):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "subsonic-response": {
+                "album": {
+                    "song": [
+                        {"id": "s1", "title": "Money", "artist": "Pink Floyd", "album": "Dark Side", "duration": 382, "suffix": "flac"},
+                        {"id": "s2", "title": "Time", "artist": "Pink Floyd", "album": "Dark Side", "duration": 413, "suffix": "flac"},
+                    ]
+                }
+            }
+        }
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("app.services.navidrome_service.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            songs = await service.get_album_songs("al-1")
+
+        assert len(songs) == 2
+        assert isinstance(songs[0], NavidromeSong)
+        assert songs[0].id == "s1"
+        assert songs[0].title == "Money"
+        assert songs[0].suffix == "flac"
+
+    async def test_returns_empty_for_empty_album(self, service):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "subsonic-response": {"album": {}}
+        }
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("app.services.navidrome_service.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            songs = await service.get_album_songs("al-empty")
+
+        assert songs == []
+
+    async def test_uses_album_id_in_request(self, service):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "subsonic-response": {"album": {"song": []}}
+        }
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("app.services.navidrome_service.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            await service.get_album_songs("al-xyz")
+
+        assert mock_client.get.call_args.kwargs["params"]["id"] == "al-xyz"
 
 
 async def aiter(items):

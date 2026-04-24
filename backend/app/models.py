@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import Field
@@ -401,6 +402,16 @@ class LivestreamRecordingDoneEventData(BaseModel):
 
 class PlaylistSource(str, Enum):
     NAVIDROME = "navidrome"
+    NAVIDROME_ALBUM = "navidrome_album"
+
+
+class NavidromeAlbumItem(BaseModel):
+    """A Navidrome album returned from search."""
+
+    id: str = Field(..., description="Navidrome album ID")
+    name: str = Field(..., description="Album name")
+    artist: str = Field(..., description="Artist name")
+    song_count: int = Field(..., description="Number of songs in the album")
 
 
 class NavidromePlaylistItem(BaseModel):
@@ -435,6 +446,20 @@ class PlaylistAddResponse(BaseModel):
     added: list[PlaylistSongResult] = Field(default_factory=list, description="Successfully added songs")
     errors: list[str] = Field(default_factory=list, description="Per-song error messages")
     total_added: int = Field(..., description="Total number of songs added")
+
+
+class NavidromePurgeRequest(BaseModel):
+    """Request to purge cache entries for a Navidrome playlist or album."""
+
+    source: Literal["playlist", "album"] = Field(..., description="'playlist' or 'album'")
+    id: str = Field(..., description="Navidrome playlist or album ID")
+
+
+class NavidromePurgeResponse(BaseModel):
+    """Response after purging Navidrome cache entries."""
+
+    purged: int = Field(..., description="Number of cache entries deleted")
+    songs_checked: int = Field(..., description="Number of songs looked up from Navidrome")
 
 
 class WebhookEventPayload(BaseModel):

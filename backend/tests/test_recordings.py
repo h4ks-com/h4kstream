@@ -180,7 +180,9 @@ class TestStreamRecordingUnit:
 
     def test_segment_content_disposition(self, patched_client):
         r = patched_client.get("/recordings/stream/1?start=2&end=5")
-        assert "segment" in r.headers.get("content-disposition", "")
+        cd = r.headers.get("content-disposition", "")
+        assert "attachment" in cd
+        assert "2s" in cd and "5s" in cd
 
     def test_start_only_returns_audio(self, patched_client):
         r = patched_client.get("/recordings/stream/1?start=5")
