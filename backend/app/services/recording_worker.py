@@ -172,10 +172,18 @@ class RecordingWorker:
                 "1",
                 "-reconnect_delay_max",
                 "5",
+                "-icy",
+                "0",  # Disable ICY metadata injection — avoids frame-sync corruption at reconnect boundaries
                 "-i",
                 settings.LIQUIDSOAP_RECORDING_URL,
                 "-c:a",
-                "copy",  # Copy stream directly without re-encoding (Liquidsoap already outputs 320kbps MP3)
+                "libmp3lame",
+                "-b:a",
+                "320k",
+                "-reservoir",
+                "0",  # Disable bit reservoir so each frame is self-contained; eliminates clicks at reconnect seams
+                "-fflags",
+                "+discardcorrupt",
                 "-f",
                 "mp3",
                 str(filepath),

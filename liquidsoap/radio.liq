@@ -377,8 +377,10 @@ log("RTP output to Janus configured - Ultra low latency WebRTC streaming via FFm
 
 # Output 2: HTTP stream for recording worker (livestream only, not MPD queue)
 # This allows the recording worker to record ONLY the livestream source
+# reservoir=0: each MP3 frame is self-contained; required for artifact-free recording when ffmpeg
+# reconnects mid-stream (bit reservoir creates cross-frame dependencies that cause clicks on reconnect)
 output.harbor(
-  %mp3(bitrate=320, stereo=true),
+  %ffmpeg(format="mp3", %audio(codec="libmp3lame", b="320k", reservoir=0)),
   fallible=true,
   port=8004,
   mount="/stream",
