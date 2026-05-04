@@ -4,6 +4,7 @@ User-facing endpoints that require JWT tokens. Users can only access their own u
 """
 
 import logging
+import shutil
 from pathlib import Path
 from uuid import UUID
 
@@ -42,6 +43,7 @@ from app.models import SongDeletedEventData
 from app.models import SongItem
 from app.models import SongMetadataEditRequest
 from app.models import SuccessResponse
+from app.services import cache_service
 from app.services import metadata_editor
 from app.services import playback_service
 from app.services import queue_service
@@ -495,8 +497,13 @@ async def add_playlist(
 
         for song in songs:
             tmp = Path(get_songs_dir()) / f"navidrome_{song.id}.{song.suffix}"
+            reference_url = f"{settings.NAVIDROME_URL}/app/#/song/{song.id}"
             try:
-                await svc.download_song(song.id, tmp)
+                pre_cached = await cache_service.lookup_by_reference_url(db_session, reference_url, "user")
+                if pre_cached:
+                    shutil.copy2(str(Path(pre_cached.filepath)), str(tmp))
+                else:
+                    await svc.download_song(song.id, tmp)
                 song_id = await queue_service.add_song(
                     playlist="user",
                     mpd_client=mpd_client,
@@ -504,7 +511,7 @@ async def add_playlist(
                     file_path=tmp,
                     song_name=song.title,
                     artist_name=song.artist,
-                    reference_url=f"{settings.NAVIDROME_URL}/app/#/song/{song.id}",
+                    reference_url=reference_url,
                     redis_client=redis_client,
                     user_id=user_id,
                     user_mpd_client=mpd_client,
@@ -512,6 +519,7 @@ async def add_playlist(
                 )
                 added.append(PlaylistSongResult(song_id=song_id, title=song.title, artist=song.artist))
             except Exception as e:
+                logger.error(f"Failed to add '{song.title}' to playlist: {e}", exc_info=True)
                 errors.append(f"{song.title}: {e}")
                 if tmp.exists():
                     tmp.unlink()
@@ -552,8 +560,13 @@ async def add_playlist(
 
         for song in songs:
             tmp = Path(get_songs_dir()) / f"navidrome_{song.id}.{song.suffix}"
+            reference_url = f"{settings.NAVIDROME_URL}/app/#/song/{song.id}"
             try:
-                await svc.download_song(song.id, tmp)
+                pre_cached = await cache_service.lookup_by_reference_url(db_session, reference_url, "user")
+                if pre_cached:
+                    shutil.copy2(str(Path(pre_cached.filepath)), str(tmp))
+                else:
+                    await svc.download_song(song.id, tmp)
                 song_id = await queue_service.add_song(
                     playlist="user",
                     mpd_client=mpd_client,
@@ -561,7 +574,7 @@ async def add_playlist(
                     file_path=tmp,
                     song_name=song.title,
                     artist_name=song.artist,
-                    reference_url=f"{settings.NAVIDROME_URL}/app/#/song/{song.id}",
+                    reference_url=reference_url,
                     redis_client=redis_client,
                     user_id=user_id,
                     user_mpd_client=mpd_client,
@@ -569,6 +582,7 @@ async def add_playlist(
                 )
                 album_added.append(PlaylistSongResult(song_id=song_id, title=song.title, artist=song.artist))
             except Exception as e:
+                logger.error(f"Failed to add '{song.title}' to album playlist: {e}", exc_info=True)
                 album_errors.append(f"{song.title}: {e}")
                 if tmp.exists():
                     tmp.unlink()

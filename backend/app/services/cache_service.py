@@ -71,6 +71,38 @@ async def lookup_by_url(session: Session, origin_url: str, playlist_type: Playli
     return None
 
 
+async def lookup_by_reference_url(session: Session, reference_url: str, playlist_type: PlaylistType) -> FileCache | None:
+    """Look up cached file by reference URL (e.g. Navidrome song URL).
+
+    :param session: Database session
+    :param reference_url: Reference URL to look up (e.g. Navidrome song URL)
+    :param playlist_type: Playlist type (user or fallback)
+    :return: FileCache entry if found and file exists, None otherwise
+    """
+    statement = select(FileCache).where(
+        FileCache.reference_url == reference_url, FileCache.playlist_type == playlist_type
+    )
+    cache_entry = session.exec(statement).first()  # type: ignore[no-any-return]
+
+    if cache_entry:
+        if not Path(cache_entry.filepath).exists():
+            logger.warning(
+                f"Cache entry {cache_entry.id} points to missing file {cache_entry.filepath}, removing entry"
+            )
+            session.delete(cache_entry)
+            session.commit()
+            return None
+
+        cache_entry.last_used_at = datetime.now(UTC)
+        cache_entry.use_count += 1
+        session.add(cache_entry)
+        session.commit()
+        session.refresh(cache_entry)
+        return cache_entry
+
+    return None
+
+
 async def lookup_by_hash(session: Session, md5_hash: str, playlist_type: PlaylistType) -> FileCache | None:
     """Look up cached file by MD5 hash.
 
