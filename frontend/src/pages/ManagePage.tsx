@@ -421,7 +421,7 @@ const LivestreamSection: React.FC = () => {
           [MY LIVESTREAM]
         </h2>
         <button
-          onClick={() => navigate('/streamhealth')}
+          onClick={() => navigate('/monitor')}
           className="font-mono text-xs text-h4ks-green-600 border border-h4ks-green-900 px-3 py-1 hover:bg-h4ks-green-900/20 transition-colors"
         >
           [STREAM HEALTH →]
