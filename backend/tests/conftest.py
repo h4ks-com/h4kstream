@@ -11,8 +11,10 @@ import redis.asyncio as redis
 temp_dir = tempfile.mkdtemp(prefix="h4kstream_test_")
 music_root = Path(temp_dir) / "music"
 songs_root = Path(temp_dir) / "songs"
+db_dir = Path(temp_dir) / "db"
 music_root.mkdir(parents=True, exist_ok=True)
 songs_root.mkdir(parents=True, exist_ok=True)
+db_dir.mkdir(parents=True, exist_ok=True)
 
 os.environ["MUSIC_ROOT_PATH"] = str(music_root)
 os.environ["SONGS_ROOT_PATH"] = str(songs_root)
@@ -21,6 +23,10 @@ os.environ["ADMIN_API_TOKEN"] = "test-admin-token-12345"
 
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
+
+from app.db import init_db  # noqa: E402
+
+init_db()
 
 
 @pytest.fixture(scope="session")
