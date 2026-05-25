@@ -177,6 +177,7 @@ async def stream_recording(
             path=file_path,
             media_type="audio/mpeg",
             filename=f"{stem}.mp3",
+            content_disposition_type="inline",
             headers={"Cache-Control": "no-cache"},
         )
 

@@ -36,6 +36,10 @@ spec:
               value: {{ include "h4kstream.fullname" . }}-liquidsoap
             - name: LIQUIDSOAP_RECORDING_PORT
               value: "8004"
+            - name: LIQUIDSOAP_TELNET_HOST
+              value: {{ include "h4kstream.fullname" . }}-liquidsoap
+            - name: LIQUIDSOAP_TELNET_PORT
+              value: "1234"
             - name: JANUS_HOST
               value: {{ include "h4kstream.fullname" . }}-janus
             - name: JANUS_HTTP_PORT
