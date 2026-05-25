@@ -16,6 +16,7 @@ songs_root.mkdir(parents=True, exist_ok=True)
 
 os.environ["MUSIC_ROOT_PATH"] = str(music_root)
 os.environ["SONGS_ROOT_PATH"] = str(songs_root)
+os.environ["DATA_PATH"] = temp_dir
 os.environ["ADMIN_API_TOKEN"] = "test-admin-token-12345"
 
 backend_dir = Path(__file__).parent.parent

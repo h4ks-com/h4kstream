@@ -1,6 +1,6 @@
 FROM python:3.12-slim AS api-generator
 
-RUN pip install uv
+RUN --mount=type=cache,target=/root/.cache/pip pip install uv
 
 WORKDIR /workspace
 
@@ -13,7 +13,7 @@ COPY backend/generate_ws_types.py /workspace/backend/
 
 # Generate OpenAPI spec and WebSocket JSON schema
 WORKDIR /workspace/backend
-RUN uv sync --frozen
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen
 RUN uv run python generate_openapi_spec.py
 RUN uv run python generate_ws_types.py
 
