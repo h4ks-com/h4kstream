@@ -57,6 +57,14 @@ backend:
     NAVIDROME_USER: ""
     NAVIDROME_PASSWORD: ""
 
+  # yt-dlp cookies for authenticated downloads (SoundCloud full tracks, etc.)
+  # Export cookies.txt from browser (e.g. with "Get cookies.txt LOCALLY" extension)
+  ytdlp:
+    cookiesEnabled: false
+    # cookiesContent: |
+    #   # Netscape HTTP Cookie File
+    #   .soundcloud.com TRUE / FALSE 0 session_id abc123...
+
   # Service configuration
   service:
     type: ClusterIP

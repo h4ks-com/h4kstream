@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     def oauth_enabled(self) -> bool:
         return bool(self.LOGTO_ENDPOINT and self.LOGTO_APP_ID and self.LOGTO_APP_SECRET and self.LOGTO_REDIRECT_URI)
 
+    # Path to cookies file for yt-dlp (enables full SoundCloud/YouTube downloads requiring login)
+    YTDLP_COOKIES_FILE: str = ""
+
     # Navidrome integration (Subsonic API)
     NAVIDROME_URL: str = ""
     NAVIDROME_USER: str = ""

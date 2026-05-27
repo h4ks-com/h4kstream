@@ -121,6 +121,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "h4kstream.fullname" . }}-secrets
                   key: NAVIDROME_PASSWORD
+            {{- if .Values.backend.ytdlp.cookiesEnabled }}
+            - name: YTDLP_COOKIES_FILE
+              value: /app/cookies/cookies.txt
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /app/data
@@ -130,6 +134,11 @@ spec:
               mountPath: /music
             - name: songs
               mountPath: /songs
+            {{- if .Values.backend.ytdlp.cookiesEnabled }}
+            - name: ytdlp-cookies
+              mountPath: /app/cookies
+              readOnly: true
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /api/health
@@ -177,3 +186,8 @@ spec:
             {{- else }}
             claimName: {{ include "h4kstream.fullname" . }}-music
             {{- end }}
+        {{- if .Values.backend.ytdlp.cookiesEnabled }}
+        - name: ytdlp-cookies
+          secret:
+            secretName: {{ include "h4kstream.fullname" . }}-ytdlp-cookies
+        {{- end }}

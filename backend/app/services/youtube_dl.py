@@ -47,7 +47,10 @@ class YoutubeDownloadResult(NamedTuple):
 
 def _extract_info_sync(url: str) -> dict:
     """Synchronous function to extract video info."""
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+    opts: dict = {"quiet": True, "no_warnings": True}
+    if settings.YTDLP_COOKIES_FILE:
+        opts["cookiefile"] = settings.YTDLP_COOKIES_FILE
+    with yt_dlp.YoutubeDL(opts) as ydl:
         info_dict = ydl.extract_info(url, download=False)
         if info_dict is None:
             raise YoutubeDownloadException(YoutubeErrorType.INVALID_URL)
@@ -63,26 +66,27 @@ def _extract_info_sync(url: str) -> dict:
 
 def _download_video_sync(url: str, target_dir: str) -> dict:
     """Synchronous function to download video."""
-    with yt_dlp.YoutubeDL(
-        {
-            "extract_audio": True,
-            "format": "bestaudio",
-            "outtmpl": f"{target_dir}/%(title)s",
-            "writethumbnail": False,
-            "embedthumbnail": False,
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "320",
-                },
-                {
-                    "key": "FFmpegMetadata",
-                    "add_metadata": True,
-                },
-            ],
-        }
-    ) as video:
+    opts: dict = {
+        "extract_audio": True,
+        "format": "bestaudio",
+        "outtmpl": f"{target_dir}/%(title)s",
+        "writethumbnail": False,
+        "embedthumbnail": False,
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "320",
+            },
+            {
+                "key": "FFmpegMetadata",
+                "add_metadata": True,
+            },
+        ],
+    }
+    if settings.YTDLP_COOKIES_FILE:
+        opts["cookiefile"] = settings.YTDLP_COOKIES_FILE
+    with yt_dlp.YoutubeDL(opts) as video:
         info_dict = video.extract_info(url, download=True)
         if info_dict is None:
             raise YoutubeDownloadException(YoutubeErrorType.INVALID_URL)
@@ -144,7 +148,14 @@ async def download_song(url: str, mainloop: bool = False) -> YoutubeDownloadResu
         video_artist = info_dict.get("artist") or info_dict.get("uploader") or info_dict.get("channel")
         video_album = info_dict.get("album")
         video_length = info_dict.get("duration", 0)
-        video_path = pathlib.Path(f"{target_dir}/{video_title}.mp3")
+
+        # Use the actual filepath from yt-dlp (sanitized) rather than constructing from raw title
+        requested = info_dict.get("requested_downloads", [{}])
+        actual_filepath = requested[0].get("filepath") if requested else None
+        if actual_filepath:
+            video_path = pathlib.Path(actual_filepath)
+        else:
+            video_path = pathlib.Path(f"{target_dir}/{video_title}.mp3")
 
         if not video_path.exists():
             raise YoutubeDownloadException(YoutubeErrorType.DOWNLOAD_ERROR)
