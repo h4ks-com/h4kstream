@@ -1,6 +1,10 @@
 import asyncio
+import contextlib
 import logging
+import os
 import pathlib
+import shutil
+import tempfile
 import urllib.parse
 from enum import StrEnum
 from enum import auto
@@ -25,6 +29,26 @@ USER_DIRECTORY = f"{settings.SONGS_ROOT_PATH}/user"
 MAINLOOP_DIRECTORY = f"{settings.SONGS_ROOT_PATH}/mainloop"
 
 
+@contextlib.contextmanager
+def _cookies_opts():
+    """Hand yt-dlp a writable copy of the cookie jar.
+
+    yt-dlp rewrites cookiefile when the session closes, but the jar is mounted
+    from a read-only secret, so writing it back in place raises OSError.
+    """
+    src = settings.YTDLP_COOKIES_FILE
+    if not src or not os.path.exists(src):
+        yield {}
+        return
+    fd, tmp = tempfile.mkstemp(prefix="ytdlp-cookies-", suffix=".txt")
+    os.close(fd)
+    shutil.copyfile(src, tmp)
+    try:
+        yield {"cookiefile": tmp}
+    finally:
+        os.unlink(tmp)
+
+
 class YoutubeErrorType(StrEnum):
     INVALID_URL = auto()
     DOWNLOAD_ERROR = auto()
@@ -47,50 +71,49 @@ class YoutubeDownloadResult(NamedTuple):
 
 def _extract_info_sync(url: str) -> dict:
     """Synchronous function to extract video info."""
-    opts: dict = {"quiet": True, "no_warnings": True}
-    if settings.YTDLP_COOKIES_FILE:
-        opts["cookiefile"] = settings.YTDLP_COOKIES_FILE
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info_dict = ydl.extract_info(url, download=False)
-        if info_dict is None:
-            raise YoutubeDownloadException(YoutubeErrorType.INVALID_URL)
+    with _cookies_opts() as cookie_opts:
+        opts: dict = {"quiet": True, "no_warnings": True, **cookie_opts}
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info_dict = ydl.extract_info(url, download=False)
+            if info_dict is None:
+                raise YoutubeDownloadException(YoutubeErrorType.INVALID_URL)
 
-        if "entries" in info_dict:
-            raise YoutubeDownloadException(YoutubeErrorType.PLAYLIST_NOT_ALLOWED)
+            if "entries" in info_dict:
+                raise YoutubeDownloadException(YoutubeErrorType.PLAYLIST_NOT_ALLOWED)
 
-        if info_dict.get("_type") == "playlist":
-            raise YoutubeDownloadException(YoutubeErrorType.PLAYLIST_NOT_ALLOWED)
+            if info_dict.get("_type") == "playlist":
+                raise YoutubeDownloadException(YoutubeErrorType.PLAYLIST_NOT_ALLOWED)
 
-        return info_dict
+            return info_dict
 
 
 def _download_video_sync(url: str, target_dir: str) -> dict:
     """Synchronous function to download video."""
-    opts: dict = {
-        "extract_audio": True,
-        "format": "bestaudio",
-        "outtmpl": f"{target_dir}/%(title)s",
-        "writethumbnail": False,
-        "embedthumbnail": False,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "320",
-            },
-            {
-                "key": "FFmpegMetadata",
-                "add_metadata": True,
-            },
-        ],
-    }
-    if settings.YTDLP_COOKIES_FILE:
-        opts["cookiefile"] = settings.YTDLP_COOKIES_FILE
-    with yt_dlp.YoutubeDL(opts) as video:
-        info_dict = video.extract_info(url, download=True)
-        if info_dict is None:
-            raise YoutubeDownloadException(YoutubeErrorType.INVALID_URL)
-        return info_dict
+    with _cookies_opts() as cookie_opts:
+        opts: dict = {
+            "extract_audio": True,
+            "format": "bestaudio",
+            "outtmpl": f"{target_dir}/%(title)s",
+            "writethumbnail": False,
+            "embedthumbnail": False,
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "320",
+                },
+                {
+                    "key": "FFmpegMetadata",
+                    "add_metadata": True,
+                },
+            ],
+            **cookie_opts,
+        }
+        with yt_dlp.YoutubeDL(opts) as video:
+            info_dict = video.extract_info(url, download=True)
+            if info_dict is None:
+                raise YoutubeDownloadException(YoutubeErrorType.INVALID_URL)
+            return info_dict
 
 
 def _write_id3_tags_sync(
