@@ -20,6 +20,9 @@ x-backend-common: &backend-common
   - MPD_FALLBACK_PORT=6601
   - LIQUIDSOAP_TELNET_HOST=liquidsoap
   - LIQUIDSOAP_TELNET_PORT=1234
+  - LIQUIDSOAP_BUFFER_HOST=liquidsoap
+  - LIQUIDSOAP_BUFFER_PORT=8001
+  - LIQUIDSOAP_BUFFER_MOUNT=/buffer
   - DATA_PATH=/app/data
   - RECORDINGS_PATH=/app/data/recordings
   - ROOT_PATH=/api

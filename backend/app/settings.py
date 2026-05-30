@@ -35,6 +35,11 @@ class Settings(BaseSettings):
         """Get the full URL for Liquidsoap recording stream."""
         return f"http://{self.LIQUIDSOAP_RECORDING_HOST}:{self.LIQUIDSOAP_RECORDING_PORT}/stream"
 
+    @property
+    def LIQUIDSOAP_BUFFER_URL(self) -> str:
+        """Get the full URL for the Liquidsoap uncounted clip-buffer mount."""
+        return f"http://{self.LIQUIDSOAP_BUFFER_HOST}:{self.LIQUIDSOAP_BUFFER_PORT}{self.LIQUIDSOAP_BUFFER_MOUNT}"
+
     MPD_USER_HOST: str = "localhost"
     MPD_USER_PORT: int = 6600
     MPD_FALLBACK_HOST: str = "localhost"
@@ -44,6 +49,14 @@ class Settings(BaseSettings):
     LIQUIDSOAP_TELNET_PORT: int = 1234
     LIQUIDSOAP_RECORDING_HOST: str = "liquidsoap"
     LIQUIDSOAP_RECORDING_PORT: int = 8004
+
+    # Rolling clip buffer: backend pulls the full radio mix from a dedicated, uncounted
+    # Liquidsoap mount and keeps the most recent audio in memory to serve on-demand clips.
+    STREAM_BUFFER_ENABLED: bool = True
+    LIQUIDSOAP_BUFFER_HOST: str = "liquidsoap"
+    LIQUIDSOAP_BUFFER_PORT: int = 8001
+    LIQUIDSOAP_BUFFER_MOUNT: str = "/buffer"
+    STREAM_BUFFER_SECONDS: int = 330  # Retain slightly more than the 300s max clip window
 
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379

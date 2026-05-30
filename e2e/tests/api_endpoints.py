@@ -8,6 +8,7 @@ Centralizes all API URLs to make refactoring easier.
 # ============================================================================
 
 PUBLIC_CLIENTS = "/public/clients"
+PUBLIC_CLIP = "/public/clip"
 
 
 # ============================================================================

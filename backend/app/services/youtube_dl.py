@@ -33,8 +33,8 @@ MAINLOOP_DIRECTORY = f"{settings.SONGS_ROOT_PATH}/mainloop"
 def _cookies_opts():
     """Hand yt-dlp a writable copy of the cookie jar.
 
-    yt-dlp rewrites cookiefile when the session closes, but the jar is mounted
-    from a read-only secret, so writing it back in place raises OSError.
+    yt-dlp rewrites cookiefile when the session closes, but the jar is mounted from a read-only secret, so writing it
+    back in place raises OSError.
     """
     src = settings.YTDLP_COOKIES_FILE
     if not src or not os.path.exists(src):

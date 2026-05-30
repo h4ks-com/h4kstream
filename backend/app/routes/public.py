@@ -13,6 +13,8 @@ from fastapi import Depends
 from fastapi import Form
 from fastapi import HTTPException
 from fastapi import Query
+from fastapi import Request
+from fastapi import Response
 from fastapi import UploadFile
 from sqlmodel import Session
 from sqlmodel import select
@@ -56,6 +58,8 @@ from app.services.mpd_service import MPDClient
 from app.services.navidrome_service import NavidromeService
 from app.services.redis_service import RedisService
 from app.services.redis_service import parse_song_id
+from app.services.stream_buffer_service import ClipUnavailableError
+from app.services.stream_buffer_service import ClipValidationError
 from app.services.youtube_dl import YoutubeDownloadException
 from app.settings import get_music_user_dir
 from app.settings import get_songs_dir
@@ -607,3 +611,49 @@ async def get_client_counts(
 ) -> ClientCountsResponse:
     """Get current client counts from Icecast and WebRTC sources."""
     return await client_count_service.get_client_counts()
+
+
+@public_router.get(
+    "/clip",
+    summary="Get Live Stream Clip",
+    description=(
+        "Return an MP3 clip of the recent live radio output. Offsets are seconds measured "
+        "backwards from the live edge: `start_offset` is the older bound, `end_offset` the newer "
+        "bound. For example `start_offset=300&end_offset=10` returns audio from 5 minutes ago up "
+        "to 10 seconds ago. The buffer holds the last few minutes only, so the clip reflects "
+        "whatever is live at request time. No authentication required."
+    ),
+    response_class=Response,
+    responses={
+        200: {"content": {"audio/mpeg": {}}, "description": "MP3 audio clip"},
+        400: {"model": ErrorResponse, "description": "Invalid clip window"},
+        503: {"model": ErrorResponse, "description": "Clip buffer unavailable"},
+    },
+)
+async def get_stream_clip(
+    request: Request,
+    start_offset: float = Query(300, gt=0, le=300, description="Older bound, seconds before live edge (max 300)"),
+    end_offset: float = Query(0, ge=0, lt=300, description="Newer bound, seconds before live edge"),
+) -> Response:
+    """Slice the recent live output from the in-memory buffer and return it as an MP3."""
+    buffer = getattr(request.app.state, "stream_buffer", None)
+    if buffer is None:
+        raise HTTPException(status_code=503, detail="Clip buffer is disabled")
+    if not buffer.is_ready:
+        raise HTTPException(status_code=503, detail="Clip buffer is warming up, try again shortly")
+
+    try:
+        data = await buffer.get_clip(start_offset, end_offset)
+    except ClipValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ClipUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    return Response(
+        content=data,
+        media_type="audio/mpeg",
+        headers={
+            "Content-Disposition": 'inline; filename="clip.mp3"',
+            "Cache-Control": "no-store",
+        },
+    )

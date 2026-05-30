@@ -415,6 +415,19 @@ harbor_output.on_disconnect(synchronous=true, on_harbor_disconnect)
 
 log("HTTP radio output configured on port 8001/radio (full radio mix)")
 
+# Output 4: HTTP stream for backend rolling clip buffer (full mix, same as /radio)
+# Separate mount with NO listener callbacks so the backend's persistent pull does not
+# inflate the public listener count. The backend keeps the last few minutes in memory
+# and serves on-demand clips of the live output.
+output.harbor(
+  %mp3(bitrate=320, stereo=true),
+  port=8001,
+  mount="/buffer",
+  radio
+)
+
+log("HTTP buffer output configured on port 8001/buffer (uncounted, for backend clip buffer)")
+
 # Register telnet command to return harbor listener count
 server.register(
   namespace="radio",

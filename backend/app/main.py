@@ -21,6 +21,7 @@ from app.routes.transitions import router as transitions_router
 from app.routes.users import admin_router as users_admin_router
 from app.routes.users import router as users_router
 from app.routes.websocket import router as websocket_router
+from app.services.stream_buffer_service import StreamBufferService
 from app.services.ws_manager import ws_manager
 from app.settings import settings
 
@@ -48,7 +49,17 @@ async def lifespan(app: FastAPI):
     await ws_manager.start(app.state.redis_pool)
     logger.info("WebSocket manager started")
 
+    app.state.stream_buffer = None
+    if settings.STREAM_BUFFER_ENABLED:
+        app.state.stream_buffer = StreamBufferService()
+        app.state.stream_buffer.start()
+        logger.info("Stream clip buffer started")
+
     yield
+
+    if app.state.stream_buffer is not None:
+        await app.state.stream_buffer.stop()
+        logger.info("Stream clip buffer stopped")
 
     await ws_manager.stop()
     logger.info("WebSocket manager stopped")

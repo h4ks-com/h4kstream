@@ -62,6 +62,12 @@ spec:
               value: {{ include "h4kstream.fullname" . }}-liquidsoap
             - name: LIQUIDSOAP_TELNET_PORT
               value: "1234"
+            - name: LIQUIDSOAP_BUFFER_HOST
+              value: {{ include "h4kstream.fullname" . }}-liquidsoap
+            - name: LIQUIDSOAP_BUFFER_PORT
+              value: "8001"
+            - name: LIQUIDSOAP_BUFFER_MOUNT
+              value: "/buffer"
             - name: DATA_PATH
               value: "/app/data"
             - name: RECORDINGS_PATH
