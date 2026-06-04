@@ -49,6 +49,8 @@ async def livestream_auth(
     success, reason, show_name, min_recording_duration = await service.validate_and_reserve_slot(
         request.token, request.address
     )
+    if not success:
+        logger.warning("Livestream auth rejected from %s: %s", request.address, reason)
     return LivestreamAuthResponse(
         success=success, reason=reason, show_name=show_name, min_recording_duration=min_recording_duration
     )
