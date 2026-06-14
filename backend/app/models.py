@@ -101,6 +101,14 @@ class ErrorResponse(BaseModel):
     detail: str = Field(..., description="Error message")
 
 
+class RecordingPeaks(BaseModel):
+    """Downsampled waveform peaks for a recording (one max-amplitude value per bin, 0..1)."""
+
+    version: int = Field(..., description="Peaks payload format version")
+    duration: float = Field(..., description="Recording duration in seconds")
+    peaks: list[float] = Field(..., description="Normalised max-amplitude value per bin")
+
+
 class LivestreamTokenCreateRequest(BaseModel):
     """Request model for creating livestream tokens."""
 

@@ -1,37 +1,43 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { HomePage } from './pages/HomePage';
-import { LoginPage } from './pages/LoginPage';
-import { SignupPage } from './pages/SignupPage';
-import { AdminPage } from './pages/AdminPage';
-import { ManagePage } from './pages/ManagePage';
-import { ArchiveDetailPage } from './pages/ArchiveDetailPage';
-import { StreamPage } from './pages/StreamPage';
-import { StreamHealthPage } from './pages/StreamHealthPage';
-import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
-import { NoAccessPage } from './pages/NoAccessPage';
-import { WebSocketProvider } from './contexts/WebSocketContext';
+import React from 'react'
+import { Routes, Route } from 'react-router-dom'
+import { HomePage } from './pages/HomePage'
+import { LoginPage } from './pages/LoginPage'
+import { SignupPage } from './pages/SignupPage'
+import { AdminPage } from './pages/AdminPage'
+import { ManagePage } from './pages/ManagePage'
+import { ArchiveDetailPage } from './pages/ArchiveDetailPage'
+import { StreamPage } from './pages/StreamPage'
+import { StreamHealthPage } from './pages/StreamHealthPage'
+import { OAuthCallbackPage } from './pages/OAuthCallbackPage'
+import { NoAccessPage } from './pages/NoAccessPage'
+import { RecordingEditorPage } from './pages/RecordingEditorPage'
+import { WebSocketProvider } from './contexts/WebSocketContext'
 
 const App: React.FC = () => {
   return (
     <WebSocketProvider>
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/signup" element={<SignupPage />} />
-      <Route path="/admin" element={<AdminPage />} />
-      <Route path="/admin/:section" element={<AdminPage />} />
-      <Route path="/manage" element={<ManagePage />} />
-      <Route path="/manage/:section" element={<ManagePage />} />
-      <Route path="/archives" element={<ArchiveDetailPage />} />
-      <Route path="/archives/:showName" element={<ArchiveDetailPage />} />
-      <Route path="/stream" element={<StreamPage />} />
-      <Route path="/monitor" element={<StreamHealthPage />} />
-      <Route path="/login/callback" element={<OAuthCallbackPage />} />
-      <Route path="/no-access" element={<NoAccessPage />} />
-    </Routes>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/:section" element={<AdminPage />} />
+        <Route path="/manage" element={<ManagePage />} />
+        <Route path="/manage/:section" element={<ManagePage />} />
+        <Route path="/archives" element={<ArchiveDetailPage />} />
+        <Route path="/archives/:showName" element={<ArchiveDetailPage />} />
+        <Route path="/stream" element={<StreamPage />} />
+        <Route path="/monitor" element={<StreamHealthPage />} />
+        <Route path="/login/callback" element={<OAuthCallbackPage />} />
+        <Route path="/no-access" element={<NoAccessPage />} />
+        <Route
+          path="/recordings/:recordingId/edit"
+          element={<RecordingEditorPage />}
+        />
+        <Route path="/edit/:blob" element={<RecordingEditorPage />} />
+      </Routes>
     </WebSocketProvider>
-  );
-};
+  )
+}
 
-export default App;
+export default App

@@ -64,6 +64,20 @@ class Settings(BaseSettings):
     DATA_PATH: str = "/app/data"
     RECORDINGS_PATH: str = "/app/data/recordings"
 
+    # Recording clip editor: a recording edit (ordered cut/silence segments with per-segment gain,
+    # fades and equal-power crossfades) is encoded into a URL blob and rendered on the fly. The
+    # public render path is unauthenticated and writes nothing to disk, so it is bounded by a
+    # concurrency semaphore, a wall-clock timeout and size caps to keep it cheap to abuse.
+    EDIT_MAX_SEGMENTS: int = 40  # bounds URL size and per-request ffmpeg work
+    EDIT_MAX_BLOB_CHARS: int = 4000  # reject oversized blobs before decoding
+    EDIT_MAX_OUTPUT_SECONDS: float = 3600.0  # safety backstop on rendered duration
+    EDIT_RENDER_TIMEOUT_SECONDS: float = 120.0  # kill a render that runs longer
+    EDIT_MAX_CONCURRENT_RENDERS: int = 4  # simultaneous edit renders (the expensive re-encode); /stream copy is uncapped
+    PEAKS_BINS_MAX: int = 4000  # max waveform resolution served by the (authed) peaks endpoint
+    PEAKS_DOWNSAMPLE_RATE: int = 8000  # mono Hz fed through ffmpeg when computing peaks
+    PEAKS_CACHE_DIR: str = "/app/data/peaks"  # small deterministic JSON, written only on authed requests
+    EDIT_MP3_BITRATE: str = "192k"  # CBR: streamed (Xing-less) clips report correct duration to players
+
     # Music and songs directories (configurable for tests)
     MUSIC_ROOT_PATH: str = "/music"
     SONGS_ROOT_PATH: str = "/songs"

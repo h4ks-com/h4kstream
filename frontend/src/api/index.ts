@@ -38,6 +38,7 @@ export { PlaylistSource } from './models/PlaylistSource';
 export type { PurgeAllCacheRequest } from './models/PurgeAllCacheRequest';
 export type { PurgeAllCacheResponse } from './models/PurgeAllCacheResponse';
 export type { RecordingMetadata } from './models/RecordingMetadata';
+export type { RecordingPeaks } from './models/RecordingPeaks';
 export type { RecordingsListResponse } from './models/RecordingsListResponse';
 export type { ShowCreate } from './models/ShowCreate';
 export type { ShowPublic } from './models/ShowPublic';

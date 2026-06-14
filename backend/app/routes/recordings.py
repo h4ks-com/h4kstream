@@ -1,8 +1,6 @@
 """Public and admin endpoints for livestream recordings."""
 
-import asyncio
 import logging
-from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
 
@@ -16,12 +14,17 @@ from sqlmodel import Session
 
 from app.db import get_session
 from app.db import recordings as recordings_db
+from app.dependencies import get_jwt_token
 from app.dependencies import require_admin_role
 from app.models import ErrorResponse
 from app.models import RecordingMetadata
+from app.models import RecordingPeaks
 from app.models import RecordingsListResponse
 from app.models import ShowRecordings
 from app.models import SuccessResponse
+from app.services import edit_spec
+from app.services import recording_render_service
+from app.services.edit_spec import EditSpecError
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -110,34 +113,88 @@ async def list_recordings(
     )
 
 
-async def _stream_segment(filepath: Path, start: float | None, end: float | None) -> AsyncIterator[bytes]:
-    """Pipe a time-range slice of an audio file via ffmpeg, yielding raw MP3 bytes."""
-    args = ["ffmpeg", "-loglevel", "error"]
-    if start:
-        args += ["-ss", str(start)]
-    args += ["-i", str(filepath)]
-    if end is not None:
-        # -to is relative to -ss when -ss precedes -i
-        duration = end - (start or 0.0)
-        args += ["-to", str(duration)]
-    args += ["-c:a", "copy", "-f", "mp3", "pipe:1"]
-
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL,
-    )
-    assert proc.stdout is not None
+@router.get(
+    "/clip/{blob}.mp3",
+    summary="Render Recording Edit Clip",
+    description=(
+        "Render an edit of a recording, described entirely by the URL blob, to MP3 on the fly. "
+        "The blob encodes the recording id and an ordered list of cut/silence segments with "
+        "per-segment gain, fades and equal-power crossfades. Public and unauthenticated; nothing "
+        "is written to disk. Add ?dl=1 to download instead of inline playback."
+    ),
+    responses={
+        200: {"content": {"audio/mpeg": {}}, "description": "Rendered MP3 clip"},
+        400: {"model": ErrorResponse, "description": "Invalid edit"},
+        404: {"model": ErrorResponse, "description": "Recording not found"},
+        503: {"model": ErrorResponse, "description": "Renderer busy"},
+    },
+)
+async def render_clip(
+    blob: str,
+    db: Session = Depends(get_session),
+    dl: bool = Query(False, description="Download instead of inline playback"),
+) -> StreamingResponse:
+    """Decode, validate and stream-render a recording edit on the fly (no caching)."""
     try:
-        while True:
-            chunk = await proc.stdout.read(65536)
-            if not chunk:
-                break
-            yield chunk
-    finally:
-        if proc.returncode is None:
-            proc.kill()
-        await proc.wait()
+        spec = edit_spec.decode(blob)
+    except EditSpecError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    recording = recordings_db.get_recording(db, spec.recording_id)
+    if not recording:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    file_path = Path(settings.RECORDINGS_PATH) / recording.file_path
+    if not file_path.exists():
+        logger.error(f"Recording file not found: {file_path}")
+        raise HTTPException(status_code=404, detail="Recording file not found")
+
+    try:
+        edit_spec.validate(spec, recording.duration_seconds)
+    except EditSpecError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if recording_render_service.slots_busy():
+        raise HTTPException(status_code=503, detail="Render pool is busy, try again shortly")
+
+    stem = Path(recording.file_path).stem
+    disposition = "attachment" if dl else "inline"
+    return StreamingResponse(
+        recording_render_service.stream_edit(file_path, spec),
+        media_type="audio/mpeg",
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{stem}_clip.mp3"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get(
+    "/{recording_id}/peaks",
+    summary="Recording Waveform Peaks",
+    description="Downsampled waveform peaks for the editor. Requires a logged-in user.",
+    responses={
+        401: {"model": ErrorResponse, "description": "Unauthorized"},
+        404: {"model": ErrorResponse, "description": "Recording not found"},
+    },
+)
+async def recording_peaks(
+    recording_id: int,
+    db: Session = Depends(get_session),
+    _token: str = Depends(get_jwt_token),
+    bins: int = Query(1500, ge=16, description="Number of waveform bins"),
+) -> RecordingPeaks:
+    """Return downsampled max-amplitude peaks for a recording (authed, cached)."""
+    bins = min(bins, settings.PEAKS_BINS_MAX)
+    recording = recordings_db.get_recording(db, recording_id)
+    if not recording:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    file_path = Path(settings.RECORDINGS_PATH) / recording.file_path
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Recording file not found")
+
+    return await recording_render_service.get_peaks(file_path, recording_id, recording.duration_seconds, bins)
 
 
 @router.get(
@@ -185,7 +242,7 @@ async def stream_recording(
     t1 = int(end) if end is not None else 0
     filename = f"{stem}_{t0}s-{t1}s.mp3"
     return StreamingResponse(
-        _stream_segment(file_path, start, end),
+        recording_render_service.stream_segment(file_path, start, end),
         media_type="audio/mpeg",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',

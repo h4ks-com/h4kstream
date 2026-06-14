@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { RecordingPeaks } from '../models/RecordingPeaks';
 import type { RecordingsListResponse } from '../models/RecordingsListResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import type { BaseHttpRequest } from '../core/BaseHttpRequest';
@@ -42,6 +43,63 @@ export class RecordingsService {
                 'page_size': pageSize,
             },
             errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Render Recording Edit Clip
+     * Render an edit of a recording, described entirely by the URL blob, to MP3 on the fly. The blob encodes the recording id and an ordered list of cut/silence segments with per-segment gain, fades and equal-power crossfades. Public and unauthenticated; nothing is written to disk. Add ?dl=1 to download instead of inline playback.
+     * @param blob
+     * @param dl Download instead of inline playback
+     * @returns any Rendered MP3 clip
+     * @throws ApiError
+     */
+    public renderClipRecordingsClipBlobMp3Get(
+        blob: string,
+        dl: boolean = false,
+    ): CancelablePromise<any> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/recordings/clip/{blob}.mp3',
+            path: {
+                'blob': blob,
+            },
+            query: {
+                'dl': dl,
+            },
+            errors: {
+                400: `Invalid edit`,
+                404: `Recording not found`,
+                422: `Validation Error`,
+                503: `Renderer busy`,
+            },
+        });
+    }
+    /**
+     * Recording Waveform Peaks
+     * Downsampled waveform peaks for the editor. Requires a logged-in user.
+     * @param recordingId
+     * @param bins Number of waveform bins
+     * @returns RecordingPeaks Successful Response
+     * @throws ApiError
+     */
+    public recordingPeaksRecordingsRecordingIdPeaksGet(
+        recordingId: number,
+        bins: number = 1500,
+    ): CancelablePromise<RecordingPeaks> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/recordings/{recording_id}/peaks',
+            path: {
+                'recording_id': recordingId,
+            },
+            query: {
+                'bins': bins,
+            },
+            errors: {
+                401: `Unauthorized`,
+                404: `Recording not found`,
                 422: `Validation Error`,
             },
         });
