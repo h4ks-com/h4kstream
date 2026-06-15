@@ -15,6 +15,8 @@ class WaveSurferMock {
   private currentTime = 0
   private playing = false
   duration = 0
+  /** Last px/sec passed to zoom(), so tests can assert autofit/fit behavior. */
+  lastZoom = 0
   // The streaming media element the real library plays/seeks through; recorded so tests can
   // assert it was wired up (e.g. its src points at the public Range-streaming endpoint).
   media: HTMLMediaElement | null = null
@@ -55,7 +57,9 @@ class WaveSurferMock {
     this.handlers.get(event)?.forEach((h) => h(...args))
   }
 
-  zoom(): void {}
+  zoom(pxPerSec: number): void {
+    this.lastZoom = pxPerSec
+  }
   setOptions(): void {}
   setTime(time: number): void {
     this.currentTime = time

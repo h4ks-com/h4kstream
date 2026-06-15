@@ -30,6 +30,11 @@ export interface Transport {
   /** Switch to export mode and play the joined edit from its start. */
   playExport: () => Promise<void>
   /**
+   * Seek the export preview to `offset` seconds on the joined timeline and keep playing — used to
+   * jump between regions without stopping or rewinding. Stops the source so the two never overlap.
+   */
+  seekExport: (offset: number) => Promise<void>
+  /**
    * Switch to export mode and loop a window of the joined edit (used to audition the join between
    * two regions). Like playExport, this stops the source so the two are never audible at once.
    */
@@ -119,6 +124,20 @@ export const useTransport = ({
     setPlaying(true)
   }, [preview, wavesurfer])
 
+  const seekExport = useCallback(
+    async (offset: number) => {
+      const engine = preview.current
+      if (!engine) {
+        return
+      }
+      wavesurfer.current?.pause()
+      setMode('export')
+      await engine.play(offset)
+      setPlaying(true)
+    },
+    [preview, wavesurfer]
+  )
+
   const playTransition = useCallback(
     async (range: { start: number; end: number }) => {
       const engine = preview.current
@@ -176,5 +195,14 @@ export const useTransport = ({
     setPlaying(false)
   }, [wavesurfer, cycle, stopExportEngine])
 
-  return { mode, playing, toggle, playSource, playExport, playTransition, stop }
+  return {
+    mode,
+    playing,
+    toggle,
+    playSource,
+    playExport,
+    seekExport,
+    playTransition,
+    stop,
+  }
 }

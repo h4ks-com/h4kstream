@@ -704,6 +704,42 @@ describe('RecordingEditor', () => {
     expect(lastPreviewEngine().isPlaying()).toBe(false)
   })
 
+  it('autofit zooms to fit the whole recording in the view', async () => {
+    await renderSettled(new EditSpec(42, []))
+    // Width falls back to the mock's getWidth() (1000) since jsdom has no layout; duration is 60,
+    // so fitting the whole recording is 1000/60 ≈ 16.67 px/sec.
+    expect(lastWaveSurfer!.lastZoom).toBeCloseTo(1000 / 60, 1)
+  })
+
+  it('double-clicking a region seeks the export preview to it without stopping', async () => {
+    await renderSettled(new EditSpec(42, []))
+    await addRegions([
+      { start: 3, end: 8 },
+      { start: 30, end: 34 },
+    ])
+
+    // Start the full export preview from the beginning.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Preview export/i }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    const engine = lastPreviewEngine()
+    expect(engine.isPlaying()).toBe(true)
+    expect(engine.lastPlayOffset).toBe(0)
+
+    // Double-click the 2nd region → preview jumps to its export offset (5s) and keeps playing.
+    const region = lastRegionsPlugin!.getRegions()[1]
+    await act(async () => {
+      lastRegionsPlugin!.emit('region-double-clicked', region, {
+        stopPropagation: () => undefined,
+      })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(engine.isPlaying()).toBe(true)
+    expect(engine.lastPlayOffset).toBeCloseTo(5)
+    expect(lastWaveSurfer!.isPlaying()).toBe(false)
+  })
+
   it('Preview export drives the joined-edit engine, separate from source transport', async () => {
     await renderSettled(new EditSpec(42, []))
     await addRegions([{ start: 3, end: 8 }])

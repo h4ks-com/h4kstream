@@ -22,15 +22,13 @@ import { PreviewEngine } from '../edit/PreviewEngine'
 import { useTransport } from './useTransport'
 import { RegionChips } from './RegionChips'
 import { RegionEditorPanel, type RegionParams } from './RegionEditorPanel'
+import { fitPxPerSec, clampPxPerSec, MIN_PX_PER_SEC } from './waveformZoom'
 
 interface RecordingEditorProps {
   initialSpec: EditSpec
   /** Known recording duration in seconds; used as a fallback before peaks load. */
   recordingDuration?: number
 }
-
-const ZOOM_MIN = 1
-const ZOOM_MAX = 800
 
 /** Above this px/sec the coarse overview peaks look blocky, so we fetch real audio detail. */
 const DETAIL_ZOOM_THRESHOLD = 60
@@ -147,6 +145,11 @@ export const RecordingEditor: React.FC<RecordingEditorProps> = ({
   const wavesurferRef = useRef<WaveSurfer | null>(null)
   const regionsRef = useRef<RegionsPlugin | null>(null)
   const previewRef = useRef<PreviewEngine | null>(null)
+  // Latest "preview from this region" handler, so the once-bound region-double-clicked listener
+  // (created during waveform init) can call the current version without re-binding.
+  const previewFromRegionRef = useRef<(regionId: string) => void>(
+    () => undefined
+  )
   // Streaming media element backing wavesurfer playback. It seeks/streams via HTTP Range so
   // the (possibly hours-long) source is never fully downloaded; the waveform still draws from
   // the precomputed peaks instantly.
@@ -182,7 +185,7 @@ export const RecordingEditor: React.FC<RecordingEditorProps> = ({
   const [sourceDuration, setSourceDuration] = useState<number>(
     recordingDuration ?? 0
   )
-  const [zoom, setZoom] = useState<number>(ZOOM_MIN)
+  const [zoom, setZoom] = useState<number>(MIN_PX_PER_SEC)
   const [waveReady, setWaveReady] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   // Source transport position (driven by wavesurfer's own playback of the streamed source).
@@ -418,6 +421,9 @@ export const RecordingEditor: React.FC<RecordingEditorProps> = ({
           interact: true,
           // Clicking still seeks; drag-to-seek is off so it doesn't fight region drag/resize.
           dragToSeek: false,
+          // Scale the waveform to its loudest peak. Backend peaks are raw amplitudes, so quiet or
+          // long recordings would otherwise render as a near-flat line of dots.
+          normalize: true,
           media,
           peaks: [data.peaks],
           duration,
@@ -470,6 +476,11 @@ export const RecordingEditor: React.FC<RecordingEditorProps> = ({
         regions.on('region-clicked', (region: Region, e: MouseEvent) => {
           e.stopPropagation()
           setActiveRegionId(region.id)
+        })
+        // Double-click a region to jump the export preview to where it sounds and keep playing.
+        regions.on('region-double-clicked', (region: Region, e: MouseEvent) => {
+          e.stopPropagation()
+          previewFromRegionRef.current(region.id)
         })
 
         // Source transport position + cycle. When the cycle is active, wrap the playhead back
@@ -774,20 +785,28 @@ export const RecordingEditor: React.FC<RecordingEditorProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waveReady])
 
-  const applyZoom = useCallback((next: number) => {
-    const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next))
-    setZoom(clamped)
-    wavesurferRef.current?.zoom(clamped)
-  }, [])
+  // Clamp every zoom to [fit-to-width, max] so a long recording can be zoomed out far enough to
+  // fit (its fit zoom is well below 1 px/sec) and zooming out never overshoots into empty space.
+  // clientWidth is 0 before layout, so fall back to wavesurfer's own measured width.
+  const applyZoom = useCallback(
+    (next: number) => {
+      const width =
+        waveformRef.current?.clientWidth ||
+        wavesurferRef.current?.getWidth?.() ||
+        0
+      const duration =
+        sourceDuration || wavesurferRef.current?.getDuration() || 0
+      const clamped = clampPxPerSec(next, fitPxPerSec(width, duration))
+      setZoom(clamped)
+      wavesurferRef.current?.zoom(clamped)
+    },
+    [sourceDuration]
+  )
 
+  // Zooming to 0 clamps up to the fit-to-width floor, fitting the whole recording to the view.
   const autofit = useCallback(() => {
-    const container = waveformRef.current
-    const duration = sourceDuration || wavesurferRef.current?.getDuration() || 0
-    if (!container || duration <= 0) {
-      return
-    }
-    applyZoom(container.clientWidth / duration)
-  }, [applyZoom, sourceDuration])
+    applyZoom(0)
+  }, [applyZoom])
 
   // Create a region at the playhead. The default span is clamped to the recording end and to
   // the next region's start; if there's no room ahead, the region is anchored to the end.
@@ -1069,6 +1088,31 @@ export const RecordingEditor: React.FC<RecordingEditorProps> = ({
       setTransitionOrder(null)
     }
   }, [transport.mode])
+
+  // Seek the export preview to where a region sounds on the joined timeline and keep playing —
+  // wired to region double-click so you can move within a long preview without stopping. Exits a
+  // join loop into the full preview from that point.
+  const previewFromRegion = useCallback(
+    async (regionId: string) => {
+      const order = orderRef.current.indexOf(regionId)
+      const offsets = specRef.current.segmentStartOffsets()
+      if (order < 0 || order >= offsets.length) {
+        return
+      }
+      setTransitionOrder(null)
+      setCycleActive(false)
+      ensurePreview().setSpec(specRef.current)
+      try {
+        await transport.seekExport(offsets[order])
+      } catch (err) {
+        setSnackbar(err instanceof Error ? err.message : 'Preview failed')
+      }
+    },
+    [transport, ensurePreview]
+  )
+  useEffect(() => {
+    previewFromRegionRef.current = previewFromRegion
+  }, [previewFromRegion])
 
   const handleStop = useCallback(async () => {
     await transport.stop()
