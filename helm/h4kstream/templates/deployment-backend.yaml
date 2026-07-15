@@ -23,6 +23,23 @@ spec:
         {{- include "h4kstream.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: backend
     spec:
+      {{- if .Values.backend.ytdlp.cookiesEnabled }}
+      # yt-dlp rewrites its --cookies file on exit (YouTube/SoundCloud rotate
+      # session cookies), but a secret volume is always read-only, so pointing
+      # yt-dlp at it directly makes every cookie-based download exit non-zero.
+      # Seed a writable copy into an emptyDir and let yt-dlp own it.
+      initContainers:
+        - name: seed-cookies
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          command: ["sh", "-c", "cp /app/cookies-src/cookies.txt /app/cookies/cookies.txt 2>/dev/null && echo seeded || echo 'no cookies yet'"]
+          volumeMounts:
+            - name: ytdlp-cookies-src
+              mountPath: /app/cookies-src
+              readOnly: true
+            - name: ytdlp-cookies
+              mountPath: /app/cookies
+      {{- end }}
       containers:
         - name: backend
           image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
@@ -143,7 +160,6 @@ spec:
             {{- if .Values.backend.ytdlp.cookiesEnabled }}
             - name: ytdlp-cookies
               mountPath: /app/cookies
-              readOnly: true
             {{- end }}
           livenessProbe:
             httpGet:
@@ -193,7 +209,9 @@ spec:
             claimName: {{ include "h4kstream.fullname" . }}-music
             {{- end }}
         {{- if .Values.backend.ytdlp.cookiesEnabled }}
-        - name: ytdlp-cookies
+        - name: ytdlp-cookies-src
           secret:
             secretName: {{ include "h4kstream.fullname" . }}-ytdlp-cookies
+        - name: ytdlp-cookies
+          emptyDir: {}
         {{- end }}
