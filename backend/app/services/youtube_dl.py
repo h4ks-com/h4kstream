@@ -49,6 +49,16 @@ def _cookies_opts():
         os.unlink(tmp)
 
 
+#: YouTube hands out its media URLs behind a JavaScript challenge. Solving it needs a JS runtime
+#: (the image ships node; deno stays in the list so a machine that has it is used first) and the
+#: solver script, which yt-dlp fetches from its own release page. Without both, every download
+#: falls back to a player API that answers 403.
+_JS_CHALLENGE_OPTS = {
+    "js_runtimes": {"deno": {}, "node": {}},
+    "remote_components": ["ejs:github"],
+}
+
+
 class YoutubeErrorType(StrEnum):
     INVALID_URL = auto()
     DOWNLOAD_ERROR = auto()
@@ -72,7 +82,7 @@ class YoutubeDownloadResult(NamedTuple):
 def _extract_info_sync(url: str) -> dict:
     """Synchronous function to extract video info."""
     with _cookies_opts() as cookie_opts:
-        opts: dict = {"quiet": True, "no_warnings": True, **cookie_opts}
+        opts: dict = {"quiet": True, "no_warnings": True, **_JS_CHALLENGE_OPTS, **cookie_opts}
         with yt_dlp.YoutubeDL(opts) as ydl:
             info_dict = ydl.extract_info(url, download=False)
             if info_dict is None:
@@ -107,6 +117,7 @@ def _download_video_sync(url: str, target_dir: str) -> dict:
                     "add_metadata": True,
                 },
             ],
+            **_JS_CHALLENGE_OPTS,
             **cookie_opts,
         }
         with yt_dlp.YoutubeDL(opts) as video:
