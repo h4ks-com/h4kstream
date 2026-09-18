@@ -3,6 +3,7 @@
 import fcntl
 import logging
 import shutil
+import sqlite3
 import subprocess
 import sys
 from datetime import datetime
@@ -13,6 +14,22 @@ from app.db.config import DATABASE_PATH
 logger = logging.getLogger(__name__)
 
 MIGRATION_LOCK_FILE = DATABASE_PATH.parent / ".migration.lock"
+
+
+def _table_names() -> set[str]:
+    if not DATABASE_PATH.exists():
+        return set()
+    with sqlite3.connect(DATABASE_PATH) as conn:
+        return {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+
+
+def is_alembic_managed() -> bool:
+    """Whether the database carries the revision Alembic upgrades from."""
+    return "alembic_version" in _table_names()
+
+
+def has_tables() -> bool:
+    return bool(_table_names() - {"alembic_version", "sqlite_sequence"})
 
 
 def backup_database() -> Path | None:
@@ -81,9 +98,12 @@ def run_migrations() -> bool:
                 logger.error("❌ Alembic config not found")
                 return False
 
-            logger.info("Running Alembic migrations via subprocess...")
+            # Tables created straight from the models are already at the newest revision, so
+            # upgrading from the first one would re-apply changes the schema has and fail.
+            command = ["upgrade", "head"] if is_alembic_managed() else ["stamp", "head"]
+            logger.info(f"Running Alembic {' '.join(command)} via subprocess...")
             result = subprocess.run(
-                ["uv", "run", "alembic", "upgrade", "head"],
+                ["uv", "run", "alembic", *command],
                 cwd=alembic_ini_path.parent,
                 capture_output=True,
                 text=True,

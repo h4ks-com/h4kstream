@@ -10,6 +10,7 @@ from sqlmodel import create_engine
 
 from app.db.config import DATABASE_PATH
 from app.db.config import DATABASE_URL
+from app.db.migration_runner import has_tables
 from app.db.migration_runner import run_migrations
 from app.db.models import LivestreamRecording as LivestreamRecording
 from app.db.models import PendingUser as PendingUser
@@ -60,6 +61,10 @@ def init_db(run_migrations_flag: bool = False):
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     if run_migrations_flag:
+        # An empty database gets its tables from the models first: the migrations only carry
+        # changes made since, and run_migrations() then records where the schema stands.
+        if not has_tables():
+            SQLModel.metadata.create_all(engine)
         if run_migrations():
             logger.info(f"Database initialized with migrations at {DATABASE_PATH}")
             return
