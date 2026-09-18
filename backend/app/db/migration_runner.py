@@ -69,6 +69,21 @@ def _get_alembic_ini_path() -> Path | None:
     return None
 
 
+def _run_alembic(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["uv", "run", "alembic", *command],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def schema_is_ahead(stderr: str) -> bool:
+    """Whether a failed upgrade tried to add something the schema already has."""
+    return "already exists" in stderr or "duplicate column name" in stderr
+
+
 def run_migrations() -> bool:
     """Run Alembic migrations with automatic database backup.
 
@@ -102,13 +117,13 @@ def run_migrations() -> bool:
             # upgrading from the first one would re-apply changes the schema has and fail.
             command = ["upgrade", "head"] if is_alembic_managed() else ["stamp", "head"]
             logger.info(f"Running Alembic {' '.join(command)} via subprocess...")
-            result = subprocess.run(
-                ["uv", "run", "alembic", *command],
-                cwd=alembic_ini_path.parent,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            result = _run_alembic(command, alembic_ini_path.parent)
+
+            if result.returncode != 0 and schema_is_ahead(result.stderr):
+                # Every service creates missing tables from the models, so a schema can carry
+                # what a pending revision adds while still being recorded behind it.
+                logger.warning("Schema already has what the pending migrations add; stamping head")
+                result = _run_alembic(["stamp", "head"], alembic_ini_path.parent)
 
             if result.returncode != 0:
                 logger.error(f"❌ Migration failed: {result.stderr}")

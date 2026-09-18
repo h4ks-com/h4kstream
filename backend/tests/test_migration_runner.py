@@ -45,3 +45,16 @@ def test_the_version_table_alone_does_not_count_as_a_schema(database: Path) -> N
         conn.execute("CREATE TABLE alembic_version (version_num TEXT NOT NULL)")
 
     assert not migration_runner.has_tables()
+
+
+@pytest.mark.parametrize(
+    ("stderr", "expected"),
+    [
+        ("sqlite3.OperationalError: table cache_metadata already exists", True),
+        ("sqlite3.OperationalError: duplicate column name: role", True),
+        ("sqlite3.OperationalError: no such table: users", False),
+        ("Can't locate revision identified by 'abc123'", False),
+    ],
+)
+def test_an_upgrade_that_adds_what_the_schema_has_is_told_apart(stderr: str, expected: bool) -> None:
+    assert migration_runner.schema_is_ahead(stderr) is expected
