@@ -1,8 +1,8 @@
 """E2E tests for the public recording-edit clip render endpoint.
 
-A clip is a multi-segment edit of a recording encoded entirely in the URL blob and rendered on the
-fly (no caching). These tests create a real recording by streaming to liquidsoap, then render edits
-of it and verify the output with ffprobe.
+A clip is a multi-segment edit of a recording encoded entirely in the URL blob and rendered on the fly (no caching).
+These tests create a real recording by streaming to liquidsoap, then render edits of it and verify the output with
+ffprobe.
 """
 
 import base64

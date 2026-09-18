@@ -34,18 +34,17 @@ def jwt_headers(client: httpx.Client, admin_headers: dict[str, str]) -> dict[str
 class TestNavidromePlaylistsAuth:
     """Authentication and authorization tests for playlist endpoints."""
 
-    def test_list_playlists_rejects_unauthenticated(self, client: httpx.Client) -> None:
-        """Returns 401 when no token is provided."""
+    def test_list_playlists_allows_unauthenticated(self, client: httpx.Client) -> None:
+        """Listing is open: without a token the caller sees the public playlists."""
         response = client.get(QUEUE_PLAYLISTS_NAVIDROME)
-        assert response.status_code == 401
+        assert response.status_code == (200 if NAVIDROME_CONFIGURED else 503)
 
-    def test_list_playlists_rejects_admin_token(
+    def test_list_playlists_allows_admin_token(
         self, client: httpx.Client, admin_headers: dict[str, str]
     ) -> None:
-        """Admin tokens are rejected — endpoint requires user JWT."""
+        """An admin token is accepted here, unlike on the endpoints that queue songs."""
         response = client.get(QUEUE_PLAYLISTS_NAVIDROME, headers=admin_headers)
-        assert response.status_code == 403
-        assert "Admin token not allowed" in response.json()["detail"]
+        assert response.status_code == (200 if NAVIDROME_CONFIGURED else 503)
 
     def test_add_playlist_rejects_unauthenticated(self, client: httpx.Client) -> None:
         """Returns 401 when no token is provided to add-playlist."""

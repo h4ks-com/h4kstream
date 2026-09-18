@@ -214,6 +214,7 @@ def test_metadata_user_queue_with_real_song(client: httpx.Client, admin_headers:
         f"Expected Rick Astley song but got title='{metadata['title']}', artist='{metadata['artist']}'"
 
 
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Cannot use YouTube in GitHub Actions")
 def test_metadata_fallback_queue_with_real_song(client: httpx.Client, admin_headers: dict[str, str]) -> None:
     """Test that metadata is extracted from real song in fallback queue."""
     # Clear user queue first to ensure fallback is checked

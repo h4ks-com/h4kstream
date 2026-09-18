@@ -232,6 +232,7 @@ def test_websocket_disconnect_and_reconnect(
 
 
 @pytest.mark.websocket
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Cannot use YouTube in GitHub Actions")
 def test_websocket_with_real_song_add(
     client: httpx.Client,
     admin_headers: dict[str, str],

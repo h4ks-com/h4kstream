@@ -163,6 +163,7 @@ def test_webhook_subscription_lifecycle(
 
 
 @pytest.mark.webhook
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Cannot use YouTube in GitHub Actions")
 def test_webhook_song_changed_event(
     client: httpx.Client,
     admin_headers: dict[str, str],
