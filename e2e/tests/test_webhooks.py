@@ -404,6 +404,7 @@ def test_webhook_registry_persistence(
 
 
 @pytest.mark.webhook
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Cannot use YouTube in GitHub Actions")
 def test_webhook_delivery_logs(
     client: httpx.Client,
     admin_headers: dict[str, str],
