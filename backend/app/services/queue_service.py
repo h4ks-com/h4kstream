@@ -313,7 +313,9 @@ async def add_song(
                 logger.error(f"Failed to clean up temp file {temp_path}: {cleanup_error}")
         raise
 
-    await mpd_client.update_database()
+    # Scanning the whole music directory costs ~24s once it holds thousands of files, and it
+    # runs for every song added; MPD only needs to learn about the one file we just wrote.
+    await mpd_client.update_database(target_path.name)
     mpd_song_id = await mpd_client.add_local_song(target_path.name)
 
     if redis_client and user_id:

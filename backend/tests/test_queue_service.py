@@ -67,6 +67,10 @@ class TestAddSong:
 
             mock_download.assert_called_once_with("https://youtube.com/watch?v=test")
             mock_mpd_client.update_database.assert_called_once()
+            # Only the new file, never the whole library: a full scan takes ~24s here.
+            assert mock_mpd_client.update_database.call_args.args == (
+                mock_mpd_client.add_local_song.call_args.args[0],
+            )
             mock_mpd_client.add_local_song.assert_called_once()
             mock_mpd_client.set_consume.assert_called_once_with(True)
 
